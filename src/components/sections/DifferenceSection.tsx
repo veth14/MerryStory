@@ -57,7 +57,7 @@ export function DifferenceSection() {
           <motion.div
              initial={{ opacity: 0, x: 50 }}
              whileInView={{ opacity: 1, x: 0 }}
-             viewport={{ once: true, margin: "-100px" }}
+             viewport={{ once: true, amount: 0.1 }}
              transition={{ duration: 0.7 }}
           >
              <span className="text-brand-yellow font-semibold tracking-wider uppercase text-sm mb-4 block">

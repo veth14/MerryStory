@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       `;
     }
 
-    // 1. Email to You (Merry Story)
+    // 1. Email to Me (Merry Story)
     const mailToYou = {
       from: process.env.EMAIL_USER,
       to: 'merrystoryeventservices@gmail.com', // Send to your business email
