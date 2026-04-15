@@ -33,7 +33,7 @@ export function PackagesSection() {
 
   return (
     <section id="packages" className="py-24 bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 2xl:px-16">
         <div className="flex flex-col md:flex-row justify-between items-start mb-16 gap-6">
           <div className="flex-1">
             <span className="text-brand-yellow font-bold tracking-widest uppercase text-xs mb-3 block">
@@ -59,7 +59,7 @@ export function PackagesSection() {
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.6, delay: index * 0.15 }}
               whileHover={{ y: -10 }}
-              className={`bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-50 overflow-hidden flex flex-col hover:shadow-2xl transition-all duration-300 group ${index % 2 === 0 ? 'h-[500px]' : 'h-[460px]'}`}
+              className={`bg-white rounded-lg shadow-lg border border-gray-50 overflow-hidden flex flex-col hover:shadow-xl transition-all duration-300 group ${index % 2 === 0 ? 'h-[500px]' : 'h-[460px]'}`}
             >
               <div className="relative h-3/5 overflow-hidden flex-shrink-0">
                 <img src={pkg.image} alt={pkg.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />

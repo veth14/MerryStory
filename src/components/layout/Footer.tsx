@@ -4,7 +4,7 @@ import { Facebook, Instagram, Linkedin, Twitter } from "lucide-react";
 export function Footer() {
   return (
     <footer className="bg-brand-dark text-white py-12 md:py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 2xl:px-16 grid grid-cols-1 md:grid-cols-4 gap-8">
         
         <div className="col-span-1 md:col-span-2">
           <Link href="/" className="font-bold text-2xl tracking-tighter text-white block mb-4">
@@ -41,9 +41,9 @@ export function Footer() {
         </div>
       </div>
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 2xl:px-16 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500">
         <p>&copy; {new Date().getFullYear()} Merry Story Productions. All rights reserved.</p>
-        <p className="mt-2 md:mt-0">Made with ❤️ for unforgettable moments.</p>
+        <p className="mt-2 md:mt-0">Made for unforgettable moments.</p>
       </div>
     </footer>
   );

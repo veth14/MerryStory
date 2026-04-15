@@ -23,7 +23,7 @@ export function TestimonialsSection() {
 
   return (
     <section id="testimonials" className="py-28 bg-gray-50 overflow-hidden relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 2xl:px-16">
         
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 relative z-10">
           <motion.div
@@ -32,10 +32,10 @@ export function TestimonialsSection() {
              viewport={{ once: true, margin: "-100px" }}
              transition={{ duration: 0.6 }}
           >
-            <span className="text-[#e2ab34] font-bold tracking-widest uppercase text-xs mb-2 block">
+            <span className="text-brand-yellow font-bold tracking-widest uppercase text-xs mb-2 block">
                THE EXPERIENCE
             </span>
-            <h2 className="text-4xl md:text-5xl font-extrabold text-[#1a1a1a]">
+            <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900">
                Voices of Delight
             </h2>
           </motion.div>
@@ -44,7 +44,7 @@ export function TestimonialsSection() {
              whileInView={{ opacity: 1, x: 0 }}
              viewport={{ once: true }}
              transition={{ duration: 0.6, delay: 0.2 }}
-             className="hidden md:block w-16 h-[2px] bg-[#e2ab34] mb-4"
+             className="hidden md:block w-16 h-[2px] bg-brand-yellow mb-4"
           />
         </div>
 
@@ -56,19 +56,19 @@ export function TestimonialsSection() {
                whileInView={{ opacity: 1, y: 0 }}
                viewport={{ once: true, margin: "-100px" }}
                transition={{ duration: 0.6, delay: idx * 0.15 }}
-               className={`bg-white p-8 rounded-lg shadow-[0_10px_40px_-15px_rgba(0,0,0,0.1)] border-t-[3px] border-t-[#e2ab34] flex flex-col relative h-full ${
+               className={`bg-white p-8 rounded-lg shadow-lg border-t-[3px] border-t-brand-yellow flex flex-col relative h-full ${
                  idx === 1 ? 'md:mt-12' : ''
                }`}
             >
                <div className="flex justify-between items-start mb-6">
                   <div className="flex gap-1.5 pt-2">
                     {[...Array(5)].map((_, i) => (
-                      <svg key={i} className="w-4 h-4 text-[#e2ab34] fill-current" viewBox="0 0 24 24">
+                        <svg key={i} className="w-4 h-4 text-brand-yellow fill-current" viewBox="0 0 24 24">
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                       </svg>
                     ))}
                   </div>
-                  <div className="text-[#f7e6bb] font-serif text-6xl leading-none h-10 select-none pointer-events-none">
+                  <div className="text-yellow-100 font-serif text-6xl leading-none h-10 select-none pointer-events-none">
                     ”
                   </div>
                </div>
