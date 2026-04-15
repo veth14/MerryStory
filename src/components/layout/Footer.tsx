@@ -24,10 +24,10 @@ export function Footer() {
         <div>
           <h4 className="text-sm font-semibold tracking-wider text-white uppercase mb-4">Quick Links</h4>
           <ul className="space-y-3">
-            <li><Link href="#packages" className="text-gray-400 hover:text-brand-yellow text-sm transition-colors">Packages</Link></li>
-            <li><Link href="#difference" className="text-gray-400 hover:text-brand-yellow text-sm transition-colors">About Us</Link></li>
-            <li><Link href="#expertise" className="text-gray-400 hover:text-brand-yellow text-sm transition-colors">Services</Link></li>
-            <li><Link href="#testimonials" className="text-gray-400 hover:text-brand-yellow text-sm transition-colors">Reviews</Link></li>
+            <li><Link href="/#packages" className="text-gray-400 hover:text-brand-yellow text-sm transition-colors">Collections</Link></li>
+            <li><Link href="/#difference" className="text-gray-400 hover:text-brand-yellow text-sm transition-colors">About Us</Link></li>
+            <li><Link href="/#expertise" className="text-gray-400 hover:text-brand-yellow text-sm transition-colors">Services</Link></li>
+            <li><Link href="/#testimonials" className="text-gray-400 hover:text-brand-yellow text-sm transition-colors">Reviews</Link></li>
           </ul>
         </div>
 

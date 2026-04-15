@@ -2,32 +2,37 @@
 
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 export function PackagesSection() {
   const packages = [
     {
-      title: "Elegant Wedding",
+      title: "Weddings",
+      link: "/collections/weddings",
       price: "700,000",
       description: "Atmospheric curation for the day two souls become an eternal legacy.",
       image: "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=800&auto=format&fit=crop",
     },
     {
-      title: "Birthday Celebration",
-      price: "50,000",
-      description: "Marking the milestones of life with unrivaled vibrance and joy.",
-      image: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop",
-    },
-    {
-      title: "Graduation Events",
+      title: "Corporate",
+      link: "/collections/corporate",
       price: "1,000,000",
-      description: "Sophisticated galas celebrating academic triumphs and new beginnings.",
+      description: "Elevating corporate identity through high-impact production.",
       image: "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?q=80&w=800&auto=format&fit=crop",
     },
     {
       title: "Trade Shows",
-      price: "1,000,000",
+      link: "/collections/trade-shows",
+      price: "150,000",
       description: "Strategic brand experiences designed to ignite market desire.",
       image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=800&auto=format&fit=crop",
+    },
+    {
+      title: "Birthdays",
+      link: "/collections/birthdays",
+      price: "50,000",
+      description: "Marking the milestones of life with unrivaled vibrance and joy.",
+      image: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop",
     },
   ];
 
@@ -40,12 +45,12 @@ export function PackagesSection() {
               The Portfolio
             </span>
             <h2 className="text-4xl md:text-[3.25rem] font-extrabold text-gray-900 leading-[1.1] tracking-tight">
-              Premium Event <br className="hidden md:block" /> Packages
+              Signature <br className="hidden md:block" /> Collections
             </h2>
           </div>
           <div className="flex-1 flex justify-end items-end h-full pt-4 md:pt-14">
              <p className="text-gray-500 max-w-sm text-sm leading-relaxed text-left md:text-right">
-                Exclusivity is our baseline. Each package is tailored to reflect your individual legacy.
+                Exclusivity is our baseline. Each collection is tailored to reflect your individual legacy.
              </p>
           </div>
         </div>
@@ -74,13 +79,23 @@ export function PackagesSection() {
                 <h3 className="text-lg font-bold text-gray-900 mb-2">{pkg.title}</h3>
                 <p className="text-gray-500 text-sm mb-6 flex-grow leading-relaxed">{pkg.description}</p>
                 <div className="mt-auto">
-                    <button className="text-brand-yellow font-bold uppercase tracking-widest text-[10px] hover:text-yellow-600 flex items-center group-hover:underline">
+                    <Link href={pkg.link} className="text-brand-yellow font-bold uppercase tracking-widest text-[10px] hover:text-yellow-600 flex items-center group-hover:underline">
                     Explore Details
-                    </button>
+                    </Link>
                 </div>
               </div>
             </motion.div>
           ))}
+        </div>
+
+        <div className="mt-20 flex justify-center">
+          <Link
+            href="/collections"
+            className="group inline-flex items-center justify-center gap-3 bg-[#D4AF37] hover:bg-[#B89053] text-white px-10 py-5 text-sm font-bold tracking-[0.2em] uppercase transition-all duration-300 shadow-lg hover:shadow-xl rounded-sm"
+          >
+            <span>View Full Collection</span>
+            <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+          </Link>
         </div>
       </div>
     </section>
