@@ -11,6 +11,7 @@ const INITIAL_TASKS = [
     status: 'IN PROGRESS',
     priority: 'HIGH',
     dueDate: 'Oct 15, 2024',
+    dueTime: '14:00',
     assignee: 'Alesia',
   },
   {
@@ -20,6 +21,7 @@ const INITIAL_TASKS = [
     status: 'TO DO',
     priority: 'MEDIUM',
     dueDate: 'Oct 18, 2024',
+    dueTime: '10:30',
     assignee: 'Julian',
   },
   {
@@ -29,6 +31,7 @@ const INITIAL_TASKS = [
     status: 'TO DO',
     priority: 'HIGH',
     dueDate: 'Oct 20, 2024',
+    dueTime: '09:00',
     assignee: 'Sarah',
   },
   {
@@ -38,6 +41,7 @@ const INITIAL_TASKS = [
     status: 'COMPLETED',
     priority: 'LOW',
     dueDate: 'Oct 10, 2024',
+    dueTime: '16:45',
     assignee: 'Ian',
   },
 ];
@@ -49,6 +53,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
 
   const [tasks, setTasks] = useState(INITIAL_TASKS);
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const filteredTasks = filterStatus === 'ALL' ? tasks : tasks.filter(t => t.status === filterStatus);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,38 +63,37 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
     status: 'TO DO',
     priority: 'MEDIUM',
     dueDate: '',
-    assignee: ''
-  });
-
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTask.title || !newTask.assignee) return;
-    
-    const taskToAdd = {
-      id: `TSK-00${tasks.length + 1}`,
-      title: newTask.title,
-      description: newTask.description,
-      status: newTask.status,
-      priority: newTask.priority,
-      dueDate: newTask.dueDate || 'No Date',
-      assignee: newTask.assignee,
-    };
-
-    setTasks([taskToAdd, ...tasks]);
-    setIsModalOpen(false);
-    setNewTask({
-      title: '',
-      description: '',
-      status: 'TO DO',
-      priority: 'MEDIUM',
-      dueDate: '',
+      dueTime: '',
       assignee: ''
     });
-  };
 
-  const filteredTasks = tasks.filter(task => {
-    return filterStatus === 'ALL' || task.status === filterStatus;
-  });
+    const handleAddTask = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newTask.title || !newTask.assignee) return;
+
+      const taskToAdd = {
+        id: `TSK-00${tasks.length + 1}`,
+        title: newTask.title,
+        description: newTask.description,
+        status: newTask.status,
+        priority: newTask.priority,
+        dueDate: newTask.dueDate || 'No Date',
+        dueTime: newTask.dueTime || 'Any Time',
+        assignee: newTask.assignee,
+      };
+
+      setTasks([taskToAdd, ...tasks]);
+      setIsModalOpen(false);
+      setNewTask({
+        title: '',
+        description: '',
+        status: 'TO DO',
+        priority: 'MEDIUM',
+        dueDate: '',
+        dueTime: '',
+        assignee: ''
+      });
+    };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -191,8 +195,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                 </div>
                 <div className="flex flex-col items-end">
                    <svg className="w-4 h-4 text-gray-300 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                   <span className="text-[11px] font-bold text-gray-500">{task.dueDate}</span>
-                </div>
+                   <span className="text-[11px] font-bold text-gray-500">{task.dueDate}</span>                     {task.dueTime && <span className="text-[9px] font-bold text-gray-400 mt-0.5">{task.dueTime}</span>}                </div>
              </div>
           </div>
         ))}
@@ -212,71 +215,94 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
               </button>
             </div>
             
-            <form onSubmit={handleAddTask} className="p-6 space-y-6">
+            <form onSubmit={handleAddTask} className="p-6 space-y-5">
               <div>
-                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">Task Title</label>
+                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Task Title</label>
                 <input 
                   type="text"
                   required
                   value={newTask.title}
                   onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-gray-400 focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-colors outline-none"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none"
                   placeholder="e.g., Finalize floral arrangements"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">Description</label>
-                <input 
-                  type="text"
+                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Detailed Description</label>
+                <textarea 
                   required
+                  rows={3}
                   value={newTask.description}
                   onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-gray-400 focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-colors outline-none"
-                  placeholder="e.g., Short details about the task"
-                />
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none resize-none"
+                  placeholder="Include specific requirements, vendor contacts, or special instructions..."
+                ></textarea>
+              </div>
+
+              <div>
+                <div>
+                  <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Priority Level</label>
+                  <select 
+                    value={newTask.priority}
+                    onChange={(e) => setNewTask({...newTask, priority: e.target.value as any})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="CRITICAL">🔴 Critical</option>
+                    <option value="HIGH">🟠 High</option>
+                    <option value="MEDIUM">🟡 Medium</option>
+                    <option value="LOW">🟢 Low</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">Priority</label>
-                  <select 
-                    value={newTask.priority}
-                    onChange={(e) => setNewTask({...newTask, priority: e.target.value as any})}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-gray-400 focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-colors outline-none"
-                  >
-                    <option value="CRITICAL">Critical</option>
-                    <option value="HIGH">High</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="LOW">Low</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">Due Date</label>
+                  <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Due Date</label>
                   <input 
                     type="date"
                     required
                     value={newTask.dueDate}
                     onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-gray-400 focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-colors outline-none"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Due Time</label>
+                  <input 
+                    type="time"
+                    required
+                    value={newTask.dueTime}
+                    onChange={(e) => setNewTask({...newTask, dueTime: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none cursor-pointer"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">Assignee Initials</label>
-                <input 
-                  type="text"
-                  required
-                  maxLength={2}
-                  value={newTask.assignee}
-                  onChange={(e) => setNewTask({...newTask, assignee: e.target.value.toUpperCase()})}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-gray-400 focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-colors outline-none"
-                  placeholder="e.g., JD"
-                />
+                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Assignee (Staff Pool)</label>
+                <div className="relative">
+                  <select 
+                    required
+                    value={newTask.assignee}
+                    onChange={(e) => setNewTask({...newTask, assignee: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled>Select a team member...</option>
+                    <option value="EV">Elena Vance (Creative Director)</option>
+                    <option value="JD">James Director (Event Manager)</option>
+                    <option value="SO">Sarah Operations (Logistics Lead)</option>
+                    <option value="MV">Michael Vendor (Vendor Relations)</option>
+                    <option value="CS">Chloe Styles (Design & Styling)</option>
+                    <option value="AG">Alex Garcia (Technical Director)</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </div>
+                </div>
               </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
+              <div className="pt-5 mt-2 flex items-center justify-end gap-3 border-t border-gray-100">
                 <button 
                   type="button"
                   onClick={() => setIsModalOpen(false)}
