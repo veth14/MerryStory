@@ -39,7 +39,7 @@ export default function ProjectsView() {
         {/* Card 1 */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
           <div className="h-48 bg-gray-200 relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&q=80&w=800" alt="TechPH Summit 2026" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />  
+            <img src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=800" alt="TechPH Summit 2026" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />  
             <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm text-yellow-600 text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">In Progress</div>
           </div>
 
@@ -71,17 +71,24 @@ export default function ProjectsView() {
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                 <div className="bg-[#facc15] h-full rounded-full transition-all" style={{ width: '75%' }}></div>
               </div>
-              <div className="text-[10px] font-bold tracking-wider text-gray-400 mt-2 uppercase">Budget: ₱450,000</div>
+              <div className="text-[10px] font-bold tracking-wider text-gray-400 mt-2 uppercase">Budget: ?450,000</div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 mt-auto">
-              <Link href="/admin/events/1" className="flex-1 bg-[#d4a017] hover:bg-[#c49214] text-white font-bold py-2.5 rounded-xl text-[13px] transition-colors shadow-sm flex items-center justify-center">        
-                View
+            <div className="flex flex-col gap-2 mt-auto">
+              <Link href="/admin/events/1" className="w-full bg-[#d4a017] hover:bg-[#c49214] text-white font-extrabold uppercase tracking-widest py-3 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center">        
+                Event Dashboard
               </Link>
-              <Link href="/admin/events/1" className="w-10 h-10 border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
-                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-              </Link>
+              <div className="flex gap-2">
+                <Link href="/admin/rsvp/1" className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                  RSVP
+                </Link>
+                <Link href="/admin/tasks/techph-summit-2026" className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                  Tasks
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -89,7 +96,7 @@ export default function ProjectsView() {
         {/* Card 2 */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
           <div className="h-48 bg-gray-200 relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1540039155732-d6749b109c91?auto=format&fit=crop&q=80&w=800" alt="Manila Food Expo 2026" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <img src="https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&q=80&w=800" alt="Manila Food Expo 2026" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
             <div className="absolute top-4 right-4 bg-red-50 text-red-600 text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">At Risk</div>
           </div>
 
@@ -121,17 +128,24 @@ export default function ProjectsView() {
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                 <div className="bg-[#d4a017] h-full rounded-full transition-all" style={{ width: '25%' }}></div>
               </div>
-              <div className="text-[10px] font-bold tracking-wider text-gray-400 mt-2 uppercase">Budget: ₱450,000</div>
+              <div className="text-[10px] font-bold tracking-wider text-gray-400 mt-2 uppercase">Budget: ?450,000</div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 mt-auto">
-              <Link href="/admin/events/1" className="flex-1 bg-[#d4a017] hover:bg-[#c49214] text-white font-bold py-2.5 rounded-xl text-[13px] transition-colors shadow-sm flex items-center justify-center">        
-                View
+            <div className="flex flex-col gap-2 mt-auto">
+              <Link href="/admin/events/2" className="w-full bg-[#d4a017] hover:bg-[#c49214] text-white font-extrabold uppercase tracking-widest py-3 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center">        
+                Event Dashboard
               </Link>
-              <Link href="/admin/events/1" className="w-10 h-10 border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
-                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-              </Link>
+              <div className="flex gap-2">
+                <Link href="/admin/rsvp/2" className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                  RSVP
+                </Link>
+                <Link href="/admin/tasks/manila-food-expo-2026" className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                  Tasks
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -139,7 +153,7 @@ export default function ProjectsView() {
         {/* Card 3 */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
           <div className="h-48 bg-gray-200 relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1509631179647-0c5000642f53?auto=format&fit=crop&q=80&w=800" alt="Garcia Santos Wedding" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <img src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=800" alt="Garcia Santos Wedding" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
             <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm text-yellow-600 text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">In Progress</div>
           </div>
 
@@ -171,17 +185,24 @@ export default function ProjectsView() {
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                 <div className="bg-[#d4a017] h-full rounded-full transition-all" style={{ width: '15%' }}></div>
               </div>
-              <div className="text-[10px] font-bold tracking-wider text-gray-400 mt-2 uppercase">Budget: ₱150,000</div>
+              <div className="text-[10px] font-bold tracking-wider text-gray-400 mt-2 uppercase">Budget: ?150,000</div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 mt-auto">
-              <Link href="/admin/events/1" className="flex-1 bg-[#d4a017] hover:bg-[#c49214] text-white font-bold py-2.5 rounded-xl text-[13px] transition-colors shadow-sm flex items-center justify-center">        
-                View
+            <div className="flex flex-col gap-2 mt-auto">
+              <Link href="/admin/events/3" className="w-full bg-[#d4a017] hover:bg-[#c49214] text-white font-extrabold uppercase tracking-widest py-3 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center">        
+                Event Dashboard
               </Link>
-              <Link href="/admin/events/1" className="w-10 h-10 border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
-                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-              </Link>
+              <div className="flex gap-2">
+                <Link href="/admin/rsvp/3" className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                  RSVP
+                </Link>
+                <Link href="/admin/tasks/garcia-santos-wedding" className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                  Tasks
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -189,7 +210,7 @@ export default function ProjectsView() {
         {/* Card 4 */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
           <div className="h-48 bg-gray-200 relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1540039155732-d6749b109c91?auto=format&fit=crop&q=80&w=800" alt="Sofia 18th Birthday" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> 
+            <img src="https://images.unsplash.com/photo-1533174000222-94b29bb88b69?auto=format&fit=crop&q=80&w=800" alt="Sofia 18th Birthday" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> 
             <div className="absolute top-4 right-4 bg-blue-50 text-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">Scheduled</div>
           </div>
 
@@ -221,17 +242,24 @@ export default function ProjectsView() {
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                 <div className="bg-[#d4a017] h-full rounded-full transition-all" style={{ width: '5%' }}></div>
               </div>
-              <div className="text-[10px] font-bold tracking-wider text-gray-400 mt-2 uppercase">Budget: ₱650,000</div>
+              <div className="text-[10px] font-bold tracking-wider text-gray-400 mt-2 uppercase">Budget: ?650,000</div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 mt-auto">
-              <Link href="/admin/events/1" className="flex-1 bg-[#d4a017] hover:bg-[#c49214] text-white font-bold py-2.5 rounded-xl text-[13px] transition-colors shadow-sm flex items-center justify-center">        
-                View
+            <div className="flex flex-col gap-2 mt-auto">
+              <Link href="/admin/events/4" className="w-full bg-[#d4a017] hover:bg-[#c49214] text-white font-extrabold uppercase tracking-widest py-3 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center">        
+                Event Dashboard
               </Link>
-              <Link href="/admin/events/1" className="w-10 h-10 border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
-                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-              </Link>
+              <div className="flex gap-2">
+                <Link href="/admin/rsvp/4" className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                  RSVP
+                </Link>
+                <Link href="/admin/tasks/sofia-18th-birthday" className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                  Tasks
+                </Link>
+              </div>
             </div>
           </div>
         </div>

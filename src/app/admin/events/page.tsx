@@ -5,7 +5,7 @@ import CalendarView from '@/components/admin/events/CalendarView';
 import VendorsView from '@/components/admin/events/VendorsView';
 
 export default function EventsAdminPage() {
-  const [activeTab, setActiveTab] = useState('calendar');
+  const [activeTab, setActiveTab] = useState('projects');
 
   return (
     <div className="space-y-8 w-full max-w-none">
