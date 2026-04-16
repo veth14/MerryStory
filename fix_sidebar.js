@@ -1,0 +1,1 @@
+const fs = require('fs'); let code = fs.readFileSync('src/components/admin/AdminSidebar.tsx', 'utf8'); let start = code.indexOf('<button className="flex items-center justify-center'); let end = code.indexOf('<div className="flex flex-col gap-3'); code = code.substring(0, start) + code.substring(end); fs.writeFileSync('src/components/admin/AdminSidebar.tsx', code);
