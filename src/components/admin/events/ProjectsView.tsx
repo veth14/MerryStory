@@ -26,8 +26,8 @@ export default function ProjectsView() {
             <svg className="w-4 h-4 text-gray-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
           </div>
 
-          <Link href="/admin/events/new" className="flex items-center justify-center gap-2 bg-[#facc15] hover:bg-[#eab308] text-gray-900 font-bold py-3 px-6 rounded-xl text-[14px] transition-all shadow-sm hover:shadow-md transform hover:-translate-y-0.5 whitespace-nowrap">
-             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+          <Link href="/admin/events/new" className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-colors rounded-xl shadow-md shadow-[#eebf43]/20 whitespace-nowrap">
+             <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
              New Event
           </Link>
         </div>

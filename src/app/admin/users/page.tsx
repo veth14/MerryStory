@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef } from 'react';
-import { MoreVertical, Users, BadgeCheck, Mail, ChevronLeft, ChevronRight, ShieldAlert } from 'lucide-react';
+import { MoreVertical, Users, BadgeCheck, Mail, ChevronLeft, ChevronRight, ShieldAlert, Download, Plus, ArrowRight } from 'lucide-react';
 
 const INITIAL_USERS = [
   { id: 'USL-001', name: 'Elena Vance', email: 'elena.v@merrystory.com', role: 'ADMINISTRATOR', status: 'Active', statusColor: 'bg-emerald-500', lastActive: '2 mins ago', avatar: 'https://i.pravatar.cc/150?u=12' },
@@ -61,20 +61,24 @@ export default function UsersAdministrationPage() {
       <div className="w-full text-[#1d1d1f]">
         
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6 pt-2">
           <div>
-            <p className="text-[#a88231] text-xs font-bold tracking-[0.15em] mb-2 uppercase">Access Control</p>
-            <h1 className="text-4xl font-extrabold text-[#1d1d1f] tracking-tight mb-3">Users & Access<br/>Management</h1>
-            <p className="text-[#71717a] text-sm max-w-md leading-relaxed">
+            <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
+              System Admin <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Access Control</span>
+            </p>
+            <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
+              Users & <span className="text-[#eebf43] italic pr-2">Management</span>
+            </h1>
+            <p className="text-[#71717a] text-sm mt-4 max-w-md leading-relaxed font-medium">
               Curate your production collective. Assign roles that mirror the bespoke precision of your events.
             </p>
           </div>
           <div className="flex items-center gap-4 shrink-0 mt-4 md:mt-0">
-            <button className="px-6 py-3 rounded-md bg-white border border-[#e5e7eb] text-[#1d1d1f] text-xs font-bold tracking-wider uppercase transition hover:bg-gray-50 flex items-center shadow-sm">
-              Export Directory
+            <button className="flex items-center justify-center gap-2 px-7 py-3.5 bg-white border border-gray-200 text-[#0f172a] text-[11px] font-black tracking-[0.1em] uppercase hover:bg-gray-50 transition-colors rounded-xl shadow-sm">
+              <Download size={14} className="text-[#0f172a]" /> Export Directory
             </button>
-            <button onClick={handleAddNew} className="px-6 py-3 rounded-md bg-[#eebf43] hover:bg-[#dcae32] text-[#1d1d1f] text-xs font-bold tracking-wider uppercase transition shadow-sm">
-              Invite New User
+            <button onClick={handleAddNew} className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-colors rounded-xl shadow-md shadow-[#eebf43]/20">
+              <Plus size={14} className="text-white" /> Invite New User
             </button>
           </div>
         </div>
@@ -314,7 +318,6 @@ export default function UsersAdministrationPage() {
                         <div>
                           <label htmlFor="role" className="block text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Access Role</label>
                           <select id="role" name="role" value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="block w-full py-2.5 px-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:border-[#dcae32] focus:ring-1 focus:ring-[#dcae32] text-sm text-[#1d1d1f]">
-                            <option value="ADMINISTRATOR">Administrator</option>
                             <option value="LEAD COORDINATOR">Lead Coordinator</option>
                             <option value="PRODUCTION STAFF">Production Staff</option>
                           </select>

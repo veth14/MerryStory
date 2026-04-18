@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 
+import { ArrowRight } from 'lucide-react';
+
 const GUESTS = [
   {
     id: 1,
@@ -56,18 +58,23 @@ export default function RsvpDetailPage() {
       </Link>
 
       {/* Header Section */}
-      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2">
         <div className="max-w-3xl">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-2">Guest Registry</h1>
-          <p className="text-gray-500 text-[14px] font-medium leading-relaxed">
+          <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
+            Invitations <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Guest List</span>
+          </p>
+          <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
+            Guest <span className="text-[#eebf43] italic pr-2">Registry</span>
+          </h1>
+          <p className="text-[#71717a] text-sm mt-4 max-w-md leading-relaxed font-medium">
             A curated overview of your production's attendee lifecycle. Manage high-tier classifications and track real-time RSVP engagement metrics.
           </p>
         </div>
         <Link 
           href="/admin/rsvp/scan"
-          className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gray-900 hover:bg-black text-white text-[11px] font-extrabold uppercase tracking-widest rounded-sm transition-all shadow-xl shadow-gray-900/20 shrink-0"
+          className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-colors rounded-xl shadow-md shadow-[#eebf43]/20 shrink-0"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+          <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
           SCAN QR TICKET
         </Link>
       </div>
