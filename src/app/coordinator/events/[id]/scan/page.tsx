@@ -1,12 +1,14 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, AlertCircle, ScanLine, Loader2, UserCheck, ShieldCheck, ChevronLeft } from 'lucide-react';
 
-export default function RsvpScannerPage() {
+export default function CoordinatorScannerPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { id } = use(params);
+  
   const [scannedData, setScannedData] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -47,7 +49,7 @@ export default function RsvpScannerPage() {
 
     } catch (error) {
       console.error('Scan Parse Error:', error);
-      setErrorMsg('Unrecognized QR format. Please scan a valid MerryStory ticket.');
+      setErrorMsg('Unrecognized QR format. Please scan a valid check-in ticket.');
       setTimeout(() => {
         setIsProcessing(false);
         setErrorMsg('');
@@ -56,24 +58,27 @@ export default function RsvpScannerPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2">
+    <div className="animate-in fade-in duration-500 w-full pb-12 mt-2 max-w-none text-[#1d1d1f]">
       {/* Breadcrumb / Back Navigation */}
-      <Link href="/admin/rsvp" className="inline-flex items-center gap-2 text-[11px] font-extrabold text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-colors mb-4 group">
+      <button 
+        onClick={() => router.push(`/coordinator/events/${id}?tab=rsvp`)} 
+        className="inline-flex items-center gap-2 text-[11px] font-extrabold text-gray-400 hover:text-[#d4a017] uppercase tracking-widest transition-colors mb-4 group"
+      >
         <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform" strokeWidth={3} />
-        BACK TO REGISTRY
-      </Link>
+        BACK TO EVENT
+      </button>
 
       {/* Header Section */}
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2">
         <div className="max-w-3xl">
           <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
-            Invitations <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Authentication</span>
+            Operations <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Authentication</span>
           </p>
           <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
-            Ticket <span className="text-[#eebf43] italic pr-2">Scanner</span>
+            Ticket <span className="text-[#d4a017] italic pr-2">Scanner</span>
           </h1>
           <p className="text-[#71717a] text-sm mt-4 max-w-lg leading-relaxed font-medium">
-            Point your camera at a guest's unique QR code. The system will instantly authenticate their invitation and update the live registry.
+            Point your camera at a guest's unique QR code. The system will instantly authenticate their invitation and check them into the event.
           </p>
         </div>
         <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-5 py-3 rounded-2xl shrink-0">
@@ -111,13 +116,13 @@ export default function RsvpScannerPage() {
                   <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                     <div className="w-56 h-56 sm:w-72 sm:h-72 border-[3px] border-white/20 rounded-3xl relative transition-all duration-300">
                       {/* Corner accents */}
-                      <div className="absolute -top-1 -left-1 w-10 h-10 border-t-[4px] border-l-[4px] border-[#eebf43] rounded-tl-3xl"></div>
-                      <div className="absolute -top-1 -right-1 w-10 h-10 border-t-[4px] border-r-[4px] border-[#eebf43] rounded-tr-3xl"></div>
-                      <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-[4px] border-l-[4px] border-[#eebf43] rounded-bl-3xl"></div>
-                      <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-[4px] border-r-[4px] border-[#eebf43] rounded-br-3xl"></div>
+                      <div className="absolute -top-1 -left-1 w-10 h-10 border-t-[4px] border-l-[4px] border-[#d4a017] rounded-tl-3xl"></div>
+                      <div className="absolute -top-1 -right-1 w-10 h-10 border-t-[4px] border-r-[4px] border-[#d4a017] rounded-tr-3xl"></div>
+                      <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-[4px] border-l-[4px] border-[#d4a017] rounded-bl-3xl"></div>
+                      <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-[4px] border-r-[4px] border-[#d4a017] rounded-br-3xl"></div>
                       
                       {/* Scanning line animation */}
-                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#eebf43] opacity-50 shadow-[0_0_20px_#eebf43] animate-[scan_2s_ease-in-out_infinite]"></div>
+                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#d4a017] opacity-50 shadow-[0_0_20px_#d4a017] animate-[scan_2s_ease-in-out_infinite]"></div>
                     </div>
                   </div>
 
@@ -128,7 +133,7 @@ export default function RsvpScannerPage() {
                        Camera Active
                      </span>
                      {isProcessing && (
-                       <span className="flex items-center gap-2 bg-[#eebf43]/90 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-extrabold tracking-widest uppercase shadow-lg shadow-[#eebf43]/20">
+                       <span className="flex items-center gap-2 bg-[#d4a017]/90 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-extrabold tracking-widest uppercase shadow-lg shadow-[#d4a017]/20">
                          <Loader2 size={12} className="animate-spin" /> Analyzing
                        </span>
                      )}
@@ -191,7 +196,7 @@ export default function RsvpScannerPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                       <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Party Size</p>
-                      <p className="text-xl font-black text-[#eebf43]">{scannedData.attendees || 1} PAX</p>
+                      <p className="text-xl font-black text-[#d4a017]">{scannedData.attendees || 1} PAX</p>
                     </div>
                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                       <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Pass Code</p>

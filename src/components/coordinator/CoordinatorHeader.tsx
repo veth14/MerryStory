@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Search, User, MessageSquare, Briefcase } from 'lucide-react';
+import { Bell, Search, User, MessageSquare, Calendar } from 'lucide-react';
 
-export default function AdminHeader() {
+export default function CoordinatorHeader() {
   const [activeDropdown, setActiveDropdown] = useState<'notifications' | 'profile' | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -52,29 +52,29 @@ export default function AdminHeader() {
               <div className="max-h-80 overflow-y-auto p-2">
                 <div className="p-3 hover:bg-[#fafafa] rounded-xl cursor-pointer transition-colors mb-1">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="w-8 h-8 rounded-full bg-[#fff9e6] text-[#d4a017] flex items-center justify-center shrink-0 mt-0.5">
                       <MessageSquare size={14} />
                     </div>
                     <div>
-                      <p className="text-sm text-[#1d1d1f] font-medium leading-tight">New inquiry received from <span className="font-bold">Garcia-Reyes</span></p>
-                      <p className="text-xs text-[#a1a1aa] mt-1">2 minutes ago</p>
+                      <p className="text-sm text-[#1d1d1f] font-medium leading-tight">Admin assigned a new task for <span className="font-bold">Lim Launch</span></p>
+                      <p className="text-xs text-[#a1a1aa] mt-1">10 minutes ago</p>
                     </div>
                   </div>
                 </div>
                 <div className="p-3 hover:bg-[#fafafa] rounded-xl cursor-pointer transition-colors">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                      <Briefcase size={14} />
+                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <Calendar size={14} />
                     </div>
                     <div>
-                      <p className="text-sm text-[#1d1d1f] font-medium leading-tight">Contract signed for <span className="font-bold">Lim Launch</span></p>
-                      <p className="text-xs text-[#a1a1aa] mt-1">1 hour ago</p>
+                      <p className="text-sm text-[#1d1d1f] font-medium leading-tight">Schedule updated for <span className="font-bold">Garcia Wedding</span></p>
+                      <p className="text-xs text-[#a1a1aa] mt-1">2 hours ago</p>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="p-3 border-t border-gray-50 text-center">
-                <button className="text-[11px] font-bold uppercase tracking-widest text-[#71717a] hover:text-[#1d1d1f] transition-colors">View All Notifications</button>
+                <button onClick={() => window.location.href = '/coordinator/tasks'} className="text-[11px] font-bold uppercase tracking-widest text-[#71717a] hover:text-[#1d1d1f] transition-colors">View All Assigned</button>
               </div>
             </div>
           )}
@@ -86,20 +86,20 @@ export default function AdminHeader() {
             onClick={() => handleToggle('profile')}
             className={`w-9 h-9 bg-gray-200 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer transition-all ${activeDropdown === 'profile' ? 'ring-2 ring-[#1d1d1f]' : 'hover:ring-2 hover:ring-gray-200'}`}
           >
-             <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Admin avatar" className="w-full h-full object-cover" />
+             <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Coordinator avatar" className="w-full h-full object-cover" />
           </div>
 
           {activeDropdown === 'profile' && (
             <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2">
               <div className="p-4 border-b border-gray-50 flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Admin avatar" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Coordinator avatar" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
                 <div>
-                  <p className="text-sm font-bold text-[#1d1d1f]">Merry Admin</p>
-                  <p className="text-xs font-medium text-[#a1a1aa]">admin@merrystory.com</p>
+                  <p className="text-sm font-bold text-[#1d1d1f]">Coordinator</p>
+                  <p className="text-xs font-medium text-[#a1a1aa]">coor@merrystory.com</p>
                 </div>
               </div>
               <div className="p-2">
-                <button onClick={() => window.location.href = '/admin/profile'} className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#1d1d1f] hover:bg-[#fafafa] rounded-xl transition-colors">
+                <button onClick={() => window.location.href = '/coordinator/profile'} className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#1d1d1f] hover:bg-[#fafafa] rounded-xl transition-colors">
                   <User size={16} className="text-[#a1a1aa]" /> Edit Profile
                 </button>
               </div>

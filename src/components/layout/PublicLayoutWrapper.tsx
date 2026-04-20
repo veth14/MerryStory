@@ -6,9 +6,9 @@ import { Footer } from "@/components/layout/Footer";
 
 export default function PublicLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAdminRoute = pathname?.startsWith("/admin");
+  const isDashboardRoute = pathname?.startsWith("/admin") || pathname?.startsWith("/coordinator");
 
-  if (isAdminRoute) {
+  if (isDashboardRoute) {
     return <>{children}</>;
   }
 
