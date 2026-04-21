@@ -32,7 +32,7 @@ export default function CoordinatorProfilePage() {
 
       {/* Toast Alert */}
       {alert && (
-        <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border animate-in slide-in-from-top-4 fade-in ${alert.type === 'info' ? 'bg-blue-50 border-blue-100 text-blue-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-3`}>
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border animate-in slide-in-from-bottom-4 fade-in ${alert.type === 'info' ? 'bg-blue-50 border-blue-100 text-blue-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-3`}>
           {alert.type === 'info' ? <Bell size={18} /> : <CheckCircle2 size={18} />}
           <span className="text-sm font-extrabold tracking-wide">{alert.message}</span>
         </div>

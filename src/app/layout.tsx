@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import PublicLayoutWrapper from '@/components/layout/PublicLayoutWrapper';
+import { AuthProvider } from '@/components/auth/AuthProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -21,9 +22,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth">
       <body className={inter.className}>
-        <PublicLayoutWrapper>
-          {children}
-        </PublicLayoutWrapper>
+        <AuthProvider>
+          <PublicLayoutWrapper>
+            {children}
+          </PublicLayoutWrapper>
+        </AuthProvider>
       </body>
     </html>
   );

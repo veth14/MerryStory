@@ -2,21 +2,92 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { getFirebaseClientAuth } from "@/lib/firebase/client";
+
+type AuthProfileResponse = {
+  uid: string;
+  email: string | null;
+  role: "admin" | "coordinator" | "client" | null;
+};
+
+function toFriendlyAuthErrorMessage(error: unknown): string {
+  const fallbackMessage = "Unable to sign in right now. Please verify your credentials and try again.";
+
+  if (!(error instanceof Error)) {
+    return fallbackMessage;
+  }
+
+  const authCode = (error as Error & { code?: string }).code;
+
+  switch (authCode) {
+    case "auth/invalid-email":
+      return "The email format is invalid.";
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "Invalid email or password.";
+    case "auth/too-many-requests":
+      return "Too many login attempts. Please wait and try again.";
+    default:
+      return error.message || fallbackMessage;
+  }
+}
 
 export function SignInForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    setAuthError(null);
     setIsLoading(true);
-    
-    // Simulate authentication delay
-    setTimeout(() => {
+
+    try {
+      const firebaseAuth = getFirebaseClientAuth();
+      const credentials = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
+      const idToken = await credentials.user.getIdToken();
+
+      const profileResponse = await fetch("/api/auth/me", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+        cache: "no-store",
+      });
+
+      const profilePayload = (await profileResponse.json().catch(() => ({}))) as Partial<AuthProfileResponse> & {
+        error?: string;
+      };
+
+      if (!profileResponse.ok) {
+        throw new Error(profilePayload.error || "Failed to validate account access.");
+      }
+
+      if (profilePayload.role === "admin") {
+        router.push("/admin");
+        router.refresh();
+        return;
+      }
+
+      if (profilePayload.role === "coordinator") {
+        router.push("/coordinator");
+        router.refresh();
+        return;
+      }
+
+      await signOut(firebaseAuth);
+      throw new Error("This account is authenticated but has no dashboard role assigned yet.");
+    } catch (error) {
+      setAuthError(toFriendlyAuthErrorMessage(error));
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -64,6 +135,12 @@ export function SignInForm() {
             {isLoading ? 'AUTHENTICATING...' : 'SECURE LOGIN'}
           </span>
         </button>
+
+        {authError && (
+          <p className="mt-3 text-[10px] font-semibold tracking-[0.08em] text-red-500 uppercase leading-relaxed">
+            {authError}
+          </p>
+        )}
       </div>
 
       <div className="pt-2 text-center">

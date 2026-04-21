@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import { AuthGuardError, requireRole } from '@/lib/auth/guards';
 
 export async function POST(request: Request) {
   try {
+    await requireRole(request, ['admin', 'coordinator']);
+
     const body = await request.json();
     const { subject, priority, message } = body;
 
@@ -70,8 +73,15 @@ export async function POST(request: Request) {
     await transporter.sendMail(mailOptions);
 
     return NextResponse.json({ success: true, message: 'Support ticket sent successfully' }, { status: 200 });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof AuthGuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+
     console.error('Support ticket error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to send support ticket' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to send support ticket' },
+      { status: 500 }
+    );
   }
 }

@@ -2,10 +2,32 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Bell, Search, User, MessageSquare, Briefcase } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function AdminHeader() {
   const [activeDropdown, setActiveDropdown] = useState<'notifications' | 'profile' | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+  const [profileData, setProfileData] = useState<{name?: string, email?: string, avatarUrl?: string}>({});
+
+  useEffect(() => {
+    async function loadHeaderProfile() {
+      if (!user) return;
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch('/api/users/profile', {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProfileData(data);
+        }
+      } catch (err) {
+        console.error("Failed to load header profile", err);
+      }
+    }
+    loadHeaderProfile();
+  }, [user]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -86,16 +108,16 @@ export default function AdminHeader() {
             onClick={() => handleToggle('profile')}
             className={`w-9 h-9 bg-gray-200 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer transition-all ${activeDropdown === 'profile' ? 'ring-2 ring-[#1d1d1f]' : 'hover:ring-2 hover:ring-gray-200'}`}
           >
-             <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Admin avatar" className="w-full h-full object-cover" />
+             <img src={profileData.avatarUrl || `https://ui-avatars.com/api/?name=${profileData.name || 'Admin'}&background=eebf43&color=fff`} alt="Admin avatar" className="w-full h-full object-cover" />
           </div>
 
           {activeDropdown === 'profile' && (
             <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2">
               <div className="p-4 border-b border-gray-50 flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Admin avatar" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
-                <div>
-                  <p className="text-sm font-bold text-[#1d1d1f]">Merry Admin</p>
-                  <p className="text-xs font-medium text-[#a1a1aa]">admin@merrystory.com</p>
+                <img src={profileData.avatarUrl || `https://ui-avatars.com/api/?name=${profileData.name || 'Admin'}&background=eebf43&color=fff`} alt="Admin avatar" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                <div className="overflow-hidden">
+                  <p className="text-sm font-bold text-[#1d1d1f] truncate">{profileData.name || 'Admin User'}</p>
+                  <p className="text-xs font-medium text-[#a1a1aa] truncate">{profileData.email || user?.email || 'admin@merrystory.com'}</p>
                 </div>
               </div>
               <div className="p-2">

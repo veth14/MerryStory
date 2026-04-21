@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ArrowRight, Code, Mail, Phone, ExternalLink, ShieldCheck, MessageSquare, Send, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { getFirebaseClientAuth } from '@/lib/firebase/client';
 
 export default function SupportCenterPage() {
   const [isSending, setIsSending] = useState(false);
@@ -23,9 +24,20 @@ export default function SupportCenterPage() {
     setIsSending(true);
 
     try {
+      const currentUser = getFirebaseClientAuth().currentUser;
+
+      if (!currentUser) {
+        throw new Error('Please sign in again to send a support ticket.');
+      }
+
+      const idToken = await currentUser.getIdToken();
+
       const response = await fetch('/api/admin/support', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({ subject, priority, message }),
       });
 
@@ -52,7 +64,7 @@ export default function SupportCenterPage() {
 
       {/* Toast Alert */}
       {alert && (
-        <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border animate-in slide-in-from-top-4 fade-in ${alert.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-3`}>
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border animate-in slide-in-from-bottom-4 fade-in ${alert.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-3`}>
           {alert.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
           <span className="text-sm font-extrabold tracking-wide">{alert.message}</span>
         </div>
