@@ -1,38 +1,188 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, User, Mail, Phone, Lock, Save, Loader2, CheckCircle2, Bell, Tag } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function CoordinatorProfilePage() {
+  const { user, role } = useAuth();
+  const [isFetching, setIsFetching] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [alert, setAlert] = useState<{ message: string, type: 'success'|'info' } | null>(null);
+  const [alert, setAlert] = useState<{ message: string, type: 'success'|'info'|'error' } | null>(null);
 
-  const showAlert = (message: string, type: 'success' | 'info' = 'success') => {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+  });
+
+  useEffect(() => {
+    async function fetchProfile() {
+      if (!user) return;
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch('/api/users/profile', {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setFormData({
+            name: data.name || '',
+            email: data.email || user.email || '',
+            phone: data.phone || '',
+            password: '',
+          });
+          if (data.avatarUrl) setAvatarUrl(data.avatarUrl);
+        } else {
+          showAlert('Failed to load profile data.', 'error');
+        }
+      } catch (error) {
+        console.error(error);
+        showAlert('An error occurred while loading profile.', 'error');
+      } finally {
+        setIsFetching(false);
+      }
+    }
+    fetchProfile();
+  }, [user]);
+
+  const showAlert = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setAlert({ message, type });
     setTimeout(() => setAlert(null), 3000);
   };
 
   const handleUploadImage = () => {
-    showAlert('Image upload feature will be connected to storage shortly.', 'info');
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
-  const handleSave = () => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/users/profile/avatar', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: formDataUpload,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvatarUrl(data.avatarUrl);
+        showAlert('Profile picture updated successfully.', 'success');
+      } else {
+        const errData = await response.json();
+        showAlert(errData.error || 'Failed to upload image.', 'error');
+      }
+    } catch (error) {
+      console.error(error);
+      showAlert('An error occurred during upload', 'error');
+    } finally {
       setIsLoading(false);
-      setSuccess(true);
-      showAlert('Profile information updated successfully.', 'success');
-      setTimeout(() => setSuccess(false), 3000);
-    }, 1500);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
+
+  const handleRemoveImage = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/users/profile/avatar', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      if (response.ok) {
+        setAvatarUrl(null);
+        showAlert('Image removed successfully.', 'success');
+      } else {
+        const errData = await response.json();
+        showAlert(errData.error || 'Failed to remove image.', 'error');
+      }
+    } catch (error) {
+       showAlert('An error occurred while removing the image.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    setSuccess(false);
+    
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          password: formData.password,
+        }),
+      });
+
+      if (response.ok) {
+        setSuccess(true);
+        showAlert('Profile information updated successfully.', 'success');
+        setFormData(prev => ({ ...prev, password: '' }));
+        setTimeout(() => setSuccess(false), 3000);
+      } else {
+        const errData = await response.json();
+        showAlert(errData.error || 'Failed to update profile.', 'error');
+      }
+    } catch (error) {
+      console.error(error);
+      showAlert('An error occurred while saving.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isFetching) {
+    return (
+      <div className="flex h-64 w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#d4a017]" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative">
 
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+
       {/* Toast Alert */}
       {alert && (
-        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border animate-in slide-in-from-bottom-4 fade-in ${alert.type === 'info' ? 'bg-blue-50 border-blue-100 text-blue-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-3`}>
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border animate-in slide-in-from-bottom-4 fade-in ${alert.type === 'info' ? 'bg-blue-50 border-blue-100 text-blue-800' : alert.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-3`}>
           {alert.type === 'info' ? <Bell size={18} /> : <CheckCircle2 size={18} />}
           <span className="text-sm font-extrabold tracking-wide">{alert.message}</span>
         </div>
@@ -62,7 +212,7 @@ export default function CoordinatorProfilePage() {
             
             <div className="relative group cursor-pointer mb-6 z-10" onClick={handleUploadImage}>
               <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-xl group-hover:opacity-90 transition-all flex items-center justify-center bg-[#1d1d1f] text-white">
-                 <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Coordinator" className="w-full h-full object-cover" />
+                 <img src={avatarUrl || `https://ui-avatars.com/api/?name=${formData.name || 'Coordinator'}&background=1d1d1f&color=fff`} alt="Coordinator" className="w-full h-full object-cover" />
               </div>
               <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <span className="text-xs font-bold text-white uppercase tracking-widest">Change</span>
@@ -70,9 +220,9 @@ export default function CoordinatorProfilePage() {
             </div>
             
             <div className="z-10">
-              <h2 className="text-2xl font-black text-[#1d1d1f]">Coordinator</h2>
-              <p className="text-sm font-medium text-[#71717a] mt-1 flex items-center justify-center gap-1.5">
-                <Tag size={14} className="text-[#d4a017]" /> Merry Story Staff
+              <h2 className="text-2xl font-black text-[#1d1d1f]">{formData.name || 'Set your name'}</h2>
+              <p className="text-sm font-medium text-[#71717a] mt-1 flex items-center justify-center gap-1.5 capitalize">
+                <Tag size={14} className="text-[#d4a017]" /> {role || 'Merry Story Staff'}
               </p>
             </div>
 
@@ -83,7 +233,7 @@ export default function CoordinatorProfilePage() {
               Upload New Image
             </button>
             <button 
-              onClick={() => showAlert('Removing image...', 'info')}
+              onClick={handleRemoveImage}
               className="mt-3 px-6 py-2.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all w-full max-w-[200px]"
             >
               Remove Picture
@@ -104,7 +254,10 @@ export default function CoordinatorProfilePage() {
                   </label>
                   <input 
                     type="text" 
-                    defaultValue="Coordinator First" 
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter your full name" 
                     className="w-full px-4 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-sm font-medium text-[#1d1d1f] focus:ring-2 focus:ring-[#d4a017]/20 focus:border-[#d4a017] transition-all outline-none"
                   />
                 </div>
@@ -115,7 +268,8 @@ export default function CoordinatorProfilePage() {
                   </label>
                   <input 
                     type="email" 
-                    defaultValue="coor@merrystory.com" 
+                    name="email"
+                    value={formData.email}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 shadow-sm rounded-xl text-sm font-medium text-[#a1a1aa] outline-none cursor-not-allowed"
                     readOnly
                   />
@@ -127,6 +281,9 @@ export default function CoordinatorProfilePage() {
                   </label>
                   <input 
                     type="tel" 
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
                     placeholder="+63 9XX XXX XXXX" 
                     className="w-full px-4 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-sm font-medium text-[#1d1d1f] focus:ring-2 focus:ring-[#d4a017]/20 focus:border-[#d4a017] transition-all outline-none"
                   />
@@ -138,6 +295,9 @@ export default function CoordinatorProfilePage() {
                   </label>
                   <input 
                     type="password" 
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
                     placeholder="Leave blank to keep same" 
                     className="w-full px-4 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-sm font-medium text-[#1d1d1f] focus:ring-2 focus:ring-[#d4a017]/20 focus:border-[#d4a017] transition-all outline-none"
                   />
@@ -147,7 +307,7 @@ export default function CoordinatorProfilePage() {
 
             <div className="pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-6">
               <p className="text-[10px] uppercase tracking-widest text-[#a1a1aa] font-extrabold text-center sm:text-left">
-                Last login: <span className="text-[#1d1d1f]">April 20, 2026</span>
+                Last login: <span className="text-[#1d1d1f]">Currently Active</span>
               </p>
 
               <button 

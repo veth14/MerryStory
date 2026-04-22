@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import { getMongoDb } from '@/lib/mongodb';
 
 export async function POST(request: Request) {
   try {
@@ -124,11 +125,27 @@ export async function POST(request: Request) {
       `,
     };
 
-    // Send both emails at the same time to speed up the API response
-    await Promise.all([
-      transporter.sendMail(mailToYou),
-      transporter.sendMail(mailToClient)
-    ]);
+    // Save to MongoDB
+    try {
+      const db = await getMongoDb();
+      const inquiriesCollection = db.collection('inquiries');
+      
+      const inquiryDoc = {
+        client: name,
+        email: email,
+        type: type,
+        eventType: type === 'inquiry' ? (body.eventType || 'Not specified') : 'Consultation',
+        needs: type === 'inquiry' ? (body.message || 'Not specified') : `Preferred Date: ${body.date || 'Not specified'} | Guests: ${body.guests || 'Not specified'} | Vision: ${body.vision || 'Not specified'}`,
+        status: 'New',
+        submitted: new Date().toISOString(),
+        isArchived: false,
+      };
+
+      await inquiriesCollection.insertOne(inquiryDoc);
+    } catch (dbError) {
+      console.error('Failed to save inquiry to database:', dbError);
+      // We don't fail the request here, emails were sent
+    }
 
     return NextResponse.json({ message: 'Emails sent successfully!' }, { status: 200 });
 

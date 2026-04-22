@@ -9,6 +9,7 @@ export default function AdminHeader() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const [profileData, setProfileData] = useState<{name?: string, email?: string, avatarUrl?: string}>({});
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadHeaderProfile() {
@@ -27,6 +28,23 @@ export default function AdminHeader() {
       }
     }
     loadHeaderProfile();
+
+    async function loadNotifications() {
+      if (!user) return;
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch('/api/notifications', {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data.notifications || []);
+        }
+      } catch (err) {
+        console.error("Failed to load notifications", err);
+      }
+    }
+    loadNotifications();
   }, [user]);
 
   useEffect(() => {
@@ -62,7 +80,9 @@ export default function AdminHeader() {
             className={`transition-colors relative p-1 rounded-md ${activeDropdown === 'notifications' ? 'text-[#1d1d1f] bg-gray-100' : 'hover:text-[#1d1d1f]'}`}
           >
             <Bell size={20} strokeWidth={2} />
-            <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            {notifications.length > 0 && (
+              <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            )}
           </button>
           
           {activeDropdown === 'notifications' && (
@@ -72,28 +92,26 @@ export default function AdminHeader() {
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#eebf43] cursor-pointer hover:text-[#dcae32]">Mark all read</span>
               </div>
               <div className="max-h-80 overflow-y-auto p-2">
-                <div className="p-3 hover:bg-[#fafafa] rounded-xl cursor-pointer transition-colors mb-1">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-                      <MessageSquare size={14} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-[#1d1d1f] font-medium leading-tight">New inquiry received from <span className="font-bold">Garcia-Reyes</span></p>
-                      <p className="text-xs text-[#a1a1aa] mt-1">2 minutes ago</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-3 hover:bg-[#fafafa] rounded-xl cursor-pointer transition-colors">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                      <Briefcase size={14} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-[#1d1d1f] font-medium leading-tight">Contract signed for <span className="font-bold">Lim Launch</span></p>
-                      <p className="text-xs text-[#a1a1aa] mt-1">1 hour ago</p>
-                    </div>
-                  </div>
-                </div>
+                {notifications.length === 0 ? (
+                  <div className="p-4 text-center text-[#a1a1aa] text-xs font-medium">No new notifications</div>
+                ) : (
+                  notifications.map((notif) => {
+                    const timeString = new Date(notif.time).toLocaleDateString() + ' ' + new Date(notif.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <div key={notif.id} className="p-3 hover:bg-[#fafafa] rounded-xl cursor-pointer transition-colors mb-1">
+                        <div className="flex items-start gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${notif.type === 'consultation' ? 'bg-[#fef9ec] text-[#dcae32]' : 'bg-blue-50 text-blue-600'}`}>
+                            {notif.type === 'consultation' ? <Briefcase size={14} /> : <MessageSquare size={14} />}
+                          </div>
+                          <div>
+                            <p className="text-sm text-[#1d1d1f] font-medium leading-tight" dangerouslySetInnerHTML={{ __html: notif.title.replace(/(from\s+)(.*)/i, '$1<span class="font-bold">$2</span>') }}></p>
+                            <p className="text-xs text-[#a1a1aa] mt-1">{timeString}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
               <div className="p-3 border-t border-gray-50 text-center">
                 <button className="text-[11px] font-bold uppercase tracking-widest text-[#71717a] hover:text-[#1d1d1f] transition-colors">View All Notifications</button>

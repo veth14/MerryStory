@@ -2,15 +2,18 @@
 
 import React, { useState } from 'react';
 import { Search, ChevronDown, Calendar, MapPin, Users, ArrowRight, Eye, CheckCircle2, AlertCircle, X, Send, Loader2, Archive, ArchiveRestore } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
-// Mock Data
-const INQUIRIESList = [
-  { id: 'INQ-001', client: 'John Doe', email: 'john@example.com', eventType: 'Elegant Wedding', needs: 'We are planning a grand gala and need an exceptional team to coordinate everything. We have some initial ideas but need guidance with vendors.', status: 'Under Review', submitted: 'Mar 5, 2025', isArchived: false },
-  { id: 'INQ-002', client: 'Jane Smith', email: 'jane@example.com', eventType: 'Intimate Milestone', needs: 'Our daughter is turning 18 and we want a luxurious debut. We need help with styling and program flow.', status: 'Awaiting Docs', submitted: 'Mar 2, 2025', isArchived: false },
-  { id: 'INQ-003', client: 'Lim Launch', email: 'lim@example.com', eventType: 'Corporate Event', needs: 'We are launching a new product and need a modern, sleek setup. We also need an LED wall.', status: 'Confirmed', submitted: 'Feb 28, 2025', isArchived: true },
-  { id: 'INQ-004', client: 'Santos Gala', email: 'santos@example.com', eventType: 'Grand Gala', needs: 'Looking for full coordination for our annual charity gala. Venue is already secured, but need everything else.', status: 'New', submitted: 'Mar 8, 2025', isArchived: false },
-  { id: 'INQ-005', client: 'Cruz Anniversary', email: 'cruz@example.com', eventType: 'Intimate Milestone', needs: 'Celebrating our 50th corporate anniversary. We want something intimate but very high-end for our partners.', status: 'Reviewing', submitted: 'Mar 9, 2025', isArchived: false },
-];
+type Inquiry = {
+  id: string;
+  client: string;
+  email: string;
+  eventType: string;
+  needs: string;
+  status: string;
+  submitted: string;
+  isArchived: boolean;
+};
 
 const STATUS_STYLES: Record<string, string> = {
   'Under Review': 'text-blue-600 bg-blue-50 border-blue-100',
@@ -21,7 +24,9 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function InquiriesCoordinatorPage() {
-  const [inquiries, setInquiries] = useState(INQUIRIESList);
+  const { user } = useAuth();
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
@@ -71,16 +76,94 @@ export default function InquiriesCoordinatorPage() {
     }, 1500);
   };
 
-  const handleToggleArchive = (id: string, currentlyArchived: boolean) => {
-    setInquiries(prev => prev.map(inq => 
-      inq.id === id ? { ...inq, isArchived: !currentlyArchived } : inq
-    ));
-    showAlert(currentlyArchived ? 'Inquiry restored successfully' : 'Inquiry archived successfully');
+  const fetchInquiries = async () => {
+    if (!user) return;
+    try {
+      setIsLoading(true);
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/inquiries', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setInquiries(data.inquiries || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch inquiries:', error);
+      showAlert('Failed to load inquiries', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchInquiries();
+  }, [user]);
+
+  const handleToggleArchive = async (id: string, currentlyArchived: boolean) => {
+    if (!user) return;
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch(`/api/inquiries/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ isArchived: !currentlyArchived }),
+      });
+      
+      if (response.ok) {
+        setInquiries(prev => prev.map(inq => 
+          inq.id === id ? { ...inq, isArchived: !currentlyArchived } : inq
+        ));
+        showAlert(currentlyArchived ? 'Inquiry restored successfully' : 'Inquiry archived successfully');
+      } else {
+        throw new Error('Failed to update');
+      }
+    } catch (error) {
+      showAlert('Failed to update archive status', 'error');
+    }
+  };
+
+  const handleStatusUpdate = async (id: string, newStatus: string) => {
+    if (!user) return;
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch(`/api/inquiries/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      if (response.ok) {
+        setInquiries(prev => prev.map(inq => inq.id === id ? { ...inq, status: newStatus } : inq));
+        setOpenDropdownId(null);
+        showAlert(`Status updated to ${newStatus}`);
+      } else {
+        throw new Error('Failed to update');
+      }
+    } catch (error) {
+      showAlert('Failed to update status', 'error');
+    }
   };
 
   const filteredInquiries = inquiries.filter(inq => 
     activeTab === 'archived' ? inq.isArchived : !inq.isArchived
   );
+
+  const formatDate = (isoString: string) => {
+    try {
+      return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(isoString));
+    } catch {
+      return isoString;
+    }
+  };
 
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative">
@@ -285,7 +368,7 @@ export default function InquiriesCoordinatorPage() {
                     </div>
                   </td>
                   <td className="px-6 py-5 align-middle text-center">
-                    <span className="text-xs font-bold text-[#a1a1aa] whitespace-nowrap">{item.submitted}</span>
+                    <span className="text-xs font-bold text-[#a1a1aa] whitespace-nowrap">{formatDate(item.submitted)}</span>
                   </td>
                   <td className="px-6 py-5 align-middle relative">
                     <div className="flex justify-center">
@@ -303,9 +386,7 @@ export default function InquiriesCoordinatorPage() {
                             key={status}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setInquiries(prev => prev.map(inq => inq.id === item.id ? { ...inq, status } : inq));
-                              setOpenDropdownId(null);
-                              showAlert(`Status updated to ${status}`);
+                              handleStatusUpdate(item.id, status);
                             }}
                             className={`w-full text-left px-4 py-3 text-[10px] font-black tracking-widest uppercase transition-colors hover:bg-[#fafafa] ${item.status === status ? 'text-[#eebf43] bg-[#f9f1d8]/30' : 'text-[#71717a]'}`}
                           >
@@ -340,7 +421,18 @@ export default function InquiriesCoordinatorPage() {
                 </tr>
               ))}
               
-              {filteredInquiries.length === 0 && activeTab === 'active' && (
+              {isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <Loader2 size={32} className="text-gray-300 animate-spin" />
+                      <p className="text-[#a1a1aa] text-sm font-bold">Loading inquiries...</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              
+              {!isLoading && filteredInquiries.length === 0 && activeTab === 'active' && (
                 <tr>
                   <td colSpan={6} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
@@ -350,7 +442,7 @@ export default function InquiriesCoordinatorPage() {
                   </td>
                 </tr>
               )}
-              {filteredInquiries.length === 0 && activeTab === 'archived' && (
+              {!isLoading && filteredInquiries.length === 0 && activeTab === 'archived' && (
                  <tr>
                   <td colSpan={6} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">

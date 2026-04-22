@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,6 +89,26 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    await writeAuditLog({
+      request,
+      category: "PROFILE",
+      action: "PROFILE_AVATAR_UPDATED",
+      message: `Updated profile avatar for ${user.email || user.uid}.`,
+      actor: {
+        uid: user.uid,
+        email: user.email,
+        role: user.role,
+      },
+      target: {
+        uid: user.uid,
+        email: user.email,
+        type: "user",
+      },
+      details: {
+        storagePath,
+      },
+    });
+
     return NextResponse.json({ 
       success: true, 
       avatarUrl: publicUrl 
@@ -130,6 +151,23 @@ export async function DELETE(request: NextRequest) {
          { $unset: { avatarUrl: "" } }
        );
     }
+
+    await writeAuditLog({
+      request,
+      category: "PROFILE",
+      action: "PROFILE_AVATAR_REMOVED",
+      message: `Removed profile avatar for ${user.email || user.uid}.`,
+      actor: {
+        uid: user.uid,
+        email: user.email,
+        role: user.role,
+      },
+      target: {
+        uid: user.uid,
+        email: user.email,
+        type: "user",
+      },
+    });
     
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {

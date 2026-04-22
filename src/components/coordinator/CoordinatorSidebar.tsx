@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { getFirebaseClientAuth } from '@/lib/firebase/client';
+import { signOut } from 'firebase/auth';
 import { LayoutDashboard, Calendar, ClipboardCheck, Users, LogOut } from 'lucide-react';
 
 const navItems = [
@@ -12,6 +14,16 @@ const navItems = [
 
 export default function CoordinatorSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(getFirebaseClientAuth());
+      router.push('/sign-in');
+    } catch (error) {
+      console.error('Failed to sign out:', error);
+    }
+  };
 
   return (
     <aside className="w-[280px] bg-white border-r border-gray-100 h-screen hidden md:flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 relative">
@@ -57,10 +69,10 @@ export default function CoordinatorSidebar() {
             <svg className="w-[18px] h-[18px] text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             Support Center
           </Link>
-          <Link href="/sign-in" className="flex items-center gap-3 hover:text-red-600 transition-colors text-left p-2 rounded-lg hover:bg-red-50 pb-2 mb-2">
+          <button onClick={handleSignOut} className="flex w-full items-center gap-3 hover:text-red-600 transition-colors text-left p-2 rounded-lg hover:bg-red-50 pb-2 mb-2">
             <svg className="w-[18px] h-[18px] text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             Sign Out
-          </Link>
+          </button>
         </div>
       </div>
       

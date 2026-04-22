@@ -30,16 +30,16 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Revenue */}
+          {/* Inquiries */}
           <div className="bg-[#1c1c1c] p-7 rounded-xl shadow-lg shadow-gray-200 xl:w-64 w-[calc(50%-10px)] flex flex-col justify-between text-white min-h-[180px] transform transition-transform hover:-translate-y-1">
             <div className="flex gap-2 items-center text-[11px] font-bold tracking-wider text-gray-400 mb-8 uppercase">
-              <svg className="w-5 h-5 text-[#d4a017]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              Revenue
+              <svg className="w-5 h-5 text-[#d4a017]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+              Inquiries
             </div>
             <div>
-              <p className="text-6xl font-bold tracking-tight">842k</p>
+              <p className="text-6xl font-bold tracking-tight">124</p>
               <p className="text-[12px] text-[#d4a017] font-semibold mt-4 flex items-center gap-1">
-                <span className="leading-none pb-0.5">↗</span> Projected +1.2M
+                <span className="leading-none pb-0.5">↗</span> +15 this week
               </p>
             </div>
           </div>
@@ -62,27 +62,27 @@ export default function AdminDashboard() {
 
       {/* Middle Row (Charts context) */}
       <div className="flex flex-col lg:flex-row gap-6 pt-4">
-        {/* Financial Performance */}
+        {/* Client Engagements */}
         <div className="flex-1 bg-white p-8 md:p-10 rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[350px]">
            <div className="flex flex-col sm:flex-row justify-between items-start mb-12 gap-4">
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Financial Performance</h3>
-                <p className="text-[13px] text-gray-500 mt-1">Monthly profit margins and operational expenditure.</p>
+                <h3 className="text-xl font-bold text-gray-900">Client Engagements</h3>
+                <p className="text-[13px] text-gray-500 mt-1">Monthly breakdown of new inquiries and confirmed bookings.</p>
               </div>
               <div className="flex gap-6 text-[11px] font-bold tracking-wider uppercase">
-                <span className="text-gray-900 border-b-2 border-gray-900 pb-1">Margin</span>
-                <span className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors pb-1">Expenses</span>
+                <span className="text-gray-900 border-b-2 border-gray-900 pb-1">Bookings</span>
+                <span className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors pb-1">Inquiries</span>
               </div>
            </div>
            
            <div className="mt-auto relative w-full h-[150px] border-b border-gray-100 flex items-end justify-between pb-4">
-             {/* Placeholder for chart bars - making it visually nicer */}
-             <div className="w-[10%] h-[40%] bg-gray-100 rounded-t-sm mx-auto"></div>
-             <div className="w-[10%] h-[60%] bg-gray-100 rounded-t-sm mx-auto"></div>
-             <div className="w-[10%] h-[80%] bg-[#facc15]/20 rounded-t-sm mx-auto relative"><div className="absolute bottom-0 w-full h-1/2 bg-[#facc15] rounded-t-sm"></div></div>
-             <div className="w-[10%] h-[50%] bg-gray-100 rounded-t-sm mx-auto"></div>
-             <div className="w-[10%] h-[90%] bg-[#1c1c1c]/10 rounded-t-sm mx-auto relative"><div className="absolute bottom-0 w-full h-1/3 bg-[#1c1c1c] rounded-t-sm"></div></div>
-             <div className="w-[10%] h-[70%] bg-gray-100 rounded-t-sm mx-auto"></div>
+             {/* Chart bars showing Bookings (colored) vs Inquiries (gray) */}
+             <div className="w-[10%] h-[40%] bg-gray-100 rounded-t-sm mx-auto relative"><div className="absolute bottom-0 w-full h-[30%] bg-[#facc15] rounded-t-sm"></div></div>
+             <div className="w-[10%] h-[60%] bg-gray-100 rounded-t-sm mx-auto relative"><div className="absolute bottom-0 w-full h-[40%] bg-[#facc15] rounded-t-sm"></div></div>
+             <div className="w-[10%] h-[80%] bg-gray-100 rounded-t-sm mx-auto relative"><div className="absolute bottom-0 w-full h-[65%] bg-[#facc15] rounded-t-sm"></div></div>
+             <div className="w-[10%] h-[50%] bg-gray-100 rounded-t-sm mx-auto relative"><div className="absolute bottom-0 w-full h-[45%] bg-[#facc15] rounded-t-sm"></div></div>
+             <div className="w-[10%] h-[90%] bg-gray-100 rounded-t-sm mx-auto relative"><div className="absolute bottom-0 w-full h-[80%] bg-[#1c1c1c] rounded-t-sm"></div></div>
+             <div className="w-[10%] h-[70%] bg-gray-100 rounded-t-sm mx-auto relative"><div className="absolute bottom-0 w-full h-[60%] bg-[#facc15] rounded-t-sm"></div></div>
            </div>
 
            <div className="flex justify-between px-6 text-[10px] font-bold text-gray-400 tracking-widest uppercase mt-4">

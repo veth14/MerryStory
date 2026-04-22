@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -75,6 +76,28 @@ export async function PUT(request: NextRequest) {
       const adminAuth = getFirebaseAdminAuth();
       await adminAuth.updateUser(user.uid, { password: password.trim() });
     }
+
+    await writeAuditLog({
+      request,
+      category: "PROFILE",
+      action: "PROFILE_UPDATED",
+      message: `Updated profile for ${user.email || user.uid}.`,
+      actor: {
+        uid: user.uid,
+        email: user.email,
+        role: user.role,
+      },
+      target: {
+        uid: user.uid,
+        email: user.email,
+        type: "user",
+      },
+      details: {
+        nameUpdated: Boolean(name),
+        phoneUpdated: Boolean(phone),
+        passwordUpdated: Boolean(password && password.trim().length > 0),
+      },
+    });
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {

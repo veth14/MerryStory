@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, use } from 'react';
 import Link from 'next/link';
+import { ArrowRight, Plus } from 'lucide-react';
 
-// Example Mock Data for production tasks
 const INITIAL_TASKS = [
   {
     id: 'TSK-001',
@@ -13,6 +13,7 @@ const INITIAL_TASKS = [
     dueDate: 'Oct 15, 2024',
     dueTime: '14:00',
     assignee: 'Alesia',
+    vendor: 'Grand Ballroom SMX',
   },
   {
     id: 'TSK-002',
@@ -23,6 +24,7 @@ const INITIAL_TASKS = [
     dueDate: 'Oct 18, 2024',
     dueTime: '10:30',
     assignee: 'Julian',
+    vendor: 'Taste of Manila Catering',
   },
   {
     id: 'TSK-003',
@@ -33,6 +35,7 @@ const INITIAL_TASKS = [
     dueDate: 'Oct 20, 2024',
     dueTime: '09:00',
     assignee: 'Sarah',
+    vendor: 'None',
   },
   {
     id: 'TSK-004',
@@ -43,6 +46,7 @@ const INITIAL_TASKS = [
     dueDate: 'Oct 10, 2024',
     dueTime: '16:45',
     assignee: 'Ian',
+    vendor: 'Lumina Floral Design',
   },
 ];
 
@@ -64,7 +68,8 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
     priority: 'MEDIUM',
     dueDate: '',
       dueTime: '',
-      assignee: ''
+      assignee: '',
+      vendor: 'None'
     });
 
     const handleAddTask = (e: React.FormEvent) => {
@@ -80,6 +85,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
         dueDate: newTask.dueDate || 'No Date',
         dueTime: newTask.dueTime || 'Any Time',
         assignee: newTask.assignee,
+        vendor: newTask.vendor,
       };
 
       setTasks([taskToAdd, ...tasks]);
@@ -91,7 +97,8 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
         priority: 'MEDIUM',
         dueDate: '',
         dueTime: '',
-        assignee: ''
+        assignee: '',
+        vendor: 'None'
       });
     };
 
@@ -115,90 +122,175 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
 
   return (
     <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2">
-      {/* Breadcrumb / Back Navigation */}
-      <div className="w-full mb-4">
-        <Link href="/admin/events" className="inline-flex items-center gap-2 text-[11px] font-extrabold text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-colors mb-4">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-          BACK TO EVENTS
-        </Link>
-      </div>
-
       {/* Header Section */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2">
         <div className="max-w-3xl">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-2">{eventName} Tasks</h1>
-          <p className="text-gray-500 text-[14px] font-medium leading-relaxed">
-            Monitor deliverables across all your events. Keep your production timeline running seamlessly.
+          <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
+            <Link href="/admin/events" className="hover:text-[#1d1d1f] transition-colors">Events</Link> <ArrowRight size={10} /> <span className="text-[#1d1d1f]">{eventName}</span>
+          </p>
+          <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
+            Event <span className="text-[#eebf43] italic pr-2">Tasks</span>
+          </h1>
+          <p className="text-[#71717a] text-sm mt-4 max-w-md leading-relaxed font-medium">
+            Monitor deliverables across all your events. Keep your production timeline running seamlessly and easily assign responsibilities to staff.
           </p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gray-900 hover:bg-black text-white text-[11px] font-extrabold uppercase tracking-widest rounded-sm transition-all shadow-xl shadow-gray-900/20 shrink-0"
+          className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-colors rounded-xl shadow-md shadow-[#eebf43]/20 shrink-0"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+          <Plus className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
           ADD NEW TASK
         </button>
       </div>
 
-      {/* Control Board */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
-         <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            {['ALL', 'TO DO', 'IN PROGRESS', 'COMPLETED'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className={`px-4 py-2 text-[10px] font-extrabold uppercase tracking-widest rounded-md transition-all whitespace-nowrap ${
-                  filterStatus === status 
-                    ? 'bg-[#facc15] text-gray-900 shadow-md shadow-[#facc15]/20' 
-                    : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-700'
-                }`}
+      {/* Main Registry Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Tool bar */}
+        <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100">
+          <h2 className="text-[15px] font-extrabold text-gray-900 uppercase tracking-widest">LIVE TASKS REGISTRY</h2>
+          <div className="flex items-center gap-4">
+            {/* Filter Button / Select */}
+            <div className="relative">
+              <select 
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="appearance-none flex items-center justify-center gap-2 pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-[12px] font-black text-gray-700 tracking-widest uppercase hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer"
               >
-                {status}
-              </button>
-            ))}
-         </div>
-         <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest bg-gray-50 px-4 py-2 rounded-md w-full sm:w-auto text-center shrink-0">
-           {filteredTasks.length} TASKS FOUND
-         </div>
-      </div>
-
-      {/* Task Grid (Masonry/Responsive Cards) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTasks.map((task) => (
-          <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 relative group hover:shadow-md transition-shadow flex flex-col h-full hover:border-[#facc15]/50">
-             <div className="flex items-start justify-between mb-4">
-                <span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-md ${getStatusColor(task.status)}`}>
-                  {task.status}
-                </span>
-                <span className={`px-2 py-0.5 border text-[9px] font-black uppercase tracking-widest rounded-sm ${getPriorityColor(task.priority)}`}>
-                  {task.priority}
-                </span>
-             </div>
-             
-             <h3 className="text-[16px] font-extrabold text-gray-900 leading-tight mb-2 group-hover:text-[#d4a017] transition-colors line-clamp-2">
-               {task.title}
-             </h3>
-             
-             <p className="text-gray-500 text-[13px] font-medium leading-relaxed mb-6 flex-grow">
-               {task.description}
-             </p>
-
-             <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-[10px] font-black border border-white shadow-sm overflow-hidden">
-                     <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assignee}`} alt={task.assignee} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">ASSIGNEE</span>
-                    <span className="text-[12px] font-bold text-gray-900">{task.assignee}</span>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                   <svg className="w-4 h-4 text-gray-300 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                   <span className="text-[11px] font-bold text-gray-500">{task.dueDate}</span>                     {task.dueTime && <span className="text-[9px] font-bold text-gray-400 mt-0.5">{task.dueTime}</span>}                </div>
-             </div>
+                <option value="ALL">ALL STATUS</option>
+                <option value="TO DO">TO DO</option>
+                <option value="IN PROGRESS">IN PROGRESS</option>
+                <option value="COMPLETED">COMPLETED</option>
+              </select>
+              <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+              <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </div>
           </div>
-        ))}
+        </div>
+
+        {/* Table View */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[900px]">
+            <thead>
+              <tr className="bg-gray-50/50 border-b border-gray-100">
+                <th className="px-4 md:px-6 py-4 text-[10px] font-extrabold text-gray-400 uppercase tracking-[0.2em] w-[35%]">TASK DETAILS</th>
+                <th className="px-4 md:px-6 py-4 text-[10px] font-extrabold text-gray-400 uppercase tracking-[0.2em] text-center w-[15%]">STATUS</th>
+                <th className="px-4 md:px-6 py-4 text-[10px] font-extrabold text-gray-400 uppercase tracking-[0.2em] text-center w-[15%]">DUE</th>
+                <th className="px-4 md:px-6 py-4 text-[10px] font-extrabold text-gray-400 uppercase tracking-[0.2em] text-center w-[15%]">VENDOR</th>
+                <th className="px-4 md:px-6 py-4 text-[10px] font-extrabold text-gray-400 uppercase tracking-[0.2em] text-right w-[20%]">ASSIGNEE</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filteredTasks.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500 font-medium text-[13px]">
+                    No tasks found matching your criteria.
+                  </td>
+                </tr>
+              ) : filteredTasks.map((task) => {
+                let statusColor = "text-gray-500 bg-gray-50";
+                let dotColor = "bg-gray-400";
+                if (task.status === 'COMPLETED') {
+                  statusColor = "text-emerald-700 bg-emerald-50";
+                  dotColor = "bg-emerald-500";
+                } else if (task.status === 'IN PROGRESS') {
+                  statusColor = "text-[#b48600] bg-[#facc15]/20";
+                  dotColor = "bg-[#facc15]";
+                }
+
+                return (
+                  <tr key={task.id} className="hover:bg-gray-50/30 transition-colors group">
+                    <td className="px-4 md:px-6 py-4">
+                      <div className="font-extrabold text-[14px] text-gray-900 group-hover:text-[#eebf43] transition-colors mb-1">{task.title}</div>
+                      <div className="text-[12px] font-medium text-[#71717a] line-clamp-2">
+                        {task.description}
+                      </div>
+                      <div className="mt-2">
+                         <span className={`px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest rounded-sm ${getPriorityColor(task.priority)}`}>
+                            {task.priority} PRIORITY
+                         </span>
+                      </div>
+                    </td>
+
+                    <td className="px-4 md:px-6 py-4 text-center align-middle">
+                      <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-widest ${statusColor}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                        {task.status}
+                      </span>
+                    </td>
+
+                    <td className="px-4 md:px-6 py-4 text-center align-middle">
+                      <div className="text-[11px] font-bold text-gray-600">{task.dueDate}</div>
+                      <div className="text-[10px] font-bold text-gray-400 mt-0.5">{task.dueTime || 'EOD'}</div>
+                    </td>
+
+                    <td className="px-4 md:px-6 py-4 text-center align-middle">
+                      <div className="relative inline-block w-full max-w-[140px]">
+                         <select 
+                            value={task.vendor || 'None'}
+                            onChange={(e) => {
+                              const updatedTasks = tasks.map(t => t.id === task.id ? {...t, vendor: e.target.value} : t);
+                              setTasks(updatedTasks);
+                            }}
+                            className="appearance-none w-full pl-3 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-md text-[10px] font-bold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors outline-none cursor-pointer text-center truncate"
+                          >
+                            <option value="None">None</option>
+                            <option value="Taste of Manila Catering">Taste of Manila Catering</option>
+                            <option value="Snap & Shoot Studios">Snap & Shoot Studios</option>
+                            <option value="Lumina Floral Design">Lumina Floral Design</option>
+                            <option value="Grand Ballroom SMX">Grand Ballroom SMX</option>
+                            <option value="The Harmony Strings">The Harmony Strings</option>
+                            <option value="Lux Event Rentals">Lux Event Rentals</option>
+                          </select>
+                          <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </div>
+                    </td>
+
+                    <td className="px-4 md:px-6 py-4 text-right align-middle">
+                       <div className="flex items-center justify-end gap-3">
+                         <div className="relative">
+                            <select 
+                               value={task.assignee}
+                               onChange={(e) => {
+                                 const updatedTasks = tasks.map(t => t.id === task.id ? {...t, assignee: e.target.value} : t);
+                                 setTasks(updatedTasks);
+                               }}
+                               className="appearance-none pl-3 pr-8 py-1.5 bg-white border border-gray-200 rounded-md text-[11px] font-bold text-[#1d1d1f] hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer"
+                             >
+                               <option value="Alesia">Alesia</option>
+                               <option value="Julian">Julian</option>
+                               <option value="Sarah">Sarah</option>
+                               <option value="Ian">Ian</option>
+                               <option value="Unassigned">Unassigned</option>
+                             </select>
+                             <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                         </div>
+                         <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-[10px] font-black border border-white shadow-sm overflow-hidden shrink-0">
+                           <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assignee}`} alt={task.assignee} className="w-full h-full object-cover" />
+                         </div>
+                       </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer info & inline Pagination */}
+        <div className="p-4 md:p-5 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50/30">
+          <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">
+            SHOWING 1-{filteredTasks.length} OF {tasks.length} TASKS
+          </div>
+          <div className="flex gap-2">
+            <button className="px-4 py-2 border border-gray-200 bg-white rounded-lg text-[11px] font-extrabold text-gray-500 uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-colors shadow-sm">
+              PREV
+            </button>
+            <button className="px-4 py-2 bg-[#facc15] border border-[#eab308] rounded-lg text-[11px] font-extrabold text-gray-900 uppercase tracking-widest hover:bg-[#eab308] transition-colors shadow-sm">
+              NEXT
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Add Task Modal */}
@@ -217,36 +309,36 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
             
             <form onSubmit={handleAddTask} className="p-6 space-y-5">
               <div>
-                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Task Title</label>
+                <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Task Title</label>
                 <input 
                   type="text"
                   required
                   value={newTask.title}
                   onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none"
                   placeholder="e.g., Finalize floral arrangements"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Detailed Description</label>
+                <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Detailed Description</label>
                 <textarea 
                   required
                   rows={3}
                   value={newTask.description}
                   onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none resize-none"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none resize-none"
                   placeholder="Include specific requirements, vendor contacts, or special instructions..."
                 ></textarea>
               </div>
 
               <div>
                 <div>
-                  <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Priority Level</label>
+                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Priority Level</label>
                   <select 
                     value={newTask.priority}
                     onChange={(e) => setNewTask({...newTask, priority: e.target.value as any})}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
                   >
                     <option value="CRITICAL">🔴 Critical</option>
                     <option value="HIGH">🟠 High</option>
@@ -258,46 +350,69 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Due Date</label>
+                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Due Date</label>
                   <input 
                     type="date"
                     required
                     value={newTask.dueDate}
                     onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none cursor-pointer"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none cursor-pointer"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Due Time</label>
+                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Due Time</label>
                   <input 
                     type="time"
                     required
                     value={newTask.dueTime}
                     onChange={(e) => setNewTask({...newTask, dueTime: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none cursor-pointer"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none cursor-pointer"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest mb-1.5">Assignee (Staff Pool)</label>
-                <div className="relative">
-                  <select 
-                    required
-                    value={newTask.assignee}
-                    onChange={(e) => setNewTask({...newTask, assignee: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#D4AF37] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
-                  >
-                    <option value="" disabled>Select a team member...</option>
-                    <option value="EV">Elena Vance (Creative Director)</option>
-                    <option value="JD">James Director (Event Manager)</option>
-                    <option value="SO">Sarah Operations (Logistics Lead)</option>
-                    <option value="MV">Michael Vendor (Vendor Relations)</option>
-                    <option value="CS">Chloe Styles (Design & Styling)</option>
-                    <option value="AG">Alex Garcia (Technical Director)</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Assignee (Staff Pool)</label>
+                  <div className="relative">
+                    <select 
+                      required
+                      value={newTask.assignee}
+                      onChange={(e) => setNewTask({...newTask, assignee: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
+                    >
+                      <option value="" disabled>Select a team member...</option>
+                      <option value="Elena">Elena Vance</option>
+                      <option value="Julian">Julian</option>
+                      <option value="Sarah">Sarah</option>
+                      <option value="Ian">Ian</option>
+                      <option value="Alesia">Alesia</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Vendor Partner</label>
+                  <div className="relative">
+                    <select 
+                      value={newTask.vendor}
+                      onChange={(e) => setNewTask({...newTask, vendor: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
+                    >
+                      <option value="None">None</option>
+                      <option value="Taste of Manila Catering">Taste of Manila Catering</option>
+                      <option value="Snap & Shoot Studios">Snap & Shoot Studios</option>
+                      <option value="Lumina Floral Design">Lumina Floral Design</option>
+                      <option value="Grand Ballroom SMX">Grand Ballroom SMX</option>
+                      <option value="The Harmony Strings">The Harmony Strings</option>
+                      <option value="Lux Event Rentals">Lux Event Rentals</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -312,7 +427,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                 </button>
                 <button 
                   type="submit"
-                  className="px-8 py-3 bg-[#D4AF37] hover:bg-[#C5A028] text-white text-[12px] font-extrabold uppercase tracking-widest rounded-sm transition-all shadow-lg shadow-[#D4AF37]/20"
+                  className="px-8 py-3 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[12px] font-extrabold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#eebf43]/20"
                 >
                   Create Task
                 </button>
