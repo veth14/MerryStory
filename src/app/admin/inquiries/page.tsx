@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Search, ChevronDown, Calendar, MapPin, Users, ArrowRight, Eye, CheckCircle2, AlertCircle, X, Send, Loader2, Archive, ArchiveRestore } from 'lucide-react';
-
 import { useAuth } from '@/components/auth/AuthProvider';
+import { CustomSelect } from '@/components/ui/CustomInputs';
 
 type Inquiry = {
   id: string;
@@ -15,7 +16,6 @@ type Inquiry = {
   submitted: string;
   isArchived: boolean;
 };
-
 
 const STATUS_STYLES: Record<string, string> = {
   'Under Review': 'text-blue-600 bg-blue-50 border-blue-100',
@@ -31,8 +31,8 @@ export default function InquiriesAdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [classificationFilter, setClassificationFilter] = useState('All Classifications');
 
-  // Alerts & Modals
   const [alert, setAlert] = useState<{ message: string, type: 'success'|'error' } | null>(null);
   const [modal, setModal] = useState<{ isOpen: boolean, title: string, desc: string, action: (() => void) | null, type: 'info'|'danger' }>({ isOpen: false, title: '', desc: '', action: null, type: 'info' });
   const [composeModal, setComposeModal] = useState<{ isOpen: boolean, to: string, client: string, subject: string, message: string, isSending: boolean }>({ isOpen: false, to: '', client: '', subject: '', message: '', isSending: false });
@@ -70,8 +70,6 @@ export default function InquiriesAdminPage() {
 
   const handleSendEmail = () => {
     setComposeModal(prev => ({ ...prev, isSending: true }));
-    
-    // Simulate API call for now since backend will be connected later
     setTimeout(() => {
       setComposeModal(prev => ({ ...prev, isOpen: false, isSending: false }));
       showAlert('Email sent successfully via Merry Story dashboard!');
@@ -84,9 +82,7 @@ export default function InquiriesAdminPage() {
       setIsLoading(true);
       const idToken = await user.getIdToken();
       const response = await fetch('/api/inquiries', {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
+        headers: { Authorization: `Bearer ${idToken}` },
       });
       if (response.ok) {
         const data = await response.json();
@@ -118,9 +114,7 @@ export default function InquiriesAdminPage() {
       });
       
       if (response.ok) {
-        setInquiries(prev => prev.map(inq => 
-          inq.id === id ? { ...inq, isArchived: !currentlyArchived } : inq
-        ));
+        setInquiries(prev => prev.map(inq => inq.id === id ? { ...inq, isArchived: !currentlyArchived } : inq));
         showAlert(currentlyArchived ? 'Inquiry restored successfully' : 'Inquiry archived successfully');
       } else {
         throw new Error('Failed to update');
@@ -155,9 +149,11 @@ export default function InquiriesAdminPage() {
     }
   };
 
-  const filteredInquiries = inquiries.filter(inq => 
-    activeTab === 'archived' ? inq.isArchived : !inq.isArchived
-  );
+  const filteredInquiries = inquiries.filter(inq => {
+    const matchesArchive = activeTab === 'archived' ? inq.isArchived : !inq.isArchived;
+    const matchesClassification = classificationFilter === 'All Classifications' || inq.eventType === classificationFilter;
+    return matchesArchive && matchesClassification;
+  });
 
   const formatDate = (isoString: string) => {
     try {
@@ -168,229 +164,122 @@ export default function InquiriesAdminPage() {
   };
 
   return (
-    <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative">
+    <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative animate-in fade-in duration-500">
       
       {/* Toast Alert */}
       {alert && (
-        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border animate-in slide-in-from-bottom-4 fade-in ${alert.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-3`}>
-          {alert.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
-          <span className="text-sm font-extrabold tracking-wide">{alert.message}</span>
-        </div>
-      )}
-
-      {/* Modal Overlay */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d1f]/40 backdrop-blur-[2px] animate-in fade-in duration-200 p-4">
-          <div className="bg-white rounded-[24px] shadow-2xl border border-gray-100 w-full max-w-md p-8 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-start mb-6">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${modal.type === 'danger' ? 'bg-red-50 text-red-600' : 'bg-[#fafafa] text-[#1d1d1f]'}`}>
-                {modal.type === 'danger' ? <AlertCircle size={20} /> : <Eye size={20} />}
-              </div>
-              <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <X size={16} className="text-[#a1a1aa]" />
-              </button>
-            </div>
-            <h3 className="text-2xl font-black text-[#1d1d1f] mb-3">{modal.title}</h3>
-            <p className="text-sm text-[#71717a] font-medium leading-relaxed whitespace-pre-line mb-8">{modal.desc}</p>
-            <div className="flex gap-3">
-              <button onClick={closeModal} className="flex-1 py-3.5 bg-[#fafafa] border border-gray-100 hover:bg-gray-100 text-[#71717a] text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors">
-                Close
-              </button>
-              {modal.action && (
-                <button onClick={handleConfirm} className={`flex-1 py-3.5 text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors ${modal.type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#1d1d1f] hover:bg-black'}`}>
-                  Confirm
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Compose Email Modal */}
-      {composeModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d1f]/40 backdrop-blur-[2px] animate-in fade-in duration-200 p-4">
-          <div className="bg-white rounded-[24px] shadow-2xl border border-gray-100 w-full max-w-2xl p-8 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-              <h3 className="text-xl font-black text-[#1d1d1f] flex items-center gap-2">
-                <Send size={20} className="text-[#eebf43]" /> Compose Email
-              </h3>
-              <button 
-                onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))} 
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                disabled={composeModal.isSending}
-              >
-                <X size={16} className="text-[#a1a1aa]" />
-              </button>
-            </div>
-            
-            <div className="space-y-4 mb-8">
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mb-2">To</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value={composeModal.to} 
-                  className="w-full px-4 py-3 bg-[#fafafa] border border-gray-100 rounded-xl text-sm font-medium text-[#71717a] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mb-2">Subject</label>
-                <input 
-                  type="text" 
-                  value={composeModal.subject} 
-                  onChange={(e) => setComposeModal(prev => ({ ...prev, subject: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-sm font-medium text-[#1d1d1f] focus:ring-2 focus:ring-[#eebf43]/20 focus:border-[#eebf43] transition-all outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mb-2">Message</label>
-                <textarea 
-                  rows={8}
-                  value={composeModal.message} 
-                  onChange={(e) => setComposeModal(prev => ({ ...prev, message: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-sm font-medium text-[#1d1d1f] focus:ring-2 focus:ring-[#eebf43]/20 focus:border-[#eebf43] transition-all outline-none resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))} 
-                disabled={composeModal.isSending}
-                className="px-6 py-3.5 bg-white border border-gray-200 hover:bg-gray-50 text-[#71717a] text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSendEmail}
-                disabled={composeModal.isSending}
-                className="flex-1 py-3.5 text-white bg-[#1d1d1f] hover:bg-black text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                {composeModal.isSending ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" /> Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} /> Send Email
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+        <div className={`fixed bottom-8 right-8 z-50 px-8 py-5 rounded-[20px] shadow-2xl border animate-in slide-in-from-bottom-5 fade-in ${alert.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-4`}>
+          {alert.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+          <span className="text-[14px] font-black uppercase tracking-widest">{alert.message}</span>
         </div>
       )}
 
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 pt-2">
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4 pt-2">
         <div>
-          <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
-            Workspace <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Lead Routing</span>
+          <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+            Workspace <ArrowRight size={10} className="text-[#eebf43]" /> <span className="text-[#1d1d1f]">Pipeline</span>
           </p>
-          <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
+          <h1 className="text-6xl font-black text-[#1d1d1f] tracking-tight leading-none">
             Client <span className="text-[#eebf43] italic pr-2">Inquiries</span>
           </h1>
-          <p className="text-[#71717a] text-sm mt-4 max-w-md leading-relaxed font-medium">
-            Track and respond to incoming event requests directly via email communication pipelines.
+          <p className="text-[#71717a] text-[15px] mt-6 max-w-xl leading-relaxed font-medium">
+            Monitor and convert incoming production leads into active workspaces. Manage client needs and status tracking via secure pipelines.
           </p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-8 mb-8 border-b border-gray-200/60 pl-2">
+      <div className="flex gap-10 mb-10 border-b border-gray-200/60">
         <button
           onClick={() => setActiveTab('active')}
-          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'active' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'border-b-2 border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+          className={`pb-4 text-xs font-black tracking-[0.15em] uppercase transition-all relative ${activeTab === 'active' ? 'text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
         >
-          Active Inquiries
+          Active Pipeline
+          {activeTab === 'active' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#eebf43] rounded-full"></div>}
         </button>
         <button
           onClick={() => setActiveTab('archived')}
-          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'archived' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'border-b-2 border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+          className={`pb-4 text-xs font-black tracking-[0.15em] uppercase transition-all relative ${activeTab === 'archived' ? 'text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
         >
-          Archived 
-          <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'archived' ? 'bg-[#1d1d1f] text-white' : 'bg-gray-100 text-gray-500'}`}>
+          Archive Registry
+          <span className="ml-3 px-2.5 py-0.5 rounded-lg text-[10px] bg-gray-100 text-gray-500 font-black">
             {inquiries.filter(i => i.isArchived).length}
           </span>
+          {activeTab === 'archived' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#eebf43] rounded-full"></div>}
         </button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-8">
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search size={16} className="text-[#a1a1aa]" />
-          </div>
+      <div className="flex flex-col lg:flex-row gap-6 mb-10 items-end">
+        <div className="relative flex-1 w-full lg:w-auto">
+          <Search size={18} className="text-[#a1a1aa] absolute left-5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            className="w-full pl-12 pr-4 py-3 bg-white border border-gray-100 shadow-sm rounded-xl text-sm font-medium text-[#1d1d1f] placeholder-[#a1a1aa] focus:outline-none focus:ring-2 focus:ring-[#eebf43]/20 focus:border-[#eebf43] transition-all"
-            placeholder="Search events, clients, or pipelines..."
+            className="w-full pl-14 pr-6 py-4 bg-white border-2 border-gray-100 shadow-sm rounded-2xl text-sm font-bold text-[#1d1d1f] placeholder-[#a1a1aa] focus:outline-none focus:border-[#eebf43] focus:ring-4 focus:ring-[#eebf43]/5 transition-all"
+            placeholder="Search clients, events, or specific needs..."
           />
         </div>
-        <div className="relative w-full sm:w-56 shrink-0">
-          <select className="w-full appearance-none pl-4 pr-10 py-3 bg-white border border-gray-100 shadow-sm rounded-xl text-sm font-bold text-[#71717a] focus:outline-none focus:ring-2 focus:ring-[#eebf43]/20 focus:border-[#eebf43] transition-all cursor-pointer">
-            <option>All Classifications</option>
-            <option>Weddings</option>
-            <option>Corporate Events</option>
-            <option>Debuts / Galas</option>
-          </select>
-          <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-            <ChevronDown size={14} className="text-[#a1a1aa]" />
-          </div>
-        </div>
+        
+        <CustomSelect 
+          value={classificationFilter}
+          onChange={setClassificationFilter}
+          options={[
+            { value: 'All Classifications', label: 'All Classifications' },
+            { value: 'Weddings', label: 'Weddings' },
+            { value: 'Corporate Events', label: 'Corporate Events' },
+            { value: 'Debuts / Galas', label: 'Debuts / Galas' },
+          ]}
+          className="w-full lg:w-72"
+        />
       </div>
 
-      {/* Content Area - Data Table */}
-      <div className="bg-white border border-gray-100 rounded-[24px] shadow-sm animate-in fade-in duration-500">
-        <div className="overflow-visible">
-          <table className="w-full text-left border-collapse min-w-[900px]">
+      {/* Data Grid */}
+      <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden">
+        <div className="overflow-x-auto overflow-y-visible">
+          <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-[#fafafa] border-b border-gray-100">
-                <th className="w-[20%] px-6 py-5 text-[10px] uppercase font-black tracking-widest text-[#a1a1aa] whitespace-nowrap">Client / Event</th>
-                <th className="w-[40%] px-6 py-5 text-[10px] uppercase font-black tracking-widest text-[#a1a1aa] whitespace-nowrap">Client Needs</th>
-                <th className="w-[15%] px-6 py-5 text-[10px] uppercase font-black tracking-widest text-[#a1a1aa] text-center whitespace-nowrap">Submitted</th>
-                <th className="w-[10%] px-6 py-5 text-[10px] uppercase font-black tracking-widest text-[#a1a1aa] text-center whitespace-nowrap">Status</th>
-                <th className="w-[15%] px-6 py-5 text-[10px] uppercase font-black tracking-widest text-[#a1a1aa] text-center whitespace-nowrap">Actions</th>
+                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Form Identity</th>
+                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Client Briefing</th>
+                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Receipt Date</th>
+                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Status</th>
+                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-50">
               {filteredInquiries.map((item) => (
-                <tr key={item.id} onClick={() => handleViewDetails(item)} className="border-b border-gray-50 hover:bg-[#fafafa] transition-colors group cursor-pointer">
-                  <td className="px-6 py-5 align-middle">
+                <tr key={item.id} onClick={() => handleViewDetails(item)} className="group hover:bg-[#fafafa]/50 transition-colors cursor-pointer">
+                  <td className="px-8 py-6 align-middle">
                     <div className="flex flex-col">
-                      <span className="text-sm font-black text-[#1d1d1f] group-hover:text-[#eebf43] transition-colors">{item.client}</span>
-                      <span className="text-xs font-semibold text-[#a1a1aa] mt-0.5">{item.eventType}</span>
+                      <span className="text-[15px] font-black text-[#1d1d1f] group-hover:text-[#eebf43] transition-colors">{item.client}</span>
+                      <span className="text-[11px] font-black text-[#a1a1aa] uppercase tracking-wider mt-1">{item.eventType}</span>
                     </div>
                   </td>
-                  <td className="w-[40%] px-6 py-5 align-middle">
-                    <div className="flex items-start gap-2 pr-4">
-                      <p className="text-xs font-medium text-[#71717a] line-clamp-2 leading-relaxed" title={item.needs}>
-                        {item.needs}
-                      </p>
-                    </div>
+                  <td className="px-8 py-6 align-middle">
+                    <p className="text-[13px] font-medium text-[#71717a] line-clamp-1 leading-relaxed max-w-sm" title={item.needs}>
+                      {item.needs}
+                    </p>
                   </td>
-                  <td className="px-6 py-5 align-middle text-center">
-                    <span className="text-xs font-bold text-[#a1a1aa] whitespace-nowrap">{formatDate(item.submitted)}</span>
+                  <td className="px-8 py-6 align-middle text-center">
+                    <span className="text-[12px] font-black text-[#a1a1aa] uppercase">{formatDate(item.submitted)}</span>
                   </td>
-                  <td className="px-6 py-5 align-middle relative">
+                  <td className="px-8 py-6 align-middle relative">
                     <div className="flex justify-center">
                       <button 
                         onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === item.id ? null : item.id); }}
-                        className={`w-[130px] px-4 py-1.5 rounded-full text-[9px] font-black tracking-widest uppercase border flex items-center justify-between gap-1.5 cursor-pointer hover:shadow-sm transition-all focus:outline-none ${STATUS_STYLES[item.status]}`}
+                        className={`min-w-[140px] px-4 py-2 rounded-xl text-[9px] font-black tracking-widest uppercase border-2 flex items-center justify-between gap-3 transition-all ${STATUS_STYLES[item.status] || 'border-gray-100 text-gray-400 bg-gray-50'}`}
                       >
-                        <span className="truncate">{item.status}</span> <ChevronDown size={10} className="opacity-70 shrink-0" />
+                        <span className="truncate">{item.status}</span> <ChevronDown size={12} className="opacity-70 shrink-0" />
                       </button>
                     </div>
                     {openDropdownId === item.id && (
-                      <div onClick={(e) => e.stopPropagation()} className="absolute top-12 left-1/2 -translate-x-1/2 mt-1 w-48 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                      <div onClick={(e) => e.stopPropagation()} className="absolute top-16 left-1/2 -translate-x-1/2 mt-1 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in zoom-in-95 duration-200">
                         {Object.keys(STATUS_STYLES).map(status => (
                           <button
                             key={status}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusUpdate(item.id, status);
-                            }}
-                            className={`w-full text-left px-4 py-3 text-[10px] font-black tracking-widest uppercase transition-colors hover:bg-[#fafafa] ${item.status === status ? 'text-[#eebf43] bg-[#f9f1d8]/30' : 'text-[#71717a]'}`}
+                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(item.id, status); }}
+                            className={`w-full text-left px-5 py-3 text-[10px] font-black tracking-[0.1em] uppercase transition-colors hover:bg-gray-50 ${item.status === status ? 'text-[#eebf43] bg-yellow-50/30' : 'text-[#71717a]'}`}
                           >
                             {status}
                           </button>
@@ -398,25 +287,25 @@ export default function InquiriesAdminPage() {
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-5 align-middle">
-                    <div className="flex items-center justify-center gap-2">
-                      <button onClick={(e) => { e.stopPropagation(); handleReplyEmail(item); }} className="px-4 py-2 bg-[#eebf43] text-white hover:bg-[#dcae32] rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 shadow-sm border border-[#dcae32] disabled:opacity-50 disabled:cursor-not-allowed" disabled={item.isArchived}>
-                        <Send size={12} /> Email
+                  <td className="px-8 py-6 align-middle">
+                    <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
+                      <button onClick={(e) => { e.stopPropagation(); handleReplyEmail(item); }} className="px-4 py-2.5 bg-[#facc15] text-gray-900 hover:bg-[#eab308] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm border border-[#facc15]" disabled={item.isArchived}>
+                        <Send size={12} /> Contact
                       </button>
+                      
+                      <Link 
+                        href={`/admin/events/new?inquiryId=${item.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="px-4 py-2.5 bg-[#201A03] text-[#facc15] hover:bg-black rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-black/10"
+                      >
+                        <CheckCircle2 size={12} /> Convert
+                      </Link>
+
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleToggleArchive(item.id, item.isArchived); }}
-                        className={`px-4 py-2 border rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 shadow-sm ${
-                          item.isArchived 
-                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
-                            : 'bg-white text-[#a1a1aa] border-gray-200 hover:bg-gray-50 hover:text-red-500'
-                        }`}
-                        title={item.isArchived ? "Restore Form" : "Archive Form"}
+                        className={`p-2.5 border-2 rounded-xl transition-all ${item.isArchived ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' : 'bg-white text-gray-300 border-gray-100 hover:text-red-500 hover:border-red-100'}`}
                       >
-                        {item.isArchived ? (
-                          <><ArchiveRestore size={12} /> Restore</>
-                        ) : (
-                          <><Archive size={12} /> Archive</>
-                        )}
+                        {item.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
                       </button>
                     </div>
                   </td>
@@ -425,31 +314,23 @@ export default function InquiriesAdminPage() {
               
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Loader2 size={32} className="text-gray-300 animate-spin" />
-                      <p className="text-[#a1a1aa] text-sm font-bold">Loading inquiries...</p>
+                  <td colSpan={5} className="px-8 py-24 text-center">
+                    <div className="flex flex-col items-center justify-center gap-4">
+                      <Loader2 size={40} className="text-[#eebf43] animate-spin" />
+                      <p className="text-[#a1a1aa] text-xs font-black uppercase tracking-widest">Accessing Pipeline...</p>
                     </div>
                   </td>
                 </tr>
               )}
               
-              {!isLoading && filteredInquiries.length === 0 && activeTab === 'active' && (
+              {!isLoading && filteredInquiries.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Search size={32} className="text-gray-300" />
-                      <p className="text-[#a1a1aa] text-sm font-bold">No active inquiries in the pipeline.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {!isLoading && filteredInquiries.length === 0 && activeTab === 'archived' && (
-                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Archive size={32} className="text-gray-300" />
-                      <p className="text-[#a1a1aa] text-sm font-bold">No archived inquiries.</p>
+                  <td colSpan={5} className="px-8 py-24 text-center">
+                    <div className="flex flex-col items-center justify-center gap-4">
+                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
+                        <Search size={24} className="text-gray-300" />
+                      </div>
+                      <p className="text-[#a1a1aa] text-xs font-black uppercase tracking-widest">No matching inquiries found</p>
                     </div>
                   </td>
                 </tr>
@@ -457,22 +338,90 @@ export default function InquiriesAdminPage() {
             </tbody>
           </table>
         </div>
-        
-        <div className="px-6 py-4 border-t border-gray-100 bg-[#fafafa] flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa]">
-            Showing All {inquiries.length} Records
-          </span>
-          
-          <div className="flex items-center gap-2">
-            <button className="px-4 py-2 border border-gray-200 text-[#71717a] hover:bg-white bg-[#fafafa] rounded-lg text-[10px] font-black tracking-widest uppercase transition-colors shadow-sm">
-              Previous
-            </button>
-            <button className="px-4 py-2 border border-gray-200 text-[#71717a] hover:bg-white bg-[#fafafa] rounded-lg text-[10px] font-black tracking-widest uppercase transition-colors shadow-sm">
-              Next
+      </div>
+
+      {/* Modal - Details */}
+      {modal.isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+          <div className="bg-white rounded-[32px] shadow-2xl border border-gray-100 w-full max-w-lg p-10 animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-start mb-8">
+              <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-[#1d1d1f]">
+                <Eye size={24} />
+              </div>
+              <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-2xl transition-colors">
+                <X size={20} className="text-[#a1a1aa]" />
+              </button>
+            </div>
+            <h3 className="text-3xl font-black text-[#1d1d1f] mb-4 tracking-tight">{modal.title}</h3>
+            <div className="bg-gray-50 p-6 rounded-2xl mb-10">
+              <p className="text-[14px] text-[#71717a] font-medium leading-relaxed whitespace-pre-line">{modal.desc}</p>
+            </div>
+            <button onClick={closeModal} className="w-full py-4 bg-[#1d1d1f] hover:bg-black text-white text-[12px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95 shadow-xl shadow-black/10">
+              Close Inspection
             </button>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Modal - Compose */}
+      {composeModal.isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+          <div className="bg-white rounded-[32px] shadow-2xl border border-gray-100 w-full max-w-3xl p-10 animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center mb-8 border-b border-gray-100 pb-6">
+              <h3 className="text-2xl font-black text-[#1d1d1f] flex items-center gap-3">
+                <Send size={24} className="text-[#eebf43]" /> Compose Official Response
+              </h3>
+              <button onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))} className="p-2 hover:bg-gray-100 rounded-2xl transition-colors">
+                <X size={20} className="text-[#a1a1aa]" />
+              </button>
+            </div>
+            
+            <div className="space-y-6 mb-10">
+              <div className="grid grid-cols-2 gap-6">
+                 <div>
+                  <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2 ml-1">Recipient</label>
+                  <div className="px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-sm font-bold text-gray-500">{composeModal.to}</div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2 ml-1">Subject Line</label>
+                  <input 
+                    type="text" 
+                    value={composeModal.subject} 
+                    onChange={(e) => setComposeModal(prev => ({ ...prev, subject: e.target.value }))}
+                    className="w-full px-5 py-4 bg-white border-2 border-gray-100 rounded-2xl text-sm font-bold text-[#1d1d1f] focus:border-[#eebf43] outline-none transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2 ml-1">Message Body</label>
+                <textarea 
+                  rows={10}
+                  value={composeModal.message} 
+                  onChange={(e) => setComposeModal(prev => ({ ...prev, message: e.target.value }))}
+                  className="w-full px-6 py-5 bg-white border-2 border-gray-100 rounded-[24px] text-sm font-medium text-[#1d1d1f] focus:border-[#eebf43] outline-none transition-all resize-none leading-relaxed"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))} 
+                className="px-8 py-4 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all"
+              >
+                Discard
+              </button>
+              <button 
+                onClick={handleSendEmail}
+                disabled={composeModal.isSending}
+                className="flex-1 py-4 text-white bg-[#1d1d1f] hover:bg-black text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50"
+              >
+                {composeModal.isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                {composeModal.isSending ? 'Transmitting...' : 'Dispatch Email Communication'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

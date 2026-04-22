@@ -14,8 +14,8 @@ export default function EventsAdminPage() {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 pt-2">
         <div>
-          <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
-            Workspace <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Portfolio</span>
+          <p className="text-[#a1a1aa] text-[10px] font-black tracking-[0.2em] uppercase mb-3 flex items-center gap-2">
+            Workspace <ArrowRight size={10} className="text-[#eebf43]" /> Portfolio
           </p>
           <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
             Event <span className="text-[#eebf43] italic pr-2">Management</span>

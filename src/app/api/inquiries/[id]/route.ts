@@ -54,3 +54,33 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Failed to update inquiry." }, { status: 500 });
   }
 }
+
+export async function GET(request: NextRequest, context: RouteContext) {
+  try {
+    await requireRole(request, ["admin", "coordinator"]);
+
+    const { id } = await context.params;
+
+    if (!id || !ObjectId.isValid(id)) {
+      return NextResponse.json({ error: "Invalid inquiry ID." }, { status: 400 });
+    }
+
+    const db = await getMongoDb();
+    const inquiriesCollection = db.collection("inquiries");
+
+    const inquiry = await inquiriesCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!inquiry) {
+      return NextResponse.json({ error: "Inquiry not found." }, { status: 404 });
+    }
+
+    return NextResponse.json(inquiry, { status: 200 });
+  } catch (error) {
+    if (error instanceof AuthGuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+
+    console.error("Inquiries GET error:", error);
+    return NextResponse.json({ error: "Failed to fetch inquiry." }, { status: 500 });
+  }
+}

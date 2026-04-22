@@ -10,7 +10,8 @@ export type AuditAction =
   | "USERS_EXPORTED"
   | "PROFILE_UPDATED"
   | "PROFILE_AVATAR_UPDATED"
-  | "PROFILE_AVATAR_REMOVED";
+  | "PROFILE_AVATAR_REMOVED"
+  | "EVENT_CREATED";
 
 export type AuditLogDocument = {
   category: AuditCategory;
