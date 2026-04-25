@@ -76,8 +76,8 @@ const mapTaskRecord = (task: TaskRecord, index: number): TaskItem => {
 
 export default function TasksAdminPage({ params }: { params: Promise<{ slug: string }> }) {
   const unwrappedParams = use(params);
-  const eventSlug = unwrappedParams.slug;
-  const eventName = eventSlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  const eventId = unwrappedParams.slug;
+  const [eventTitle, setEventTitle] = useState('');
 
   const { user } = useAuth();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -87,11 +87,31 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
   useEffect(() => {
     if (!user) return;
 
+    const fetchEventTitle = async () => {
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch(`/api/events/${eventId}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const eventData = await response.json();
+        if (eventData?.title) {
+          setEventTitle(eventData.title);
+        }
+      } catch (error) {
+        console.error('Failed to load event title:', error);
+      }
+    };
+
     const fetchTasks = async () => {
       try {
-  console.info('[TasksAdmin] Fetching tasks', { eventSlug });
+  console.info('[TasksAdmin] Fetching tasks', { eventId });
         const idToken = await user.getIdToken();
-  const requestUrl = `/api/tasks?eventSlug=${eventSlug}`;
+  const requestUrl = `/api/tasks?eventId=${eventId}`;
         console.info('[TasksAdmin] Request', requestUrl);
         const response = await fetch(requestUrl, {
           headers: { Authorization: `Bearer ${idToken}` },
@@ -117,8 +137,9 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
       }
     };
 
+    fetchEventTitle();
     fetchTasks();
-  }, [eventSlug, user]);
+  }, [eventId, user]);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -133,34 +154,52 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
       vendor: 'None'
     });
 
-    const handleAddTask = (e: React.FormEvent) => {
+    const handleAddTask = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!newTask.title || !newTask.assignee) return;
 
-      const taskToAdd = {
-        id: `TSK-00${tasks.length + 1}`,
-        title: newTask.title,
-        description: newTask.description,
-        status: newTask.status,
-        priority: newTask.priority,
-        dueDate: newTask.dueDate || 'No Date',
-        dueTime: newTask.dueTime || 'Any Time',
-        assignee: newTask.assignee,
-        vendor: newTask.vendor,
-      };
+      try {
+        const idToken = await user?.getIdToken();
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
+          body: JSON.stringify({
+            eventId,
+            title: newTask.title,
+            description: newTask.description,
+            status: newTask.status,
+            priority: newTask.priority,
+            dueDate: newTask.dueDate,
+            dueTime: newTask.dueTime,
+            assignee: newTask.assignee,
+            vendor: newTask.vendor,
+          }),
+        });
 
-      setTasks([taskToAdd, ...tasks]);
-      setIsModalOpen(false);
-      setNewTask({
-        title: '',
-        description: '',
-        status: 'TO DO',
-        priority: 'MEDIUM',
-        dueDate: '',
-        dueTime: '',
-        assignee: '',
-        vendor: 'None'
-      });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to create task');
+        }
+
+        const createdTask = await response.json();
+        setTasks((prevTasks) => [mapTaskRecord(createdTask, 0), ...prevTasks]);
+        setIsModalOpen(false);
+        setNewTask({
+          title: '',
+          description: '',
+          status: 'TO DO',
+          priority: 'MEDIUM',
+          dueDate: '',
+          dueTime: '',
+          assignee: '',
+          vendor: 'None'
+        });
+      } catch (error) {
+        console.error('Failed to create task:', error);
+      }
     };
 
   const getPriorityColor = (priority: string) => {
@@ -187,7 +226,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2">
         <div className="max-w-3xl">
           <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
-            <Link href="/admin/events" className="hover:text-[#1d1d1f] transition-colors">Events</Link> <ArrowRight size={10} /> <span className="text-[#1d1d1f]">{eventName}</span>
+            <Link href="/admin/events" className="hover:text-[#1d1d1f] transition-colors">Events</Link> <ArrowRight size={10} /> <span className="text-[#1d1d1f]">{eventTitle || 'Event'}</span>
           </p>
           <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
             Event <span className="text-[#eebf43] italic pr-2">Tasks</span>
