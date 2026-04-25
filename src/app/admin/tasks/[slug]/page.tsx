@@ -32,6 +32,12 @@ type TaskRecord = {
   vendor?: { name?: string } | string;
 };
 
+type OptionRecord = {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
 const normalizeStatus = (value?: string) => {
   if (!value) return 'TO DO';
   const normalized = value.toUpperCase().replace(/[_-]/g, ' ').trim();
@@ -90,6 +96,22 @@ const mapTaskRecord = (task: TaskRecord, index: number): TaskItem => {
   };
 };
 
+const extractNames = (payload: any): string[] => {
+  const records = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.users)
+      ? payload.users
+      : [];
+
+  return records
+    .map((record: OptionRecord) => {
+      if (record?.name && record.name.trim()) return record.name.trim();
+      const fullName = `${record?.firstName || ''} ${record?.lastName || ''}`.trim();
+      return fullName;
+    })
+    .filter(Boolean);
+};
+
 export default function TasksAdminPage({ params }: { params: Promise<{ slug: string }> }) {
   const unwrappedParams = use(params);
   const eventId = unwrappedParams.slug;
@@ -97,6 +119,8 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
 
   const { user } = useAuth();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [staffOptions, setStaffOptions] = useState<string[]>([]);
+  const [vendorOptions, setVendorOptions] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const filteredTasks = filterStatus === 'ALL' ? tasks : tasks.filter(t => t.status === filterStatus);
 
@@ -153,8 +177,38 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
       }
     };
 
+    const fetchDropdownOptions = async () => {
+      try {
+        const idToken = await user.getIdToken();
+
+        const [staffResponse, vendorResponse] = await Promise.all([
+          fetch('/api/staffs', {
+            headers: { Authorization: `Bearer ${idToken}` },
+          }),
+          fetch('/api/vendors', {
+            headers: { Authorization: `Bearer ${idToken}` },
+          }),
+        ]);
+
+        if (staffResponse.ok) {
+          const staffPayload = await staffResponse.json();
+          const staffNames = extractNames(staffPayload);
+          setStaffOptions(Array.from(new Set([...staffNames, 'Unassigned'])));
+        }
+
+        if (vendorResponse.ok) {
+          const vendorPayload = await vendorResponse.json();
+          const vendorNames = extractNames(vendorPayload);
+          setVendorOptions(Array.from(new Set(['None', ...vendorNames])));
+        }
+      } catch (error) {
+        console.error('Failed to load dropdown options:', error);
+      }
+    };
+
     fetchEventTitle();
     fetchTasks();
+    fetchDropdownOptions();
   }, [eventId, user]);
   
   // Modal State
@@ -267,6 +321,42 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
       if (previousStatus) {
         setTasks((prevTasks) =>
           prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, status: previousStatus } : task))
+        );
+      }
+    }
+  };
+
+  const updateTaskField = async (taskToUpdate: TaskItem, field: 'assignee' | 'vendor', value: string) => {
+    const previousValue = tasks.find((task) => task.id === taskToUpdate.id)?.[field];
+
+    setTasks((prevTasks) =>
+      prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, [field]: value } : task))
+    );
+
+    try {
+      const idToken = await user?.getIdToken();
+      const response = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          taskObjectId: taskToUpdate.dbId,
+          taskId: taskToUpdate.taskCode || taskToUpdate.id,
+          [field]: value,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to update ${field}`);
+      }
+    } catch (error) {
+      console.error(`Failed to update task ${field}:`, error);
+      if (previousValue) {
+        setTasks((prevTasks) =>
+          prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, [field]: previousValue } : task))
         );
       }
     }
@@ -389,19 +479,12 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                       <div className="relative inline-block w-full max-w-[140px]">
                          <select 
                             value={task.vendor || 'None'}
-                            onChange={(e) => {
-                              const updatedTasks = tasks.map(t => t.id === task.id ? {...t, vendor: e.target.value} : t);
-                              setTasks(updatedTasks);
-                            }}
+                            onChange={(e) => updateTaskField(task, 'vendor', e.target.value)}
                             className="appearance-none w-full pl-3 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-md text-[10px] font-bold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors outline-none cursor-pointer text-center truncate"
                           >
-                            <option value="None">None</option>
-                            <option value="Taste of Manila Catering">Taste of Manila Catering</option>
-                            <option value="Snap & Shoot Studios">Snap & Shoot Studios</option>
-                            <option value="Lumina Floral Design">Lumina Floral Design</option>
-                            <option value="Grand Ballroom SMX">Grand Ballroom SMX</option>
-                            <option value="The Harmony Strings">The Harmony Strings</option>
-                            <option value="Lux Event Rentals">Lux Event Rentals</option>
+                            {[...new Set(['None', ...(vendorOptions.length ? vendorOptions : [task.vendor || 'None'])])].map((vendorName) => (
+                              <option key={vendorName} value={vendorName}>{vendorName}</option>
+                            ))}
                           </select>
                           <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                       </div>
@@ -412,17 +495,12 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                          <div className="relative">
                             <select 
                                value={task.assignee}
-                               onChange={(e) => {
-                                 const updatedTasks = tasks.map(t => t.id === task.id ? {...t, assignee: e.target.value} : t);
-                                 setTasks(updatedTasks);
-                               }}
+                               onChange={(e) => updateTaskField(task, 'assignee', e.target.value)}
                                className="appearance-none pl-3 pr-8 py-1.5 bg-white border border-gray-200 rounded-md text-[11px] font-bold text-[#1d1d1f] hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer"
                              >
-                               <option value="Alesia">Alesia</option>
-                               <option value="Julian">Julian</option>
-                               <option value="Sarah">Sarah</option>
-                               <option value="Ian">Ian</option>
-                               <option value="Unassigned">Unassigned</option>
+                               {[...new Set(['Unassigned', ...(staffOptions.length ? staffOptions : [task.assignee || 'Unassigned'])])].map((staffName) => (
+                                 <option key={staffName} value={staffName}>{staffName}</option>
+                               ))}
                              </select>
                              <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                          </div>
@@ -543,11 +621,9 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
                     >
                       <option value="" disabled>Select a team member...</option>
-                      <option value="Elena">Elena Vance</option>
-                      <option value="Julian">Julian</option>
-                      <option value="Sarah">Sarah</option>
-                      <option value="Ian">Ian</option>
-                      <option value="Alesia">Alesia</option>
+                      {(staffOptions.length ? staffOptions : ['Unassigned']).map((staffName) => (
+                        <option key={staffName} value={staffName}>{staffName}</option>
+                      ))}
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -563,13 +639,9 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                       onChange={(e) => setNewTask({...newTask, vendor: e.target.value})}
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
                     >
-                      <option value="None">None</option>
-                      <option value="Taste of Manila Catering">Taste of Manila Catering</option>
-                      <option value="Snap & Shoot Studios">Snap & Shoot Studios</option>
-                      <option value="Lumina Floral Design">Lumina Floral Design</option>
-                      <option value="Grand Ballroom SMX">Grand Ballroom SMX</option>
-                      <option value="The Harmony Strings">The Harmony Strings</option>
-                      <option value="Lux Event Rentals">Lux Event Rentals</option>
+                      {(vendorOptions.length ? vendorOptions : ['None']).map((vendorName) => (
+                        <option key={vendorName} value={vendorName}>{vendorName}</option>
+                      ))}
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>

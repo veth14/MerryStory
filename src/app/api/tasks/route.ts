@@ -106,13 +106,31 @@ export async function PATCH(request: NextRequest) {
     const taskObjectId = typeof body?.taskObjectId === "string" ? body.taskObjectId.trim() : "";
     const taskId = typeof body?.taskId === "string" ? body.taskId.trim() : "";
     const status = typeof body?.status === "string" ? body.status.trim() : "";
+    const assignee = typeof body?.assignee === "string" ? body.assignee.trim() : "";
+    const vendor = typeof body?.vendor === "string" ? body.vendor.trim() : "";
 
     if (!taskObjectId && !taskId) {
       return NextResponse.json({ error: "Missing taskId." }, { status: 400 });
     }
 
     if (!status) {
-      return NextResponse.json({ error: "Missing status." }, { status: 400 });
+      if (!assignee && !vendor) {
+        return NextResponse.json({ error: "No updates provided." }, { status: 400 });
+      }
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (status) {
+      updates.status = status;
+    }
+
+    if (assignee) {
+      updates.assignee = { name: assignee };
+    }
+
+    if (vendor) {
+      updates.vendor = { name: vendor };
     }
 
     const db = await getMongoDb();
@@ -123,7 +141,7 @@ export async function PATCH(request: NextRequest) {
     if (taskObjectId && ObjectId.isValid(taskObjectId)) {
       result = await tasksCollection.findOneAndUpdate(
         { _id: new ObjectId(taskObjectId) },
-        { $set: { status, updatedAt: new Date() } },
+        { $set: updates },
         { returnDocument: "after" }
       );
     }
@@ -139,7 +157,7 @@ export async function PATCH(request: NextRequest) {
     if (!getUpdatedDoc(result) && taskId) {
       result = await tasksCollection.findOneAndUpdate(
         { taskId },
-        { $set: { status, updatedAt: new Date() } },
+        { $set: updates },
         { returnDocument: "after" }
       );
     }
