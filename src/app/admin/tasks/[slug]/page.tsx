@@ -6,6 +6,8 @@ import { useAuth } from '@/components/auth/AuthProvider';
 
 type TaskItem = {
   id: string;
+  dbId?: string;
+  taskCode?: string;
   title: string;
   description: string;
   status: string;
@@ -56,13 +58,27 @@ const resolveName = (value?: { name?: string } | string, fallback = 'None') => {
   return value.name || fallback;
 };
 
+const getStringId = (value?: unknown) => {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null && '$oid' in value) {
+    const oidValue = (value as { $oid?: string }).$oid;
+    return oidValue || undefined;
+  }
+  return String(value);
+};
+
 const mapTaskRecord = (task: TaskRecord, index: number): TaskItem => {
   const dueDate = task.dueDate ?? task.due?.date;
   const dueTime = task.dueTime ?? task.due?.time;
-  const idValue = task.taskId || task._id || `TSK-${String(index + 1).padStart(3, '0')}`;
+  const dbId = getStringId(task._id);
+  const taskCode = task.taskId || undefined;
+  const idValue = dbId || taskCode || `TSK-${String(index + 1).padStart(3, '0')}`;
 
   return {
     id: String(idValue),
+    dbId,
+    taskCode,
     title: task.title || 'Untitled Task',
     description: task.description || '',
     status: normalizeStatus(task.status),
@@ -220,6 +236,42 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
     }
   };
 
+  const updateTaskStatus = async (taskToUpdate: TaskItem, nextStatus: string) => {
+    const previousStatus = tasks.find((task) => task.id === taskToUpdate.id)?.status;
+
+    setTasks((prevTasks) =>
+      prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, status: nextStatus } : task))
+    );
+
+    try {
+      const idToken = await user?.getIdToken();
+      const response = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          taskObjectId: taskToUpdate.dbId,
+          taskId: taskToUpdate.taskCode || taskToUpdate.id,
+          status: nextStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update status');
+      }
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+      if (previousStatus) {
+        setTasks((prevTasks) =>
+          prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, status: previousStatus } : task))
+        );
+      }
+    }
+  };
+
   return (
     <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2">
       {/* Header Section */}
@@ -313,10 +365,19 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                     </td>
 
                     <td className="px-4 md:px-6 py-4 text-center align-middle">
-                      <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-widest ${statusColor}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                        {task.status}
-                      </span>
+                      <div className="relative inline-flex items-center">
+                        <span className={`absolute left-2.5 w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                        <select
+                          value={task.status}
+                          onChange={(e) => updateTaskStatus(task, e.target.value)}
+                          className={`appearance-none inline-flex items-center gap-2 pl-5 pr-7 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-widest ${statusColor} cursor-pointer`}
+                        >
+                          <option value="TO DO">TO DO</option>
+                          <option value="IN PROGRESS">IN PROGRESS</option>
+                          <option value="COMPLETED">COMPLETED</option>
+                        </select>
+                        <svg className="w-3 h-3 text-current absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </div>
                     </td>
 
                     <td className="px-4 md:px-6 py-4 text-center align-middle">

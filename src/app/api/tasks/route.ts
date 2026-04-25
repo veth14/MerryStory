@@ -33,9 +33,15 @@ export async function GET(request: NextRequest) {
 
     const tasks = await tasksCollection.find(filter).sort({ createdAt: -1 }).toArray();
 
-    console.info("[Tasks API] Returned", tasks.length, "tasks");
+    const serializedTasks = tasks.map((task) => ({
+      ...task,
+      _id: task._id?.toString?.() || task._id,
+      eventId: task.eventId?.toString?.() || task.eventId,
+    }));
 
-    return NextResponse.json(tasks, { status: 200 });
+    console.info("[Tasks API] Returned", serializedTasks.length, "tasks");
+
+    return NextResponse.json(serializedTasks, { status: 200 });
   } catch (error) {
     if (error instanceof AuthGuardError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
@@ -88,6 +94,75 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
     }
     console.error("Error creating task:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    await requireAuthenticatedUser(request);
+    const body = await request.json();
+
+    const taskObjectId = typeof body?.taskObjectId === "string" ? body.taskObjectId.trim() : "";
+    const taskId = typeof body?.taskId === "string" ? body.taskId.trim() : "";
+    const status = typeof body?.status === "string" ? body.status.trim() : "";
+
+    if (!taskObjectId && !taskId) {
+      return NextResponse.json({ error: "Missing taskId." }, { status: 400 });
+    }
+
+    if (!status) {
+      return NextResponse.json({ error: "Missing status." }, { status: 400 });
+    }
+
+    const db = await getMongoDb();
+    const tasksCollection = db.collection("event_tasks");
+
+  let result: any = null;
+
+    if (taskObjectId && ObjectId.isValid(taskObjectId)) {
+      result = await tasksCollection.findOneAndUpdate(
+        { _id: new ObjectId(taskObjectId) },
+        { $set: { status, updatedAt: new Date() } },
+        { returnDocument: "after" }
+      );
+    }
+
+    const getUpdatedDoc = (updateResult: any) => {
+      if (!updateResult) return null;
+      if (typeof updateResult === "object" && "value" in updateResult) {
+        return updateResult.value;
+      }
+      return updateResult;
+    };
+
+    if (!getUpdatedDoc(result) && taskId) {
+      result = await tasksCollection.findOneAndUpdate(
+        { taskId },
+        { $set: { status, updatedAt: new Date() } },
+        { returnDocument: "after" }
+      );
+    }
+
+    const updatedTask = getUpdatedDoc(result);
+
+    if (!updatedTask) {
+      return NextResponse.json({ error: "Task not found." }, { status: 404 });
+    }
+
+    return NextResponse.json(
+      {
+        ...updatedTask,
+        _id: updatedTask._id?.toString?.() || updatedTask._id,
+        eventId: updatedTask.eventId?.toString?.() || updatedTask.eventId,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    if (error instanceof AuthGuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    console.error("Error updating task:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
