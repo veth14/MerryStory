@@ -1,63 +1,124 @@
 'use client';
-import React, { useState, use } from 'react';
+import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
-const INITIAL_TASKS = [
-  {
-    id: 'TSK-001',
-    title: 'Confirm Starlight Gala Venue Capacity',
-    description: 'Finalize the floor plan with the venue manager to ensure we can accommodate the VIP list.',
-    status: 'IN PROGRESS',
-    priority: 'HIGH',
-    dueDate: 'Oct 15, 2024',
-    dueTime: '14:00',
-    assignee: 'Alesia',
-    vendor: 'Grand Ballroom SMX',
-  },
-  {
-    id: 'TSK-002',
-    title: 'Finalize Catering Menu Tasting',
-    description: 'Schedule tasting sessions with the premium caterers for the Corporate Summit.',
-    status: 'TO DO',
-    priority: 'MEDIUM',
-    dueDate: 'Oct 18, 2024',
-    dueTime: '10:30',
-    assignee: 'Julian',
-    vendor: 'Taste of Manila Catering',
-  },
-  {
-    id: 'TSK-003',
-    title: 'Send Invitations for Spring Awakening',
-    description: 'Draft the email and physical invitations to the curated guest list.',
-    status: 'TO DO',
-    priority: 'HIGH',
-    dueDate: 'Oct 20, 2024',
-    dueTime: '09:00',
-    assignee: 'Sarah',
-    vendor: 'None',
-  },
-  {
-    id: 'TSK-004',
-    title: 'Secure Golden Accents Decor',
-    description: 'Source 200 gold-plated centerpieces from the artisan vendor.',
-    status: 'COMPLETED',
-    priority: 'LOW',
-    dueDate: 'Oct 10, 2024',
-    dueTime: '16:45',
-    assignee: 'Ian',
-    vendor: 'Lumina Floral Design',
-  },
-];
+type TaskItem = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  dueDate: string;
+  dueTime: string;
+  assignee: string;
+  vendor: string;
+};
+
+type TaskRecord = {
+  _id?: string;
+  taskId?: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  due?: { date?: string; time?: string };
+  dueDate?: string;
+  dueTime?: string;
+  assignee?: { name?: string } | string;
+  vendor?: { name?: string } | string;
+};
+
+const normalizeStatus = (value?: string) => {
+  if (!value) return 'TO DO';
+  const normalized = value.toUpperCase().replace(/[_-]/g, ' ').trim();
+
+  if (normalized === 'TODO' || normalized === 'TO DO') return 'TO DO';
+  if (normalized === 'INPROGRESS' || normalized === 'IN PROGRESS') return 'IN PROGRESS';
+  if (normalized === 'COMPLETE' || normalized === 'COMPLETED') return 'COMPLETED';
+
+  return normalized;
+};
+
+const normalizePriority = (value?: string) => (value ? value.toUpperCase() : 'MEDIUM');
+
+const formatDateLabel = (value?: string) => {
+  if (!value) return 'No Date';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const resolveName = (value?: { name?: string } | string, fallback = 'None') => {
+  if (!value) return fallback;
+  if (typeof value === 'string') return value;
+  return value.name || fallback;
+};
+
+const mapTaskRecord = (task: TaskRecord, index: number): TaskItem => {
+  const dueDate = task.dueDate ?? task.due?.date;
+  const dueTime = task.dueTime ?? task.due?.time;
+  const idValue = task.taskId || task._id || `TSK-${String(index + 1).padStart(3, '0')}`;
+
+  return {
+    id: String(idValue),
+    title: task.title || 'Untitled Task',
+    description: task.description || '',
+    status: normalizeStatus(task.status),
+    priority: normalizePriority(task.priority),
+    dueDate: formatDateLabel(dueDate),
+    dueTime: dueTime || '',
+    assignee: resolveName(task.assignee, 'Unassigned'),
+    vendor: resolveName(task.vendor, 'None'),
+  };
+};
 
 export default function TasksAdminPage({ params }: { params: Promise<{ slug: string }> }) {
   const unwrappedParams = use(params);
-  const slug = unwrappedParams.slug;
-  const eventName = slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  const eventSlug = unwrappedParams.slug;
+  const eventName = eventSlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const { user } = useAuth();
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const filteredTasks = filterStatus === 'ALL' ? tasks : tasks.filter(t => t.status === filterStatus);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchTasks = async () => {
+      try {
+  console.info('[TasksAdmin] Fetching tasks', { eventSlug });
+        const idToken = await user.getIdToken();
+  const requestUrl = `/api/tasks?eventSlug=${eventSlug}`;
+        console.info('[TasksAdmin] Request', requestUrl);
+        const response = await fetch(requestUrl, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        console.info('[TasksAdmin] Response status', response.status);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('[TasksAdmin] Error response', errorData);
+          throw new Error(errorData.error || 'Failed to fetch tasks');
+        }
+
+        const payload = await response.json();
+        console.info('[TasksAdmin] Payload', payload);
+
+        const records = Array.isArray(payload) ? payload : payload?.tasks || [];
+        console.info('[TasksAdmin] Records count', records.length);
+        setTasks(records.map((record: TaskRecord, index: number) => mapTaskRecord(record, index)));
+      } catch (error) {
+        console.error('Failed to load tasks:', error);
+        setTasks([]);
+      }
+    };
+
+    fetchTasks();
+  }, [eventSlug, user]);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
