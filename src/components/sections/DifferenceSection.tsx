@@ -35,7 +35,7 @@ export function DifferenceSection() {
              className="relative h-[600px] rounded-2xl overflow-hidden group shadow-2xl"
           >
             <img 
-               src="https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop" 
+               src="https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/differenceSection/about.jpg" 
                alt="Dinner table place setting" 
                className="w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-105"
             />

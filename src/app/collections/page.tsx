@@ -12,7 +12,7 @@ const collections = [
     category: 'CATEGORY 1',
     investment: 'PHP 700,000',
     description: 'For the visionaries of love. We craft cinematic wedding experiences that blend heritage with modern luxury, ensuring every detail reflects your unique narrative.',
-    image: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=1600',
+    image: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/wedding.jpg',
     link: '/collections/weddings',
   },
   {
@@ -21,7 +21,7 @@ const collections = [
     category: 'CATEGORY 2',
     investment: 'PHP 1,000,000',
     description: 'Elevating corporate identity through high-impact production. From award ceremonies to milestone anniversaries, we deliver prestige and precision.',
-    image: 'https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&q=80&w=1600',
+    image: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate.jpg',
     link: '/collections/corporate',
   },
   {
@@ -30,7 +30,7 @@ const collections = [
     category: 'CATEGORY 3',
     investment: 'PHP 150,000',
     description: 'Command attention on the exhibition floor. We design and build immersive, high-traffic trade show experiences that amplify brand awareness and drive engagement.',
-    image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=1600',
+    image: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow.jpg',
     link: '/collections/trade-shows',
   },
   {
@@ -39,7 +39,7 @@ const collections = [
     category: 'CATEGORY 4',
     investment: 'PHP 50,000',
     description: 'Cherishing the milestones that matter. We create bespoke atmospheres for intimate gatherings and grand soirees alike, focused on the art of celebration.',
-    image: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=1600',
+    image: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday.jpg',
     link: '/collections/birthdays',
   },
 ];

@@ -11,28 +11,28 @@ export function PackagesSection() {
       link: "/collections/weddings",
       price: "700,000",
       description: "Atmospheric curation for the day two souls become an eternal legacy.",
-      image: "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=800&auto=format&fit=crop",
+      image: "https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/wedding.jpg",
     },
     {
       title: "Corporate",
       link: "/collections/corporate",
       price: "1,000,000",
       description: "Elevating corporate identity through high-impact production.",
-      image: "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?q=80&w=800&auto=format&fit=crop",
+      image: "https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate.jpg",
     },
     {
       title: "Trade Shows",
       link: "/collections/trade-shows",
       price: "150,000",
       description: "Strategic brand experiences designed to ignite market desire.",
-      image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=800&auto=format&fit=crop",
+      image: "https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow.jpg",
     },
     {
       title: "Birthdays",
       link: "/collections/birthdays",
       price: "50,000",
       description: "Marking the milestones of life with unrivaled vibrance and joy.",
-      image: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop",
+      image: "https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday.jpg",
     },
   ];
 
