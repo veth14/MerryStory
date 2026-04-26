@@ -30,8 +30,9 @@ interface FinancialData {
   totalReceived: string;
   outstanding: string;
   upcomingPayments: Array<{ entity: string; type: string; amount: string; due: string; days: string }>;
-  recentExpenses: Array<{ id: string; date: string; desc: string; subtitle: string; amount: string; status: string }>;
+  recentExpenses: Array<{ id: string; date: string; desc: string; subtitle: string; category: string; amount: string; status: string }>;
   invoices: Array<{ id: string; invoiceNumber: string; client: string; issue: string; due: string; amount: string; status: string }>;
+  categoryBreakdown: Array<{ category: string; amount: number; percentage: number }>;
 }
 
 export default function FinancesAdminPage() {
@@ -41,6 +42,7 @@ export default function FinancesAdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
   // Add Expense Modal State
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
@@ -88,6 +90,14 @@ export default function FinancesAdminPage() {
         const data = await response.json();
         setEventData(data);
         setError(null);
+        
+        // Auto-select the category with highest amount
+        if (data.categoryBreakdown && data.categoryBreakdown.length > 0) {
+          const highest = data.categoryBreakdown.reduce((prev: any, current: any) => 
+            current.amount > prev.amount ? current : prev
+          );
+          setSelectedCategory(highest.category);
+        }
       } catch (err) {
         console.error('Error fetching financial data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load financial data');
@@ -366,11 +376,8 @@ export default function FinancesAdminPage() {
                     </div>
                 </div>
                 <div className="space-y-4">
-                  {[
-                    { entity: "Lumina Floral Studio", type: "Final Payment", amount: "₱45,000", due: "Oct 25", days: "5 days" },
-                    { entity: "Grand Horizon Venue", type: "Balance", amount: "₱120,000", due: "Nov 01", days: "12 days" },
-                    { entity: "AudioVision Tech", type: "Deposit", amount: "₱35,000", due: "Nov 15", days: "26 days" }
-                  ].map((payment, idx) => (
+                  {eventData.upcomingPayments.length > 0 ? (
+                    eventData.upcomingPayments.map((payment, idx) => (
                     <div key={idx} className="flex justify-between items-center p-4 rounded-[16px] bg-[#fafafa] border border-gray-100 hover:border-[#eebf43]/50 transition-colors">
                       <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border border-gray-100 shadow-sm text-[#1d1d1f] font-black text-xs">
@@ -386,7 +393,10 @@ export default function FinancesAdminPage() {
                         <span className="text-[10px] text-[#eebf43] font-bold mt-1">In {payment.days}</span>
                       </div>
                     </div>
-                  ))}
+                  ))
+                  ) : (
+                    <div className="text-center py-8 text-[#a1a1aa] text-sm">No upcoming payments</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -401,30 +411,29 @@ export default function FinancesAdminPage() {
                 <button onClick={() => setActiveTab("expenses")} className="px-4 py-2 bg-[#fafafa] rounded-full text-[10px] font-bold text-[#1d1d1f] uppercase tracking-widest hover:bg-gray-100 transition-colors border border-gray-100 shadow-sm flex items-center gap-2">View All <ArrowRight size={10} /></button>
               </div>
               <div className="space-y-4 flex-1">
-                {[
-                  { date: "Oct 12", desc: "Sunset Banquet Hall", subtitle: "Initial Deposit", amount: "₱85,000", status: "Cleared" },
-                  { date: "Oct 10", desc: "Apex Corp Logistics", subtitle: "Equipment Rental", amount: "₱50,000", status: "Cleared" },
-                  { date: "Oct 05", desc: "Harmony Catering", subtitle: "Tasting & Menu Lock", amount: "₱15,000", status: "Cleared" },
-                  { date: "Oct 02", desc: "Vanguard Security", subtitle: "Retainer Fee", amount: "₱20,000", status: "Cleared" },
-                  { date: "Sep 28", desc: "Creative Media Ads", subtitle: "Campaign Launch", amount: "₱40,000", status: "Cleared" },
-                  { date: "Sep 25", desc: "Starlight Permits", subtitle: "City Processing", amount: "₱12,500", status: "Cleared" }
-                ].map((tx, idx) => (
-                  <div key={idx} className="group flex justify-between items-center p-4 rounded-[16px] hover:bg-[#fafafa] transition-colors border border-transparent hover:border-gray-100">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-50 border border-gray-100 shadow-sm group-hover:bg-white transition-colors">
-                        <Receipt size={14} className="text-[#a1a1aa] group-hover:text-[#1d1d1f] transition-colors" />
+                {eventData.recentExpenses.length > 0 ? (
+                  eventData.recentExpenses.map((tx, idx) => (
+                    <div key={idx} className="group flex justify-between items-center p-4 rounded-[16px] hover:bg-[#fafafa] transition-colors border border-transparent hover:border-gray-100">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-50 border border-gray-100 shadow-sm group-hover:bg-white transition-colors">
+                          <Receipt size={14} className="text-[#a1a1aa] group-hover:text-[#1d1d1f] transition-colors" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-black text-[#1d1d1f] mb-1">{tx.desc}</span>
+                          <span className="text-[10px] text-[#71717a] font-bold tracking-wider">{tx.date} – {tx.subtitle}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-black text-[#1d1d1f] mb-1">{tx.desc}</span>
-                        <span className="text-[10px] text-[#71717a] font-bold tracking-wider">{tx.date} � {tx.subtitle}</span>
+                      <div className="flex flex-col items-end">
+                        <span className="text-sm font-black text-[#1d1d1f]">- {tx.amount}</span>
+                        <span className="text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-100/50 uppercase tracking-widest">{tx.status}</span>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-sm font-black text-[#1d1d1f]">- {tx.amount}</span>
-                      <span className="text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-100/50 uppercase tracking-widest">{tx.status}</span>
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-[#a1a1aa] text-sm">
+                    No recent expenses
                   </div>
-                ))}
+                )}
               </div>
             </div>
 
@@ -445,7 +454,7 @@ export default function FinancesAdminPage() {
             <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Total Expenses</p>
-                <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">₱315,000</h2>
+                <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">{eventData.totalExpenses}</h2>
               </div>
               <div className="w-12 h-12 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
                 <Wallet size={20} className="text-[#a1a1aa]" />
@@ -456,7 +465,7 @@ export default function FinancesAdminPage() {
             <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Expense Records</p>
-                <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">24</h2>
+                <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">{eventData.recentExpenses.length}</h2>
               </div>
               <div className="w-12 h-12 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
                 <Receipt size={20} className="text-[#a1a1aa]" />
@@ -476,39 +485,94 @@ export default function FinancesAdminPage() {
                 </button>
               </div>
               <div className="flex-1 flex flex-col items-center justify-center relative">
-                {/* CSS-based Donut placeholder matching the style */}
-                <div className="w-[180px] h-[180px] rounded-full flex items-center justify-center" 
-                     style={{ background: 'conic-gradient(#eebf43 0% 45%, #f4d98a 45% 75%, #f9f1d8 75% 100%)' }}>
-                  <div className="w-[140px] h-[140px] bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
-                      <span className="text-2xl font-black text-[#1d1d1f]">45%</span>
-                      <span className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest">Venue</span>
-                  </div>
-                </div>
-                
-                {/* Legend below donut */}
-                <div className="w-full mt-8 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-[#eebf43]"></div>
-                      <span className="text-xs font-semibold text-[#71717a]">Venue</span>
+                {eventData.categoryBreakdown.length > 0 ? (
+                  <>
+                    {/* Donut Chart */}
+                    <div className="relative w-56 h-56 flex items-center justify-center mb-8">
+                      <svg width="100%" height="100%" viewBox="0 0 200 200" className="drop-shadow-sm">
+                        {(() => {
+                          const colors = ['#eebf43', '#d9a850', '#c7925a'];
+                          let currentAngle = -90;
+                          const radius = 70;
+                          const innerRadius = 48;
+                          
+                          return eventData.categoryBreakdown.map((item, idx) => {
+                            const sliceAngle = (item.percentage / 100) * 360;
+                            const startAngle = currentAngle;
+                            const endAngle = currentAngle + sliceAngle;
+                            
+                            const startRad = (startAngle * Math.PI) / 180;
+                            const endRad = (endAngle * Math.PI) / 180;
+                            
+                            const x1 = 100 + radius * Math.cos(startRad);
+                            const y1 = 100 + radius * Math.sin(startRad);
+                            const x2 = 100 + radius * Math.cos(endRad);
+                            const y2 = 100 + radius * Math.sin(endRad);
+                            const x3 = 100 + innerRadius * Math.cos(endRad);
+                            const y3 = 100 + innerRadius * Math.sin(endRad);
+                            const x4 = 100 + innerRadius * Math.cos(startRad);
+                            const y4 = 100 + innerRadius * Math.sin(startRad);
+                            
+                            const largeArc = sliceAngle > 180 ? 1 : 0;
+                            
+                            const pathData = `
+                              M ${x1} ${y1}
+                              A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}
+                              L ${x3} ${y3}
+                              A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4}
+                              Z
+                            `;
+                            
+                            currentAngle = endAngle;
+                            
+                            return (
+                              <path 
+                                key={idx} 
+                                d={pathData} 
+                                fill={colors[idx % colors.length]}
+                                stroke="white"
+                                strokeWidth="2"
+                                className="cursor-default"
+                              />
+                            );
+                          });
+                        })()}
+                      </svg>
+                      
+                      {/* Center text - Percentage */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        {selectedCategory && (
+                          <>
+                            <span className="text-5xl font-black text-[#1d1d1f] leading-none">
+                              {eventData.categoryBreakdown.find(c => c.category === selectedCategory)?.percentage}%
+                            </span>
+                            <span className="text-xs font-bold text-[#a1a1aa] mt-3 uppercase tracking-wider">{selectedCategory}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-xs font-black text-[#1d1d1f]">₱141,750</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-[#f4d98a]"></div>
-                      <span className="text-xs font-semibold text-[#71717a]">Catering</span>
+                    
+                    {/* Legend - Simple List */}
+                    <div className="space-y-4 w-full">
+                      {eventData.categoryBreakdown.map((item, idx) => {
+                        const colors = ['bg-[#eebf43]', 'bg-[#d9a850]', 'bg-[#c7925a]'];
+                        return (
+                          <div key={idx} className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-3 h-3 rounded-full ${colors[idx % colors.length]}`}></div>
+                              <span className="text-sm font-bold text-[#71717a] capitalize">{item.category}</span>
+                            </div>
+                            <span className="text-sm font-black text-[#1d1d1f]">₱{item.amount.toLocaleString()}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <span className="text-xs font-black text-[#1d1d1f]">₱94,500</span>
+                  </>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-sm text-[#a1a1aa]">No expense data available</p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-[#f9f1d8]"></div>
-                      <span className="text-xs font-semibold text-[#71717a]">Marketing</span>
-                    </div>
-                    <span className="text-xs font-black text-[#1d1d1f]">₱78,750</span>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -544,7 +608,7 @@ export default function FinancesAdminPage() {
                         return (
                           <tr 
                             key={idx}
-                            onClick={() => triggerModal('Expense Details', `Title: ${expense.desc}\nAmount: ${expense.amount}\nStatus: ${expense.status}\nDate: ${expense.date}\n\nCategory: ${expense.subtitle}`)}
+                            onClick={() => triggerModal('Expense Details', `Title: ${expense.desc}\nAmount: ${expense.amount}\nStatus: ${expense.status}\nDate: ${expense.date}\n\nCategory: ${expense.category}\nVendor: ${expense.subtitle}`)}
                             className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
                           >
                             <td className="py-4 px-4 border-b border-gray-50">
@@ -560,7 +624,7 @@ export default function FinancesAdminPage() {
                             </td>
                             <td className="py-4 px-4 border-b border-gray-50">
                                 <div className="inline-flex items-center px-2 py-1 rounded bg-gray-100">
-                                    <span className="text-[10px] font-bold text-[#71717a] uppercase tracking-wider">{expense.subtitle}</span>
+                                    <span className="text-[10px] font-bold text-[#71717a] uppercase tracking-wider">{expense.category}</span>
                                 </div>
                             </td>
                             <td className="py-4 px-4 border-b border-gray-50 text-right">

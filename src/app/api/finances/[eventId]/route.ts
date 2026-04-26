@@ -54,8 +54,9 @@ export async function GET(
       .map(exp => ({
         id: exp._id.toString(),
         date: new Date(exp.createdAt).toLocaleDateString(),
-        desc: exp.vendor || "Unknown Vendor",
-        subtitle: exp.description || "Payment",
+        desc: exp.description || "Payment",
+        subtitle: exp.vendor || "Unknown Vendor",
+        category: exp.paymentType || "Payment",
         amount: `₱${exp.amount.toLocaleString()}`,
         status: exp.status || "Pending"
       }));
@@ -89,6 +90,19 @@ export async function GET(
         };
       });
     
+    // Calculate category breakdown
+    const categoryBreakdown = expenses.reduce((acc: Record<string, number>, exp) => {
+      const category = exp.paymentType || "Other";
+      acc[category] = (acc[category] || 0) + (exp.amount || 0);
+      return acc;
+    }, {});
+    
+    const categoryBreakdownArray = Object.entries(categoryBreakdown).map(([category, amount]) => ({
+      category,
+      amount,
+      percentage: totalExpenses > 0 ? Math.round((amount / totalExpenses) * 100) : 0
+    }));
+    
     const financialOverview = {
       eventName: event.title,
       eventId: event._id.toString(),
@@ -101,7 +115,8 @@ export async function GET(
       outstanding: `₱${outstanding.toLocaleString()}`,
       upcomingPayments,
       recentExpenses,
-      invoices: formattedInvoices
+      invoices: formattedInvoices,
+      categoryBreakdown: categoryBreakdownArray
     };
     
     return NextResponse.json(financialOverview);
