@@ -13,7 +13,7 @@ const collectionDetails = {
     heroTitle2: 'Possibilities.',
     heroDesc: 'For the visionaries of love. We craft cinematic wedding experiences that blend heritage with modern luxury, ensuring every detail reflects your unique narrative.',
     heroBtn: 'DISCOVER OUR PROCESS',
-    heroImage: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=1920',
+    heroImage: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/weddingCanvas.jpg',
     
     section2Title: 'The Consultation',
     section2Desc: 'Every masterpiece begins with a conversation. Our process starts with an absolute immersion into your vision and style. Because we offer a truly bespoke production, we craft an intricate blueprint that makes your dream a reality.',
@@ -21,22 +21,22 @@ const collectionDetails = {
       { title: 'CONCEPTUAL BLUEPRINTING', desc: 'Detailed layouts, timelines, and visual mood boards.' },
       { title: 'FLORAL SELECTION', desc: 'Curated arrangements mapped beautifully to your palette.' }
     ],
-    section2Image: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&q=80&w=1200',
+    section2Image: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/consultation.jpg',
     
     section3Tag: 'THE SKILL & PASSION',
     section3Title: 'Artisanship.',
     section3Subtitle: 'The flawless execution of your event depends on the art of precision.',
     artisanshipImages: [
-      'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?auto=format&fit=crop&q=80&w=800',
-      'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=800',
-      'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?auto=format&fit=crop&q=80&w=800'
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/artisan1.jpeg',
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/artisan2.jpeg',
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/artiisan3.jpg'
     ],
     
     section4Title: 'The Masterpieces',
-    masterpieceMain: { src: 'https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&q=80&w=1200', label: 'The Golden Pavilion' },
-    masterpieceTopR: { src: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&q=80&w=1200', label: 'Ethereal Dining' },
-    masterpieceBotR1: { src: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&q=80&w=800', label: 'Details' },
-    masterpieceBotR2: { src: 'https://images.unsplash.com/photo-1558403194-611308249627?auto=format&fit=crop&q=80&w=800', label: 'Atmosphere' }
+    masterpieceMain: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/pavillion.jpg', label: 'The Golden Pavilion' },
+    masterpieceTopR: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/dining.jpg', label: 'Ethereal Dining' },
+    masterpieceBotR1: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/details.jpg', label: 'Details' },
+    masterpieceBotR2: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/weddings/atmosphere.jpg', label: 'Atmosphere' }
   },
   'corporate': {
     heroTag: 'BRAND IMMERSION',
@@ -44,7 +44,7 @@ const collectionDetails = {
     heroTitle2: 'Excellence.',
     heroDesc: 'Elevating corporate identity through high-impact production. From award ceremonies to milestone anniversaries, we deliver prestige and precision.',
     heroBtn: 'EXPLORE CAPABILITIES',
-    heroImage: 'https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&q=80&w=1920',
+    heroImage: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/corporatebg.jpg',
     
     section2Title: 'Strategic Design',
     section2Desc: 'We translate your brands core values into a tactile, memorable experience. When it comes to corporate events, professionalism meets boundless creativity.',
@@ -52,22 +52,22 @@ const collectionDetails = {
       { title: 'BRAND INTEGRATION', desc: 'Seamlessly weaving your identity into the event fabric.' },
       { title: 'LOGISTICAL PRECISION', desc: 'Flawless execution of schedules, talent, and technical ops.' }
     ],
-    section2Image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=1200',
+    section2Image: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/stratdesign.jpg',
     
     section3Tag: 'IMPACT & SCALE',
     section3Title: 'Production.',
     section3Subtitle: 'Environments that impress stakeholders and communicate your message dynamically.',
     artisanshipImages: [
-      'https://images.unsplash.com/photo-1551818255-e6e10975bc17?auto=format&fit=crop&q=80&w=800',
-      'https://images.unsplash.com/photo-1558403194-611308249627?auto=format&fit=crop&q=80&w=800',
-      'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&q=80&w=800'
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/production.jpg',
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/production1.jpg',
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/production2.jpg'
     ],
     
     section4Title: 'The Showcases',
-    masterpieceMain: { src: 'https://images.unsplash.com/photo-1561489396-888724a1543d?auto=format&fit=crop&q=80&w=1200', label: 'The Annual Gala' },
-    masterpieceTopR: { src: 'https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&q=80&w=1200', label: 'Stage Architecture' },
-    masterpieceBotR1: { src: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&q=80&w=800', label: 'VIP Areas' },
-    masterpieceBotR2: { src: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=800', label: 'Networking' }
+    masterpieceMain: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/annualGala.jpg', label: 'The Annual Gala' },
+    masterpieceTopR: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/stageArchi.jpg', label: 'Stage Architecture' },
+    masterpieceBotR1: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/vip.jpg', label: 'VIP Areas' },
+    masterpieceBotR2: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate/networking.jpg', label: 'Networking' }
   },
   'trade-shows': {
     heroTag: 'COMMAND ATTENTION',
@@ -75,7 +75,7 @@ const collectionDetails = {
     heroTitle2: 'Exhibitions.',
     heroDesc: 'Command attention on the exhibition floor. We design and build high-traffic experiences that amplify brand awareness and drive engagement.',
     heroBtn: 'VIEW STRATEGY',
-    heroImage: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=1920',
+    heroImage: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/tradeBig.jpg',
     
     section2Title: 'The Architecture',
     section2Desc: 'In a sea of competitors, your trade show presence must be an immediate visual anchor. We architect booths and exhibition zones designed to draw attendees in.',
@@ -83,22 +83,22 @@ const collectionDetails = {
       { title: 'SPATIAL FLOW', desc: 'Intelligent booth mapping to maximize lead generation.' },
       { title: 'CUSTOM FABRICATION', desc: 'Bespoke structural builds that command the room.' }
     ],
-    section2Image: 'https://images.unsplash.com/photo-1551818255-e6e10975bc17?auto=format&fit=crop&q=80&w=1200',
+    section2Image: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/architecture.jpg',
     
     section3Tag: 'ENGAGEMENT',
     section3Title: 'Interaction.',
     section3Subtitle: 'Creating memorable touchpoints for every single visitor.',
     artisanshipImages: [
-      'https://images.unsplash.com/photo-1558403194-611308249627?auto=format&fit=crop&q=80&w=800',
-      'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&q=80&w=800',
-      'https://images.unsplash.com/photo-1561489396-888724a1543d?auto=format&fit=crop&q=80&w=800'
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/interaction.jpg',
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/interaction1.jpg',
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/interaction2.jpg'
     ],
     
     section4Title: 'The Pavilions',
-    masterpieceMain: { src: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=1200', label: 'Tech Expo Alpha' },
-    masterpieceTopR: { src: 'https://images.unsplash.com/photo-1551818255-e6e10975bc17?auto=format&fit=crop&q=80&w=1200', label: 'Interactive Displays' },
-    masterpieceBotR1: { src: 'https://images.unsplash.com/photo-1558403194-611308249627?auto=format&fit=crop&q=80&w=800', label: 'Lead Gen Kiosks' },
-    masterpieceBotR2: { src: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&q=80&w=800', label: 'Lounges' }
+    masterpieceMain: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/lounge.jpg', label: 'Tech Expo Alpha' },
+    masterpieceTopR: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/lounge1.jpg', label: 'Interactive Displays' },
+    masterpieceBotR1: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/lounge2.jpg', label: 'Lead Gen Kiosks' },
+    masterpieceBotR2: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/tradeshow/lounge3.jpg', label: 'Lounges' }
   },
   'birthdays': {
     heroTag: 'THE ART OF CELEBRATION',
@@ -106,7 +106,7 @@ const collectionDetails = {
     heroTitle2: 'Milestones.',
     heroDesc: 'Cherishing the milestones that matter. We create bespoke atmospheres for intimate gatherings and grand soirees alike.',
     heroBtn: 'OUR APPROACH',
-    heroImage: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=1920',
+    heroImage: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/milestone.jpg',
     
     section2Title: 'The Planning',
     section2Desc: 'Birthdays are the markers of our personal journeys. We pour heart and soul into creating an atmosphere that perfectly represents the honorand.',
@@ -114,22 +114,22 @@ const collectionDetails = {
       { title: 'THEMATIC CONCEPT', desc: 'From sophisticated galas to wildly creative visual motifs.' },
       { title: 'CURATED DINING', desc: 'Unforgettable culinary experiences tailored to your palate.' }
     ],
-    section2Image: 'https://images.unsplash.com/photo-1530103862676-de8892bc952f?auto=format&fit=crop&q=80&w=1200',
+    section2Image: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/invitation.jpg',
     
     section3Tag: 'JOY & INTIMACY',
     section3Title: 'Gatherings.',
     section3Subtitle: 'Great food, gorgeous surroundings, and a night tailored around you.',
     artisanshipImages: [
-      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=800',
-      'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&q=80&w=800',
-      'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&q=80&w=800'
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/gathering1.jpg',
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/gathering2.jpg',
+      'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/gathering3.jpg'
     ],
     
     section4Title: 'The Memories',
-    masterpieceMain: { src: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=1200', label: 'The 50th Gala' },
-    masterpieceTopR: { src: 'https://images.unsplash.com/photo-1530103862676-de8892bc952f?auto=format&fit=crop&q=80&w=1200', label: 'Intimate Dining' },
-    masterpieceBotR1: { src: 'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&q=80&w=800', label: 'Performances' },
-    masterpieceBotR2: { src: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&q=80&w=800', label: 'Decor Details' }
+    masterpieceMain: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/memory1.jpg', label: 'The 50th Gala' },
+    masterpieceTopR: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/dining1.jpg', label: 'Intimate Dining' },
+    masterpieceBotR1: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/performance.jpg', label: 'Performances' },
+    masterpieceBotR2: { src: 'https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/birthday/planning.jpg', label: 'Decor Details' }
   }
 };
 

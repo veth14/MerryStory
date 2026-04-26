@@ -59,7 +59,7 @@ export default function ContactPage() {
           {/* Top Image */}
           <div className="relative w-[85%] aspect-[3/4] mb-12 shadow-xl bg-gray-100">
             <Image 
-              src="https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?auto=format&fit=crop&q=80&w=800" 
+              src="https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/differenceSection/about.jpg" 
               alt="Studio Production" 
               fill 
               className="object-cover grayscale"

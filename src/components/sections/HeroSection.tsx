@@ -44,10 +44,10 @@ export function HeroSection() {
             className="relative h-[420px] sm:h-[520px] lg:h-[700px] w-full"
           >
             <div className="absolute right-0 top-0 w-[85%] h-[85%] rounded-xl overflow-hidden shadow-2xl z-10 transform rotate-2">
-              <img src="https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?q=80&w=800&auto=format&fit=crop" alt="Grand Event Setup" className="w-full h-full object-cover" />
+              <img src="https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/heroSection/heroBig.jpg" alt="Grand Event Setup" className="w-full h-full object-cover" />
             </div>
             <div className="absolute left-0 bottom-0 w-[62%] sm:w-[55%] aspect-square rounded bg-white p-4 shadow-xl z-20 transform -rotate-6 transition-transform hover:rotate-[-2deg] duration-500">
-               <img src="https://images.unsplash.com/photo-1555244162-803834f70033?q=80&w=400&auto=format&fit=crop" alt="Catering Detail" className="w-full h-full object-cover rounded-sm" />
+               <img src="https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/heroSection/heroSmall.jpg" alt="Catering Detail" className="w-full h-full object-cover rounded-sm" />
             </div>
           </motion.div>
 
