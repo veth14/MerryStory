@@ -1,63 +1,215 @@
 'use client';
-import React, { useState, use } from 'react';
+import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
-const INITIAL_TASKS = [
-  {
-    id: 'TSK-001',
-    title: 'Confirm Starlight Gala Venue Capacity',
-    description: 'Finalize the floor plan with the venue manager to ensure we can accommodate the VIP list.',
-    status: 'IN PROGRESS',
-    priority: 'HIGH',
-    dueDate: 'Oct 15, 2024',
-    dueTime: '14:00',
-    assignee: 'Alesia',
-    vendor: 'Grand Ballroom SMX',
-  },
-  {
-    id: 'TSK-002',
-    title: 'Finalize Catering Menu Tasting',
-    description: 'Schedule tasting sessions with the premium caterers for the Corporate Summit.',
-    status: 'TO DO',
-    priority: 'MEDIUM',
-    dueDate: 'Oct 18, 2024',
-    dueTime: '10:30',
-    assignee: 'Julian',
-    vendor: 'Taste of Manila Catering',
-  },
-  {
-    id: 'TSK-003',
-    title: 'Send Invitations for Spring Awakening',
-    description: 'Draft the email and physical invitations to the curated guest list.',
-    status: 'TO DO',
-    priority: 'HIGH',
-    dueDate: 'Oct 20, 2024',
-    dueTime: '09:00',
-    assignee: 'Sarah',
-    vendor: 'None',
-  },
-  {
-    id: 'TSK-004',
-    title: 'Secure Golden Accents Decor',
-    description: 'Source 200 gold-plated centerpieces from the artisan vendor.',
-    status: 'COMPLETED',
-    priority: 'LOW',
-    dueDate: 'Oct 10, 2024',
-    dueTime: '16:45',
-    assignee: 'Ian',
-    vendor: 'Lumina Floral Design',
-  },
-];
+type TaskItem = {
+  id: string;
+  dbId?: string;
+  taskCode?: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  dueDate: string;
+  dueTime: string;
+  assignee: string;
+  vendor: string;
+};
+
+type TaskRecord = {
+  _id?: string;
+  taskId?: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  due?: { date?: string; time?: string };
+  dueDate?: string;
+  dueTime?: string;
+  assignee?: { name?: string } | string;
+  vendor?: { name?: string } | string;
+};
+
+type OptionRecord = {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+const normalizeStatus = (value?: string) => {
+  if (!value) return 'TO DO';
+  const normalized = value.toUpperCase().replace(/[_-]/g, ' ').trim();
+
+  if (normalized === 'TODO' || normalized === 'TO DO') return 'TO DO';
+  if (normalized === 'INPROGRESS' || normalized === 'IN PROGRESS') return 'IN PROGRESS';
+  if (normalized === 'COMPLETE' || normalized === 'COMPLETED') return 'COMPLETED';
+
+  return normalized;
+};
+
+const normalizePriority = (value?: string) => (value ? value.toUpperCase() : 'MEDIUM');
+
+const formatDateLabel = (value?: string) => {
+  if (!value) return 'No Date';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const resolveName = (value?: { name?: string } | string, fallback = 'None') => {
+  if (!value) return fallback;
+  if (typeof value === 'string') return value;
+  return value.name || fallback;
+};
+
+const getStringId = (value?: unknown) => {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null && '$oid' in value) {
+    const oidValue = (value as { $oid?: string }).$oid;
+    return oidValue || undefined;
+  }
+  return String(value);
+};
+
+const mapTaskRecord = (task: TaskRecord, index: number): TaskItem => {
+  const dueDate = task.dueDate ?? task.due?.date;
+  const dueTime = task.dueTime ?? task.due?.time;
+  const dbId = getStringId(task._id);
+  const taskCode = task.taskId || undefined;
+  const idValue = dbId || taskCode || `TSK-${String(index + 1).padStart(3, '0')}`;
+
+  return {
+    id: String(idValue),
+    dbId,
+    taskCode,
+    title: task.title || 'Untitled Task',
+    description: task.description || '',
+    status: normalizeStatus(task.status),
+    priority: normalizePriority(task.priority),
+    dueDate: formatDateLabel(dueDate),
+    dueTime: dueTime || '',
+    assignee: resolveName(task.assignee, 'Unassigned'),
+    vendor: resolveName(task.vendor, 'None'),
+  };
+};
+
+const extractNames = (payload: any): string[] => {
+  const records = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.users)
+      ? payload.users
+      : [];
+
+  return records
+    .map((record: OptionRecord) => {
+      if (record?.name && record.name.trim()) return record.name.trim();
+      const fullName = `${record?.firstName || ''} ${record?.lastName || ''}`.trim();
+      return fullName;
+    })
+    .filter(Boolean);
+};
 
 export default function TasksAdminPage({ params }: { params: Promise<{ slug: string }> }) {
   const unwrappedParams = use(params);
-  const slug = unwrappedParams.slug;
-  const eventName = slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  const eventId = unwrappedParams.slug;
+  const [eventTitle, setEventTitle] = useState('');
 
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const { user } = useAuth();
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [staffOptions, setStaffOptions] = useState<string[]>([]);
+  const [vendorOptions, setVendorOptions] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const filteredTasks = filterStatus === 'ALL' ? tasks : tasks.filter(t => t.status === filterStatus);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchEventTitle = async () => {
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch(`/api/events/${eventId}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const eventData = await response.json();
+        if (eventData?.title) {
+          setEventTitle(eventData.title);
+        }
+      } catch (error) {
+        console.error('Failed to load event title:', error);
+      }
+    };
+
+    const fetchTasks = async () => {
+      try {
+  console.info('[TasksAdmin] Fetching tasks', { eventId });
+        const idToken = await user.getIdToken();
+  const requestUrl = `/api/tasks?eventId=${eventId}`;
+        console.info('[TasksAdmin] Request', requestUrl);
+        const response = await fetch(requestUrl, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        console.info('[TasksAdmin] Response status', response.status);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('[TasksAdmin] Error response', errorData);
+          throw new Error(errorData.error || 'Failed to fetch tasks');
+        }
+
+        const payload = await response.json();
+        console.info('[TasksAdmin] Payload', payload);
+
+        const records = Array.isArray(payload) ? payload : payload?.tasks || [];
+        console.info('[TasksAdmin] Records count', records.length);
+        setTasks(records.map((record: TaskRecord, index: number) => mapTaskRecord(record, index)));
+      } catch (error) {
+        console.error('Failed to load tasks:', error);
+        setTasks([]);
+      }
+    };
+
+    const fetchDropdownOptions = async () => {
+      try {
+        const idToken = await user.getIdToken();
+
+        const [staffResponse, vendorResponse] = await Promise.all([
+          fetch('/api/staffs', {
+            headers: { Authorization: `Bearer ${idToken}` },
+          }),
+          fetch('/api/vendors', {
+            headers: { Authorization: `Bearer ${idToken}` },
+          }),
+        ]);
+
+        if (staffResponse.ok) {
+          const staffPayload = await staffResponse.json();
+          const staffNames = extractNames(staffPayload);
+          setStaffOptions(Array.from(new Set([...staffNames, 'Unassigned'])));
+        }
+
+        if (vendorResponse.ok) {
+          const vendorPayload = await vendorResponse.json();
+          const vendorNames = extractNames(vendorPayload);
+          setVendorOptions(Array.from(new Set(['None', ...vendorNames])));
+        }
+      } catch (error) {
+        console.error('Failed to load dropdown options:', error);
+      }
+    };
+
+    fetchEventTitle();
+    fetchTasks();
+    fetchDropdownOptions();
+  }, [eventId, user]);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -72,34 +224,52 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
       vendor: 'None'
     });
 
-    const handleAddTask = (e: React.FormEvent) => {
+    const handleAddTask = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!newTask.title || !newTask.assignee) return;
 
-      const taskToAdd = {
-        id: `TSK-00${tasks.length + 1}`,
-        title: newTask.title,
-        description: newTask.description,
-        status: newTask.status,
-        priority: newTask.priority,
-        dueDate: newTask.dueDate || 'No Date',
-        dueTime: newTask.dueTime || 'Any Time',
-        assignee: newTask.assignee,
-        vendor: newTask.vendor,
-      };
+      try {
+        const idToken = await user?.getIdToken();
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
+          body: JSON.stringify({
+            eventId,
+            title: newTask.title,
+            description: newTask.description,
+            status: newTask.status,
+            priority: newTask.priority,
+            dueDate: newTask.dueDate,
+            dueTime: newTask.dueTime,
+            assignee: newTask.assignee,
+            vendor: newTask.vendor,
+          }),
+        });
 
-      setTasks([taskToAdd, ...tasks]);
-      setIsModalOpen(false);
-      setNewTask({
-        title: '',
-        description: '',
-        status: 'TO DO',
-        priority: 'MEDIUM',
-        dueDate: '',
-        dueTime: '',
-        assignee: '',
-        vendor: 'None'
-      });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to create task');
+        }
+
+        const createdTask = await response.json();
+        setTasks((prevTasks) => [mapTaskRecord(createdTask, 0), ...prevTasks]);
+        setIsModalOpen(false);
+        setNewTask({
+          title: '',
+          description: '',
+          status: 'TO DO',
+          priority: 'MEDIUM',
+          dueDate: '',
+          dueTime: '',
+          assignee: '',
+          vendor: 'None'
+        });
+      } catch (error) {
+        console.error('Failed to create task:', error);
+      }
     };
 
   const getPriorityColor = (priority: string) => {
@@ -120,13 +290,85 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
     }
   };
 
+  const updateTaskStatus = async (taskToUpdate: TaskItem, nextStatus: string) => {
+    const previousStatus = tasks.find((task) => task.id === taskToUpdate.id)?.status;
+
+    setTasks((prevTasks) =>
+      prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, status: nextStatus } : task))
+    );
+
+    try {
+      const idToken = await user?.getIdToken();
+      const response = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          taskObjectId: taskToUpdate.dbId,
+          taskId: taskToUpdate.taskCode || taskToUpdate.id,
+          status: nextStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update status');
+      }
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+      if (previousStatus) {
+        setTasks((prevTasks) =>
+          prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, status: previousStatus } : task))
+        );
+      }
+    }
+  };
+
+  const updateTaskField = async (taskToUpdate: TaskItem, field: 'assignee' | 'vendor', value: string) => {
+    const previousValue = tasks.find((task) => task.id === taskToUpdate.id)?.[field];
+
+    setTasks((prevTasks) =>
+      prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, [field]: value } : task))
+    );
+
+    try {
+      const idToken = await user?.getIdToken();
+      const response = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          taskObjectId: taskToUpdate.dbId,
+          taskId: taskToUpdate.taskCode || taskToUpdate.id,
+          [field]: value,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to update ${field}`);
+      }
+    } catch (error) {
+      console.error(`Failed to update task ${field}:`, error);
+      if (previousValue) {
+        setTasks((prevTasks) =>
+          prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, [field]: previousValue } : task))
+        );
+      }
+    }
+  };
+
   return (
     <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2">
       {/* Header Section */}
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2">
         <div className="max-w-3xl">
           <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
-            <Link href="/admin/events" className="hover:text-[#1d1d1f] transition-colors">Events</Link> <ArrowRight size={10} /> <span className="text-[#1d1d1f]">{eventName}</span>
+            <Link href="/admin/events" className="hover:text-[#1d1d1f] transition-colors">Events</Link> <ArrowRight size={10} /> <span className="text-[#1d1d1f]">{eventTitle || 'Event'}</span>
           </p>
           <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
             Event <span className="text-[#eebf43] italic pr-2">Tasks</span>
@@ -213,10 +455,19 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                     </td>
 
                     <td className="px-4 md:px-6 py-4 text-center align-middle">
-                      <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-widest ${statusColor}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                        {task.status}
-                      </span>
+                      <div className="relative inline-flex items-center">
+                        <span className={`absolute left-2.5 w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                        <select
+                          value={task.status}
+                          onChange={(e) => updateTaskStatus(task, e.target.value)}
+                          className={`appearance-none inline-flex items-center gap-2 pl-5 pr-7 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-widest ${statusColor} cursor-pointer`}
+                        >
+                          <option value="TO DO">TO DO</option>
+                          <option value="IN PROGRESS">IN PROGRESS</option>
+                          <option value="COMPLETED">COMPLETED</option>
+                        </select>
+                        <svg className="w-3 h-3 text-current absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </div>
                     </td>
 
                     <td className="px-4 md:px-6 py-4 text-center align-middle">
@@ -228,19 +479,12 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                       <div className="relative inline-block w-full max-w-[140px]">
                          <select 
                             value={task.vendor || 'None'}
-                            onChange={(e) => {
-                              const updatedTasks = tasks.map(t => t.id === task.id ? {...t, vendor: e.target.value} : t);
-                              setTasks(updatedTasks);
-                            }}
+                            onChange={(e) => updateTaskField(task, 'vendor', e.target.value)}
                             className="appearance-none w-full pl-3 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-md text-[10px] font-bold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors outline-none cursor-pointer text-center truncate"
                           >
-                            <option value="None">None</option>
-                            <option value="Taste of Manila Catering">Taste of Manila Catering</option>
-                            <option value="Snap & Shoot Studios">Snap & Shoot Studios</option>
-                            <option value="Lumina Floral Design">Lumina Floral Design</option>
-                            <option value="Grand Ballroom SMX">Grand Ballroom SMX</option>
-                            <option value="The Harmony Strings">The Harmony Strings</option>
-                            <option value="Lux Event Rentals">Lux Event Rentals</option>
+                            {[...new Set(['None', ...(vendorOptions.length ? vendorOptions : [task.vendor || 'None'])])].map((vendorName) => (
+                              <option key={vendorName} value={vendorName}>{vendorName}</option>
+                            ))}
                           </select>
                           <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                       </div>
@@ -251,17 +495,12 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                          <div className="relative">
                             <select 
                                value={task.assignee}
-                               onChange={(e) => {
-                                 const updatedTasks = tasks.map(t => t.id === task.id ? {...t, assignee: e.target.value} : t);
-                                 setTasks(updatedTasks);
-                               }}
+                               onChange={(e) => updateTaskField(task, 'assignee', e.target.value)}
                                className="appearance-none pl-3 pr-8 py-1.5 bg-white border border-gray-200 rounded-md text-[11px] font-bold text-[#1d1d1f] hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer"
                              >
-                               <option value="Alesia">Alesia</option>
-                               <option value="Julian">Julian</option>
-                               <option value="Sarah">Sarah</option>
-                               <option value="Ian">Ian</option>
-                               <option value="Unassigned">Unassigned</option>
+                               {[...new Set(['Unassigned', ...(staffOptions.length ? staffOptions : [task.assignee || 'Unassigned'])])].map((staffName) => (
+                                 <option key={staffName} value={staffName}>{staffName}</option>
+                               ))}
                              </select>
                              <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                          </div>
@@ -382,11 +621,9 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
                     >
                       <option value="" disabled>Select a team member...</option>
-                      <option value="Elena">Elena Vance</option>
-                      <option value="Julian">Julian</option>
-                      <option value="Sarah">Sarah</option>
-                      <option value="Ian">Ian</option>
-                      <option value="Alesia">Alesia</option>
+                      {(staffOptions.length ? staffOptions : ['Unassigned']).map((staffName) => (
+                        <option key={staffName} value={staffName}>{staffName}</option>
+                      ))}
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -402,13 +639,9 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                       onChange={(e) => setNewTask({...newTask, vendor: e.target.value})}
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
                     >
-                      <option value="None">None</option>
-                      <option value="Taste of Manila Catering">Taste of Manila Catering</option>
-                      <option value="Snap & Shoot Studios">Snap & Shoot Studios</option>
-                      <option value="Lumina Floral Design">Lumina Floral Design</option>
-                      <option value="Grand Ballroom SMX">Grand Ballroom SMX</option>
-                      <option value="The Harmony Strings">The Harmony Strings</option>
-                      <option value="Lux Event Rentals">Lux Event Rentals</option>
+                      {(vendorOptions.length ? vendorOptions : ['None']).map((vendorName) => (
+                        <option key={vendorName} value={vendorName}>{vendorName}</option>
+                      ))}
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
