@@ -115,6 +115,22 @@ export default function FinancesAdminPage() {
     setModal({ isOpen: true, title, message });
   };
 
+  // Generate conic-gradient string from category breakdown
+  const generateConicGradient = (breakdown: Array<{ category: string; amount: number; percentage: number }>) => {
+    const colors = ['#eebf43', '#f4d98a', '#f9f1d8', '#dcae32', '#c7925a', '#b37b3c'];
+    let gradientParts: string[] = [];
+    let currentPercentage = 0;
+
+    breakdown.forEach((item, idx) => {
+      const color = colors[idx % colors.length];
+      const nextPercentage = currentPercentage + item.percentage;
+      gradientParts.push(`${color} ${currentPercentage}% ${nextPercentage}%`);
+      currentPercentage = nextPercentage;
+    });
+
+    return `conic-gradient(${gradientParts.join(', ')})`;
+  };
+
   // Handle Add Expense
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -442,221 +458,175 @@ export default function FinancesAdminPage() {
         </div>
       )}
 
-      {/* Expense Tracking Placeholder (Tab 2) */}
+      {/* Expense Tracking Tab with CSS-based Donut Chart matching the image */}
+{activeTab === 'expenses' && (
+  <div className="animate-in fade-in duration-500 w-full space-y-6">
+    
+    {/* KPI Cards Row */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Total Expenses Card */}
+      <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Total Expenses</p>
+          <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">{eventData.totalExpenses}</h2>
+        </div>
+        <div className="w-12 h-12 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
+          <Wallet size={20} className="text-[#a1a1aa]" />
+        </div>
+      </div>
 
+      {/* Expense Records Card */}
+      <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Expense Records</p>
+          <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">{eventData.recentExpenses.length}</h2>
+        </div>
+        <div className="w-12 h-12 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
+          <Receipt size={20} className="text-[#a1a1aa]" />
+        </div>
+      </div>
+    </div>
 
-      {activeTab === 'expenses' && (
-        <div className="animate-in fade-in duration-500 w-full space-y-6">
-          
-          {/* KPI Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Total Expenses Card */}
-            <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Total Expenses</p>
-                <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">{eventData.totalExpenses}</h2>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
-                <Wallet size={20} className="text-[#a1a1aa]" />
-              </div>
-            </div>
-
-            {/* Expense Records Card */}
-            <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Expense Records</p>
-                <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">{eventData.recentExpenses.length}</h2>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
-                <Receipt size={20} className="text-[#a1a1aa]" />
-              </div>
-            </div>
-          </div>
-
-          {/* Split Row: Donut Chart & Table */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Categorization Donut Chart (1/3 width) */}
-            <div className="bg-white rounded-[24px] p-8 border border-gray-100 shadow-sm flex flex-col">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Expenses by Category</h3>
-                <button className="text-[#a1a1aa] hover:text-[#1d1d1f] transition-colors">
-                  <MoreHorizontal size={18} />
-                </button>
-              </div>
-              <div className="flex-1 flex flex-col items-center justify-center relative">
-                {eventData.categoryBreakdown.length > 0 ? (
-                  <>
-                    {/* Donut Chart */}
-                    <div className="relative w-56 h-56 flex items-center justify-center mb-8">
-                      <svg width="100%" height="100%" viewBox="0 0 200 200" className="drop-shadow-sm">
-                        {(() => {
-                          const colors = ['#eebf43', '#d9a850', '#c7925a'];
-                          let currentAngle = -90;
-                          const radius = 70;
-                          const innerRadius = 48;
-                          
-                          return eventData.categoryBreakdown.map((item, idx) => {
-                            const sliceAngle = (item.percentage / 100) * 360;
-                            const startAngle = currentAngle;
-                            const endAngle = currentAngle + sliceAngle;
-                            
-                            const startRad = (startAngle * Math.PI) / 180;
-                            const endRad = (endAngle * Math.PI) / 180;
-                            
-                            const x1 = 100 + radius * Math.cos(startRad);
-                            const y1 = 100 + radius * Math.sin(startRad);
-                            const x2 = 100 + radius * Math.cos(endRad);
-                            const y2 = 100 + radius * Math.sin(endRad);
-                            const x3 = 100 + innerRadius * Math.cos(endRad);
-                            const y3 = 100 + innerRadius * Math.sin(endRad);
-                            const x4 = 100 + innerRadius * Math.cos(startRad);
-                            const y4 = 100 + innerRadius * Math.sin(startRad);
-                            
-                            const largeArc = sliceAngle > 180 ? 1 : 0;
-                            
-                            const pathData = `
-                              M ${x1} ${y1}
-                              A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}
-                              L ${x3} ${y3}
-                              A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4}
-                              Z
-                            `;
-                            
-                            currentAngle = endAngle;
-                            
-                            return (
-                              <path 
-                                key={idx} 
-                                d={pathData} 
-                                fill={colors[idx % colors.length]}
-                                stroke="white"
-                                strokeWidth="2"
-                                className="cursor-default"
-                              />
-                            );
-                          });
-                        })()}
-                      </svg>
-                      
-                      {/* Center text - Percentage */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        {selectedCategory && (
-                          <>
-                            <span className="text-5xl font-black text-[#1d1d1f] leading-none">
-                              {eventData.categoryBreakdown.find(c => c.category === selectedCategory)?.percentage}%
-                            </span>
-                            <span className="text-xs font-bold text-[#a1a1aa] mt-3 uppercase tracking-wider">{selectedCategory}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Legend - Simple List */}
-                    <div className="space-y-4 w-full">
-                      {eventData.categoryBreakdown.map((item, idx) => {
-                        const colors = ['bg-[#eebf43]', 'bg-[#d9a850]', 'bg-[#c7925a]'];
-                        return (
-                          <div key={idx} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-3 h-3 rounded-full ${colors[idx % colors.length]}`}></div>
-                              <span className="text-sm font-bold text-[#71717a] capitalize">{item.category}</span>
-                            </div>
-                            <span className="text-sm font-black text-[#1d1d1f]">₱{item.amount.toLocaleString()}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-sm text-[#a1a1aa]">No expense data available</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Expenses Table (2/3 width) */}
-            <div className="lg:col-span-2 bg-white rounded-[24px] p-8 border border-gray-100 shadow-sm flex flex-col overflow-hidden">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-                <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Detailed Records</h3>
-                <button 
-                  onClick={() => setShowAddExpenseModal(true)}
-                  className="bg-[#eebf43] text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors shadow-sm flex items-center gap-2 shrink-0"
-                >
-                  <Plus size={14} strokeWidth={3} />
-                  Add Expense
-                </button>
+    {/* Split Row: Donut Chart & Table */}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      {/* Categorization Donut Chart (1/3 width) - Using CSS conic-gradient style from reference */}
+      <div className="bg-white rounded-[24px] p-8 border border-gray-100 shadow-sm flex flex-col">
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Expenses by Category</h3>
+          <button className="text-[#a1a1aa] hover:text-[#1d1d1f] transition-colors">
+            <MoreHorizontal size={18} />
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center relative">
+          {eventData.categoryBreakdown.length > 0 ? (
+            <>
+              {/* CSS-based Donut with dynamic conic-gradient from fetched data */}
+              <div 
+                className="w-[180px] h-[180px] rounded-full flex items-center justify-center mb-6 shadow-sm" 
+                style={{ background: generateConicGradient(eventData.categoryBreakdown) }}
+              >
+                <div className="w-[140px] h-[140px] bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
+                  <span className="text-3xl font-black text-[#1d1d1f]">
+                    {selectedCategory 
+                      ? eventData.categoryBreakdown.find(c => c.category === selectedCategory)?.percentage 
+                      : eventData.categoryBreakdown[0]?.percentage}%
+                  </span>
+                  <span className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mt-1 text-center px-2">
+                    {selectedCategory || eventData.categoryBreakdown[0]?.category}
+                  </span>
+                </div>
               </div>
               
-              <div className="overflow-x-auto flex-1">
-                <table className="w-full text-left border-collapse min-w-[500px]">
-                  <thead>
-                    <tr>
-                      <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50 first:rounded-tl-xl w-1/3">Expense</th>
-                      <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50">Category</th>
-                      <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50 text-right">Amount</th>
-                      <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50">Status</th>
-                      <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50 last:rounded-tr-xl">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {eventData.recentExpenses.length > 0 ? (
-                      eventData.recentExpenses.map((expense, idx) => {
-                        const categoryInitials = (expense.subtitle || 'EX').substring(0, 2).toUpperCase();
-                        const statusColor = expense.status === 'Paid' ? 'emerald' : expense.status === 'Pending' ? 'amber' : 'gray';
-                        return (
-                          <tr 
-                            key={idx}
-                            onClick={() => triggerModal('Expense Details', `Title: ${expense.desc}\nAmount: ${expense.amount}\nStatus: ${expense.status}\nDate: ${expense.date}\n\nCategory: ${expense.category}\nVendor: ${expense.subtitle}`)}
-                            className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
-                          >
-                            <td className="py-4 px-4 border-b border-gray-50">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-[#f9f1d8] flex items-center justify-center shrink-0">
-                                        <span className="text-[#dcae32] font-black text-[10px]">{categoryInitials}</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-[#1d1d1f] group-hover:text-[#eebf43] transition-colors truncate max-w-[120px]">{expense.desc}</p>
-                                        <p className="text-[10px] text-[#a1a1aa] font-medium truncate max-w-[120px]">{expense.subtitle}</p>
-                                    </div>
-                                </div>
-                            </td>
-                            <td className="py-4 px-4 border-b border-gray-50">
-                                <div className="inline-flex items-center px-2 py-1 rounded bg-gray-100">
-                                    <span className="text-[10px] font-bold text-[#71717a] uppercase tracking-wider">{expense.category}</span>
-                                </div>
-                            </td>
-                            <td className="py-4 px-4 border-b border-gray-50 text-right">
-                                <span className="text-xs font-black text-[#1d1d1f]">{expense.amount}</span>
-                            </td>
-                            <td className="py-4 px-4 border-b border-gray-50">
-                                <div className="inline-flex items-center gap-1.5 flex-nowrap">
-                                    <div className={`w-1.5 h-1.5 rounded-full bg-${statusColor}-400`}></div>
-                                    <span className={`text-[11px] font-bold text-${statusColor}-600`}>{expense.status}</span>
-                                </div>
-                            </td>
-                            <td className="py-4 px-4 border-b border-gray-50">
-                                <span className="text-[10px] font-bold text-[#a1a1aa] tracking-wider uppercase">{expense.date}</span>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan={5} className="py-8 px-4 text-center text-[#a1a1aa] text-sm font-medium">
-                          No expenses yet. Add one to get started.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              {/* Dynamic Legend - generated from fetched data */}
+              <div className="w-full mt-4 space-y-3">
+                {eventData.categoryBreakdown.map((item, idx) => {
+                  const colors = ['#eebf43', '#f4d98a', '#f9f1d8', '#dcae32', '#c7925a', '#b37b3c'];
+                  return (
+                    <div 
+                      key={idx} 
+                      className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                      onClick={() => setSelectedCategory(item.category)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[idx % colors.length] }}></div>
+                        <span className="text-xs font-bold text-[#71717a] capitalize">{item.category}</span>
+                      </div>
+                      <span className="text-xs font-black text-[#1d1d1f]">₱{item.amount.toLocaleString()}</span>
+                    </div>
+                  );
+                })}
               </div>
+            </>
+          ) : (
+            <div className="text-center">
+              <p className="text-sm text-[#a1a1aa]">No expense data available</p>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
+      {/* Expenses Table (2/3 width) */}
+      <div className="lg:col-span-2 bg-white rounded-[24px] p-8 border border-gray-100 shadow-sm flex flex-col overflow-hidden">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+          <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Detailed Records</h3>
+          <button 
+            onClick={() => setShowAddExpenseModal(true)}
+            className="bg-[#eebf43] text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors shadow-sm flex items-center gap-2 shrink-0"
+          >
+            <Plus size={14} strokeWidth={3} />
+            Add Expense
+          </button>
+        </div>
+        
+        <div className="overflow-x-auto flex-1">
+          <table className="w-full text-left border-collapse min-w-[500px]">
+            <thead>
+              <tr>
+                <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50 first:rounded-tl-xl w-1/3">Expense</th>
+                <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50">Category</th>
+                <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50 text-right">Amount</th>
+                <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50">Status</th>
+                <th className="py-4 px-4 text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest border-b border-gray-100 bg-[#fafafa]/50 last:rounded-tr-xl">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {eventData.recentExpenses.length > 0 ? (
+                eventData.recentExpenses.map((expense, idx) => {
+                  const categoryInitials = (expense.subtitle || 'EX').substring(0, 2).toUpperCase();
+                  const statusColor = expense.status === 'Cleared' || expense.status === 'Paid' ? 'emerald' : expense.status === 'Pending' ? 'amber' : 'gray';
+                  const displayStatus = expense.status === 'Cleared' ? 'Paid' : expense.status;
+                  return (
+                    <tr 
+                      key={idx}
+                      onClick={() => triggerModal('Expense Details', `Title: ${expense.desc}\nAmount: ${expense.amount}\nStatus: ${displayStatus}\nDate: ${expense.date}\n\nCategory: ${expense.subtitle}`)}
+                      className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
+                    >
+                      <td className="py-4 px-4 border-b border-gray-50">
+                          <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#f9f1d8] flex items-center justify-center shrink-0">
+                                  <span className="text-[#dcae32] font-black text-[10px]">{categoryInitials}</span>
+                              </div>
+                              <div>
+                                  <p className="text-xs font-bold text-[#1d1d1f] group-hover:text-[#eebf43] transition-colors truncate max-w-[120px]">{expense.desc}</p>
+                                  <p className="text-[10px] text-[#a1a1aa] font-medium truncate max-w-[120px]">{expense.subtitle}</p>
+                              </div>
+                          </div>
+                      </td>
+                      <td className="py-4 px-4 border-b border-gray-50">
+                          <div className="inline-flex items-center px-2 py-1 rounded bg-gray-100">
+                              <span className="text-[10px] font-bold text-[#71717a] uppercase tracking-wider">{expense.category || 'Other'}</span>
+                          </div>
+                      </td>
+                      <td className="py-4 px-4 border-b border-gray-50 text-right">
+                          <span className="text-xs font-black text-[#1d1d1f]">{expense.amount}</span>
+                      </td>
+                      <td className="py-4 px-4 border-b border-gray-50">
+                          <div className="inline-flex items-center gap-1.5 flex-nowrap">
+                              <div className={`w-1.5 h-1.5 rounded-full bg-${statusColor}-400`}></div>
+                              <span className={`text-[11px] font-bold text-${statusColor}-600`}>{displayStatus}</span>
+                          </div>
+                      </td>
+                      <td className="py-4 px-4 border-b border-gray-50">
+                          <span className="text-[10px] font-bold text-[#a1a1aa] tracking-wider uppercase">{expense.date}</span>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-8 px-4 text-center text-[#a1a1aa] text-sm font-medium">
+                    No expenses yet. Add one to get started.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       {/* Invoices (Tab 3) */}
       {activeTab === 'invoices' && (
         <div className="animate-in fade-in duration-500 w-full space-y-8">
