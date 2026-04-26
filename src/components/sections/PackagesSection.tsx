@@ -91,7 +91,7 @@ export function PackagesSection() {
         <div className="mt-20 flex justify-center">
           <Link
             href="/collections"
-            className="group inline-flex items-center justify-center gap-3 bg-[#D4AF37] hover:bg-[#B89053] text-white px-10 py-5 text-sm font-bold tracking-[0.2em] uppercase transition-all duration-300 shadow-lg hover:shadow-xl rounded-sm"
+            className="group inline-flex items-center justify-center gap-3 bg-brand-yellow hover:bg-yellow-500 text-white px-10 py-5 text-sm font-bold tracking-[0.2em] uppercase transition-all duration-300 shadow-lg hover:shadow-xl rounded-sm"
           >
             <span>View Full Collection</span>
             <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
