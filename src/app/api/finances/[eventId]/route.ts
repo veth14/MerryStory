@@ -58,7 +58,9 @@ export async function GET(
         subtitle: exp.vendor || "Unknown Vendor",
         category: exp.paymentType || "Payment",
         amount: `₱${exp.amount.toLocaleString()}`,
-        status: exp.status || "Pending"
+        status: exp.status || "Pending",
+        attachmentUrl: exp.attachmentUrl || null,
+        attachmentName: exp.attachmentName || null
       }));
     
     // Format invoices

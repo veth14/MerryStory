@@ -1,7 +1,8 @@
 'use client';
-import React, { use, useState } from 'react';
+import React, { use, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Folder, ChevronLeft, Calendar, MapPin, Grid, List, Search } from 'lucide-react';
+import { ArrowRight, Folder, ChevronLeft, Calendar, MapPin, Grid, List, Search, Loader } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 const CATEGORY_NAMES: Record<string, string> = {
   'contracts': 'Contracts & Agreements',
@@ -10,37 +11,109 @@ const CATEGORY_NAMES: Record<string, string> = {
   'uploads': 'Client Uploads'
 };
 
-const MOCK_EVENTS = [
-  {
-    id: 'E-001',
-    name: 'Santos Wedding Reception',
-    date: 'Dec 12, 2024',
-    location: 'The Grand Rose Ballroom',
-    type: 'Wedding',
-    fileCount: 4
-  },
-  {
-    id: 'E-002',
-    name: 'The Summer Solstice Gala',
-    date: 'Aug 21, 2024',
-    location: 'Botanical Gardens',
-    type: 'Corporate Gala',
-    fileCount: 2
-  },
-  {
-    id: 'E-003',
-    name: 'Reyes 50th Birthday Gala',
-    date: 'Nov 05, 2024',
-    location: 'Skyline Penthouse',
-    type: 'Private Party',
-    fileCount: 1
-  }
-];
+interface Event {
+  id: string;
+  name: string;
+  date: string;
+  location: string;
+  type: string;
+  fileCount: number;
+}
 
 export default function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const { user } = useAuth();
+  const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(true);
   const categoryName = CATEGORY_NAMES[slug] || 'Document Category';
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [events, setEvents] = useState<Event[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || !user) return;
+
+    const fetchEvents = async () => {
+      try {
+        setLoading(true);
+        const token = await user.getIdToken();
+
+        const [eventsRes, documentsRes, contractsRes] = await Promise.all([
+          fetch('/api/events', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          fetch(slug === 'contracts' ? '/api/admin/documents?category=contracts' : `/api/admin/documents?category=${slug}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          slug === 'contracts'
+            ? fetch('/api/admin/contracts', {
+                headers: { 'Authorization': `Bearer ${token}` }
+              })
+            : Promise.resolve(null),
+        ]);
+
+        const eventsData = eventsRes.ok ? await eventsRes.json() : [];
+        const documentsData = documentsRes.ok ? await documentsRes.json() : [];
+        const contractsData = contractsRes && contractsRes.ok ? await contractsRes.json() : [];
+
+        const fileCountByEventId = new Map<string, number>();
+
+        (Array.isArray(documentsData) ? documentsData : []).forEach((document: any) => {
+          const eventId = String(document.eventId || '');
+          if (!eventId) return;
+          fileCountByEventId.set(eventId, (fileCountByEventId.get(eventId) || 0) + 1);
+        });
+
+        if (slug === 'contracts') {
+          (Array.isArray(contractsData) ? contractsData : []).forEach((contract: any) => {
+            const eventId = String(contract.eventId || '');
+            if (!eventId) return;
+            fileCountByEventId.set(eventId, (fileCountByEventId.get(eventId) || 0) + 1);
+          });
+        }
+
+        const mappedEvents = (Array.isArray(eventsData) ? eventsData : [])
+          .filter((event: any) => fileCountByEventId.has(String(event._id || '')))
+          .map((event: any) => ({
+            id: String(event._id),
+            name: event.title || 'Untitled Event',
+            date: event.date
+              ? new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : 'No Date',
+            location: event.location || 'No Location',
+            type: event.type || 'Event',
+            fileCount: fileCountByEventId.get(String(event._id)) || 0,
+          }));
+
+        setEvents(mappedEvents);
+      } catch (error) {
+        console.error('Failed to fetch events:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [hydrated, user, slug]);
+
+  if (loading) {
+    return (
+      <div className="w-full max-w-none text-[#1d1d1f] pb-20 flex items-center justify-center py-20">
+        <Loader className="animate-spin text-[#eebf43] mr-3" size={32} />
+        <p className="text-[#71717a]">Loading category...</p>
+      </div>
+    );
+  }
+
+  const filteredEvents = events.filter((event) =>
+    [event.name, event.location, event.type].some((value) =>
+      value.toLowerCase().includes(searchQuery.trim().toLowerCase())
+    )
+  );
 
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20 animate-in fade-in duration-500 relative">
@@ -74,7 +147,7 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
         <div className="flex items-center gap-3 w-full lg:w-auto self-end md:self-auto mt-4 md:mt-0">
           <div className="relative w-full md:w-64">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input type="text" placeholder="Search events..." className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-100 rounded-xl text-[13px] font-bold text-[#1d1d1f] outline-none shadow-sm focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] transition-all" />
+              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} type="text" placeholder="Search events..." className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-100 rounded-xl text-[13px] font-bold text-[#1d1d1f] outline-none shadow-sm focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] transition-all" />
           </div>
           <div className="flex bg-white border border-gray-100 rounded-xl p-1 shadow-sm">
             <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#fef9ec] text-[#eebf43]' : 'text-gray-400 hover:text-[#1d1d1f]'}`}>
@@ -91,7 +164,7 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
       
       {viewMode === 'grid' ? (
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-           {MOCK_EVENTS.map(event => (
+           {filteredEvents.map(event => (
              <Link href={`/admin/documents/category/${slug}/${event.id}`} key={event.id} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-[#eebf43]/40 transition-all cursor-pointer group flex flex-col">
                 <div className="flex justify-between items-start mb-6">
                    <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:bg-[#fef9ec] transition-colors relative">
@@ -114,7 +187,7 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
            ))}
          </div>
       ) : (
-        <div className="flex flex-col gap-3">
+         <div className="flex flex-col gap-3">
            <div className="grid grid-cols-12 gap-4 px-6 py-2 mb-1">
             <div className="col-span-12 lg:col-span-5 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase">EVENT DIRECTORY</div>
             <div className="col-span-12 lg:col-span-3 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase hidden lg:block">EVENT DATE</div>
@@ -122,7 +195,7 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
             <div className="col-span-12 lg:col-span-1 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase text-right hidden lg:block">FILES</div>
            </div>
            
-           {MOCK_EVENTS.map(event => (
+           {filteredEvents.map(event => (
              <Link href={`/admin/documents/category/${slug}/${event.id}`} key={event.id} className="grid grid-cols-12 gap-4 px-6 lg:px-8 py-5 items-center bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#eebf43]/40 transition-all group cursor-pointer">
                 <div className="col-span-12 lg:col-span-5 flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors bg-gray-50 group-hover:bg-[#fef9ec]">

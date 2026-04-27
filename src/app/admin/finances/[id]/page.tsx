@@ -30,10 +30,30 @@ interface FinancialData {
   totalReceived: string;
   outstanding: string;
   upcomingPayments: Array<{ entity: string; type: string; amount: string; due: string; days: string }>;
-  recentExpenses: Array<{ id: string; date: string; desc: string; subtitle: string; category: string; amount: string; status: string }>;
+  recentExpenses: Array<{ id: string; date: string; desc: string; subtitle: string; category: string; amount: string; status: string; attachmentUrl?: string | null; attachmentName?: string | null }>;
   invoices: Array<{ id: string; invoiceNumber: string; client: string; issue: string; due: string; amount: string; status: string }>;
   categoryBreakdown: Array<{ category: string; amount: number; percentage: number }>;
 }
+
+type ExpenseFormState = {
+  title: string;
+  vendor: string;
+  amount: string;
+  category: string;
+  status: string;
+  dueDate: string;
+  attachment: File | null;
+};
+
+const createEmptyExpenseForm = (): ExpenseFormState => ({
+  title: '',
+  vendor: '',
+  amount: '',
+  category: 'venue',
+  status: 'pending',
+  dueDate: '',
+  attachment: null,
+});
 
 export default function FinancesAdminPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'invoices'>('overview');
@@ -46,7 +66,7 @@ export default function FinancesAdminPage() {
   
   // Add Expense Modal State
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
-  const [expenseForm, setExpenseForm] = useState({ title: '', vendor: '', amount: '', category: 'venue', status: 'pending', dueDate: '' });
+  const [expenseForm, setExpenseForm] = useState<ExpenseFormState>(createEmptyExpenseForm());
   const [expenseLoading, setExpenseLoading] = useState(false);
   
   // Generate Invoice Modal State
@@ -141,21 +161,23 @@ export default function FinancesAdminPage() {
       if (!user) throw new Error('User not authenticated');
       
       const token = await user.getIdToken();
+      const payload = new FormData();
+      payload.append('vendor', expenseForm.vendor);
+      payload.append('description', expenseForm.title);
+      payload.append('amount', expenseForm.amount);
+      payload.append('dueDate', expenseForm.dueDate);
+      payload.append('status', expenseForm.status);
+      payload.append('paymentType', expenseForm.category);
+      if (expenseForm.attachment) {
+        payload.append('attachment', expenseForm.attachment);
+      }
       
       const response = await fetch(`/api/finances/${id}/expenses`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          vendor: expenseForm.vendor,
-          description: expenseForm.title,
-          amount: parseFloat(expenseForm.amount),
-          dueDate: expenseForm.dueDate,
-          status: expenseForm.status,
-          paymentType: expenseForm.category
-        })
+        body: payload
       });
 
       if (!response.ok) {
@@ -164,7 +186,7 @@ export default function FinancesAdminPage() {
 
       // Close modal and refresh data
       setShowAddExpenseModal(false);
-      setExpenseForm({ title: '', vendor: '', amount: '', category: 'venue', status: 'pending', dueDate: '' });
+      setExpenseForm(createEmptyExpenseForm());
       
       // Refresh financial data
       if (id) {
@@ -437,6 +459,17 @@ export default function FinancesAdminPage() {
                         <div className="flex flex-col">
                           <span className="text-sm font-black text-[#1d1d1f] mb-1">{tx.desc}</span>
                           <span className="text-[10px] text-[#71717a] font-bold tracking-wider">{tx.date} – {tx.subtitle}</span>
+                          {tx.attachmentName ? (
+                            <a
+                              href={tx.attachmentUrl || '#'}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-[#eebf43] font-black tracking-wider mt-1 hover:text-[#dcae32]"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {tx.attachmentName}
+                            </a>
+                          ) : null}
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
@@ -579,7 +612,7 @@ export default function FinancesAdminPage() {
                   return (
                     <tr 
                       key={idx}
-                      onClick={() => triggerModal('Expense Details', `Title: ${expense.desc}\nAmount: ${expense.amount}\nStatus: ${displayStatus}\nDate: ${expense.date}\n\nCategory: ${expense.subtitle}`)}
+                      onClick={() => triggerModal('Expense Details', `Title: ${expense.desc}\nAmount: ${expense.amount}\nStatus: ${displayStatus}\nDate: ${expense.date}\n\nCategory: ${expense.subtitle}${expense.attachmentName ? `\nAttachment: ${expense.attachmentName}\nLink: ${expense.attachmentUrl}` : ''}`)}
                       className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
                     >
                       <td className="py-4 px-4 border-b border-gray-50">
@@ -836,6 +869,19 @@ export default function FinancesAdminPage() {
                     onChange={(e) => setExpenseForm({ ...expenseForm, dueDate: e.target.value })}
                     className="w-full bg-white border border-gray-200 rounded-[12px] px-4 py-3 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-1 focus:ring-gray-300 transition-shadow" 
                   />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-black text-[#1d1d1f] tracking-[0.1em] uppercase">Receipt / File</label>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                    onChange={(e) => setExpenseForm({ ...expenseForm, attachment: e.target.files?.[0] || null })}
+                    className="w-full bg-white border border-gray-200 rounded-[12px] px-4 py-3 text-[13px] text-[#1d1d1f] file:mr-3 file:border-0 file:bg-[#f9f1d8] file:px-3 file:py-2 file:text-[11px] file:font-black file:uppercase file:tracking-[0.1em] file:text-[#dcae32]"
+                  />
+                  <p className="text-[11px] text-[#a1a1aa] font-medium">
+                    Optional. Attach a receipt, invoice, image, or supporting file.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
