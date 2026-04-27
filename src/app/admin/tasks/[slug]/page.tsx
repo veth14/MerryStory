@@ -3,7 +3,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, use } from 'react';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, ChevronDown, Plus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, ChevronDown, Flame, Plus } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 type SelectOption = { value: string; label: string; sublabel?: string };
@@ -38,7 +38,7 @@ const DEFAULT_DRAFT: TaskDraft = {
   priority: 'MEDIUM',
   dueDate: '',
   dueTime: '',
-  assignee: '',
+  assignee: 'Unassigned',
   vendor: 'None',
 };
 const PRIORITY_OPTIONS = [
@@ -68,6 +68,7 @@ const calendarPanelClassName = 'z-[360] min-w-[22rem] overflow-y-auto rounded-2x
 const modalLabelClassName = 'block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5';
 const modalInputClassName = 'w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none';
 const priorityColorMap: Record<string, string> = {
+  CRITICAL: 'text-red-800 bg-red-100 border-red-200',
   HIGH: 'text-red-700 bg-red-50 border-red-200',
   MEDIUM: 'text-amber-700 bg-amber-50 border-amber-200',
   LOW: 'text-emerald-700 bg-emerald-50 border-emerald-200',
@@ -143,12 +144,25 @@ const getMinutesFromTimeValue = (value?: string) => {
   const [hours, minutes] = (value || '').split(':').map(Number);
   return [hours, minutes].some(Number.isNaN) ? 0 : hours * 60 + minutes;
 };
-const buildTimeOptions = (minTime?: string): SelectOption[] =>
-  Array.from({ length: 24 * 60 - getMinutesFromTimeValue(minTime) }, (_, index) => {
-    const totalMinutes = getMinutesFromTimeValue(minTime) + index;
+const roundUpMinutesToStep = (minutes: number, step: number) => Math.min(24 * 60, Math.ceil(minutes / step) * step);
+const buildTimeOptions = (minTime?: string, stepMinutes = 15): SelectOption[] => {
+  const startMinutes = minTime ? roundUpMinutesToStep(getMinutesFromTimeValue(minTime), stepMinutes) : 0;
+  if (startMinutes >= 24 * 60) return [];
+  const optionCount = Math.floor((24 * 60 - 1 - startMinutes) / stepMinutes) + 1;
+
+  return Array.from({ length: optionCount }, (_, index) => {
+    const totalMinutes = startMinutes + index * stepMinutes;
     const value = `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
     return { value, label: formatTimeLabel(value), sublabel: value };
   });
+};
+const getPriorityMeta = (priority?: string) => {
+  const normalized = normalizePriority(priority);
+  if (normalized === 'CRITICAL') return { icon: AlertTriangle, iconClassName: 'text-red-700', badgeClassName: 'bg-red-100 text-red-800 border-red-200', label: 'Critical' };
+  if (normalized === 'HIGH') return { icon: Flame, iconClassName: 'text-red-600', badgeClassName: 'bg-red-50 text-red-700 border-red-200', label: 'High' };
+  if (normalized === 'LOW') return { icon: Check, iconClassName: 'text-emerald-600', badgeClassName: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Low' };
+  return { icon: CalendarIcon, iconClassName: 'text-amber-600', badgeClassName: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Medium' };
+};
 const uniqueNames = (fallback: string, options: string[], current?: string) => Array.from(new Set([fallback, ...(options.length ? options : [current || fallback])]));
 const renderCaret = (className: string, strokeWidth = 2) => <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d="M19 9l-7 7-7-7" /></svg>;
 const modalChevron = <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]"><ChevronDown className="w-4 h-4" /></div>;
@@ -497,6 +511,12 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
   const minSelectableDateValue = toDateInputValue(nextSelectableDateTime);
   const minTimeForToday = state.modal.dueDate === minSelectableDateValue ? toTimeInputValue(nextSelectableDateTime) : undefined;
   const timeOptions = useMemo(() => buildTimeOptions(minTimeForToday), [minTimeForToday]);
+  const dueTimeOptions = useMemo(
+    () => timeOptions.length
+      ? [{ value: '', label: 'Select due time...' }, ...timeOptions]
+      : [{ value: '', label: 'No times available', sublabel: 'Choose another date' }],
+    [timeOptions]
+  );
   const resetModal = () => updateState({ isModalOpen: false, modal: { ...DEFAULT_DRAFT }, dueDateTimeError: '', isSubmitting: false });
 
   const patchTask = async (task: TaskItem, patch: Partial<Pick<TaskItem, 'status' | 'assignee' | 'vendor'>>) => {
@@ -524,7 +544,10 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
   const createTask = async (event: React.FormEvent) => {
     event.preventDefault();
     const draft = state.modal;
-    if (!draft.title || !draft.assignee || !draft.dueDate || !draft.dueTime || state.isSubmitting) return;
+    if (state.isSubmitting) return;
+    if (!draft.assignee || !draft.dueDate || !draft.dueTime) {
+      return updateState({ dueDateTimeError: 'Please select an assignee, due date, and due time before creating the task.' });
+    }
 
     const validationError = getDueDateTimeError(draft.dueDate, draft.dueTime, new Date());
     if (validationError) return updateState({ dueDateTimeError: validationError });
@@ -612,13 +635,13 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
         <form onSubmit={createTask} className="p-6 space-y-5">
           {[['title', 'Task Title', 'e.g., Finalize floral arrangements'], ['description', 'Detailed Description', 'Include specific requirements, vendor contacts, or special instructions...']].map(([key, label, placeholder]) => <div key={key}><label className={modalLabelClassName}>{label}</label>{key === 'description' ? <textarea required rows={3} value={state.modal.description} onChange={(event) => updateState((prev) => ({ modal: { ...prev.modal, description: event.target.value } }))} className={`${modalInputClassName} resize-none`} placeholder={placeholder} /> : <input type="text" required value={state.modal.title} onChange={(event) => updateState((prev) => ({ modal: { ...prev.modal, title: event.target.value } }))} className={modalInputClassName} placeholder={placeholder} />}</div>)}
 
-          {renderSelectField({ label: 'Priority Level', value: state.modal.priority, onChange: (value) => updateState((prev) => ({ modal: { ...prev.modal, priority: value } })), options: PRIORITY_OPTIONS, renderTrigger: (selectedOption) => <><div className="flex min-h-[42px] w-full items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-[14px] font-medium text-gray-900 transition-all outline-none cursor-pointer"><span className="truncate whitespace-nowrap">{selectedOption?.label || 'Medium'}</span></div>{modalChevron}</>, renderOption: (option, selected) => renderSimpleOption(option, selected) })}
+          {renderSelectField({ label: 'Priority Level', value: state.modal.priority, onChange: (value) => updateState((prev) => ({ modal: { ...prev.modal, priority: value } })), options: PRIORITY_OPTIONS, renderTrigger: (selectedOption) => { const meta = getPriorityMeta(selectedOption?.value); const Icon = meta.icon; return <><div className="flex min-h-[42px] w-full items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-[14px] font-medium text-gray-900 transition-all outline-none cursor-pointer"><div className={`mr-3 flex h-7 w-7 items-center justify-center rounded-full border ${meta.badgeClassName}`}><Icon size={14} className={meta.iconClassName} /></div><span className="truncate whitespace-nowrap font-semibold">{selectedOption?.label || 'Medium'}</span></div>{modalChevron}</>; }, renderOption: (option, selected) => { const meta = getPriorityMeta(option.value); const Icon = meta.icon; return <><div className="flex items-center gap-3"><div className={`flex h-8 w-8 items-center justify-center rounded-full border ${meta.badgeClassName}`}><Icon size={15} className={meta.iconClassName} /></div><div className="truncate whitespace-nowrap text-[12px] font-extrabold text-gray-800">{option.label}</div></div>{selected && <Check size={15} className="shrink-0 text-[#facc15]" />}</>; } })}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <OverlayDatePicker label="Due Date" value={state.modal.dueDate} minDate={minSelectableDateValue} onChange={(value) => updateState((prev) => { const modal = { ...prev.modal, dueDate: value }; return { modal: prev.modal.dueTime && getDueDateTimeError(value, prev.modal.dueTime, prev.currentDateTime) ? { ...modal, dueTime: '' } : modal, dueDateTimeError: '' }; })} />
             </div>
-            {renderSelectField({ label: 'Due Time', value: state.modal.dueTime, onChange: (value) => updateState((prev) => ({ modal: { ...prev.modal, dueTime: value }, dueDateTimeError: '' })), options: [{ value: '', label: 'Select due time...' }, ...timeOptions], preferredHeight: 360, renderTrigger: (selectedOption) => <><div className="flex min-h-[42px] w-full items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-[14px] font-medium text-gray-900 transition-all outline-none cursor-pointer"><span className={`truncate whitespace-nowrap ${selectedOption?.value ? 'text-gray-900' : 'text-gray-400'}`}>{selectedOption?.value ? selectedOption.label : 'Select due time...'}</span></div>{modalChevron}</>, renderOption: (option, selected) => <><div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3"><div className={`truncate whitespace-nowrap text-[12px] font-extrabold tabular-nums ${option.value ? 'text-gray-800' : 'text-gray-500'}`}>{option.label}</div>{option.value && <div className="shrink-0 whitespace-nowrap text-right text-[10px] font-bold uppercase tracking-wider text-gray-400 tabular-nums">{option.sublabel}</div>}</div>{selected && option.value && <Check size={15} className="shrink-0 text-[#facc15]" />}</> })}
+            {renderSelectField({ label: 'Due Time', value: state.modal.dueTime, onChange: (value) => updateState((prev) => ({ modal: { ...prev.modal, dueTime: value }, dueDateTimeError: '' })), options: dueTimeOptions, preferredHeight: 360, renderTrigger: (selectedOption) => <><div className="flex min-h-[42px] w-full items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-[14px] font-medium text-gray-900 transition-all outline-none cursor-pointer"><span className={`truncate whitespace-nowrap ${selectedOption?.value ? 'text-gray-900' : 'text-gray-400'}`}>{selectedOption?.value ? selectedOption.label : dueTimeOptions[0]?.label || 'Select due time...'}</span></div>{modalChevron}</>, renderOption: (option, selected) => <><div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3"><div className={`truncate whitespace-nowrap text-[12px] font-extrabold tabular-nums ${option.value ? 'text-gray-800' : 'text-gray-500'}`}>{option.label}</div>{option.sublabel && <div className="shrink-0 whitespace-nowrap text-right text-[10px] font-bold uppercase tracking-wider text-gray-400 tabular-nums">{option.sublabel}</div>}</div>{selected && option.value && <Check size={15} className="shrink-0 text-[#facc15]" />}</> })}
           </div>
 
           {state.dueDateTimeError && <div className="text-[12px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{state.dueDateTimeError}</div>}

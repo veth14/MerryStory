@@ -2,13 +2,14 @@
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { 
-  ArrowLeft, ArrowRight, MapPin, Briefcase, AlertTriangle, User, Tag, 
+  ArrowLeft, ArrowRight, MapPin, Briefcase, AlertTriangle, User, Tag,
   Image as ImageIcon, UploadCloud, Phone, Mail, Loader2, 
   Check, UserCheck, Save
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CustomSelect, CustomDatePicker } from '@/components/ui/CustomInputs';
+import EventTimeDropdown from '../_components/EventTimeDropdown';
 
 interface StaffUser {
   uid: string;
@@ -17,6 +18,10 @@ interface StaffUser {
   appRole: string;
   avatarUrl?: string;
 }
+
+const combineEventDateTime = (date: string, time: string) => (
+  date && time ? `${date}T${time}` : date
+);
 
 function NewEventForm() {
   const router = useRouter();
@@ -39,6 +44,7 @@ function NewEventForm() {
     title: '',
     type: 'Wedding',
     date: '',
+    time: '',
     location: '',
     budgetTotal: '',
     vendorTarget: '',
@@ -128,7 +134,14 @@ function NewEventForm() {
 
     try {
       const data = new FormData();
-      Object.entries(formData).forEach(([key, value]) => data.append(key, value));
+      const payload = {
+        ...formData,
+        date: combineEventDateTime(formData.date, formData.time),
+      };
+
+      Object.entries(payload).forEach(([key, value]) => {
+        if (key !== 'time') data.append(key, value);
+      });
       if (coverImage) data.append('coverImage', coverImage);
 
       const idToken = await user!.getIdToken();
@@ -261,7 +274,7 @@ function NewEventForm() {
                   onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
                 />
 
-                <div className="md:col-span-2 space-y-2">
+                <div className="space-y-2">
                   <label className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-500">
                     <MapPin size={12} /> Master Location / Venue
                   </label>
@@ -270,6 +283,12 @@ function NewEventForm() {
                     className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none"
                   />
                 </div>
+
+                <EventTimeDropdown
+                  label="Live Production Time"
+                  value={formData.time}
+                  onChange={(time) => setFormData((prev) => ({ ...prev, time }))}
+                />
               </div>
            </div>
         </div>

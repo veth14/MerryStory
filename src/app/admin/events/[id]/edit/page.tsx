@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, Save, User, Briefcase, MapPin, Tag, Mail, Phone, Al
 import { CustomSelect, CustomDatePicker } from '@/components/ui/CustomInputs';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Link from 'next/link';
+import EventTimeDropdown from '../../_components/EventTimeDropdown';
 
 interface StaffUser {
   uid: string;
@@ -36,6 +37,25 @@ interface EventData {
   };
 }
 
+const toDateInputValue = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+const toTimeInputValue = (value: Date) => `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+const splitEventDateTime = (value: string) => {
+  if (!value) return { date: '', time: '' };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return { date: value, time: '' };
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return { date: value.slice(0, 10), time: value.slice(11, 16) };
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return { date: value, time: '' };
+
+  return {
+    date: toDateInputValue(parsed),
+    time: toTimeInputValue(parsed),
+  };
+};
+const combineEventDateTime = (date: string, time: string) => (
+  date && time ? `${date}T${time}` : date
+);
+
 export default function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuth();
@@ -50,6 +70,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     title: '',
     type: '',
     date: '',
+    time: '',
     location: '',
     leadAssigned: '',
     status: '',
@@ -82,12 +103,15 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       if (!eventRes.ok) throw new Error('Failed to fetch event');
       const eventData = await eventRes.json();
       setEvent(eventData);
+
+      const { date, time } = splitEventDateTime(eventData.date);
       
       // Set Form Data
       setFormData({
         title: eventData.title,
         type: eventData.type,
-        date: eventData.date,
+        date,
+        time,
         location: eventData.location,
         leadAssigned: eventData.leadAssigned,
         status: eventData.status || 'Active',
@@ -131,7 +155,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       const payload = {
         title: formData.title,
         type: formData.type,
-        date: formData.date,
+        date: combineEventDateTime(formData.date, formData.time),
         location: formData.location,
         leadAssigned: formData.leadAssigned,
         status: formData.status,
@@ -242,10 +266,16 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                 onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
               />
 
-              <div className="md:col-span-2 space-y-2">
+              <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Venue Location</label>
                 <input required type="text" name="location" value={formData.location} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
               </div>
+
+              <EventTimeDropdown
+                label="Production Time"
+                value={formData.time}
+                onChange={(time) => setFormData((prev) => ({ ...prev, time }))}
+              />
             </div>
           </div>
 
