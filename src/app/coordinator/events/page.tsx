@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, ArrowRight, Eye, Users, Loader2, Image as ImageIcon, Search, MapPin } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Calendar, ArrowRight, Eye, Users, Loader2, Image as ImageIcon, Search, MapPin, Check, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -50,17 +50,31 @@ const getStatusTextClassName = (status?: string) => {
 
 export default function CoordinatorEventsPage() {
   const { user } = useAuth();
+  const typeFilterRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<AssignedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All types');
+  const [isTypeFilterOpen, setIsTypeFilterOpen] = useState(false);
+  const filterOptions = ['All types', 'Wedding', 'Corporate', 'Gala', 'Exhibition', 'Private'];
 
   useEffect(() => {
     if (user) {
       fetchAssignedEvents();
     }
   }, [user]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (typeFilterRef.current && !typeFilterRef.current.contains(event.target as Node)) {
+        setIsTypeFilterOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   const fetchAssignedEvents = async () => {
     try {
@@ -164,20 +178,37 @@ export default function CoordinatorEventsPage() {
           </div>
 
           <div className="flex gap-4 shrink-0">
-            <div className="relative">
-              <select
-                value={filterType}
-                onChange={(event) => setFilterType(event.target.value)}
-                className="appearance-none bg-white border border-gray-100 text-gray-700 text-[14px] font-bold rounded-xl pl-5 pr-12 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400 cursor-pointer min-w-[140px]"
+            <div className="relative" ref={typeFilterRef}>
+              <button
+                type="button"
+                onClick={() => setIsTypeFilterOpen((prev) => !prev)}
+                className="relative appearance-none flex items-center justify-center px-6 pr-9 py-3.5 bg-white border border-gray-200 rounded-xl text-[11px] font-black text-gray-700 tracking-[0.1em] uppercase hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer min-w-[150px]"
               >
-                <option>All types</option>
-                <option>Wedding</option>
-                <option>Corporate</option>
-                <option>Gala</option>
-                <option>Exhibition</option>
-                <option>Private</option>
-              </select>
-              <svg className="w-4 h-4 text-gray-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                {filterType.toUpperCase()}
+                <ChevronDown size={16} className={`text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 transition-transform ${isTypeFilterOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isTypeFilterOpen && (
+                <div className="absolute right-0 mt-2 min-w-[150px] bg-gray-100 rounded-2xl border border-gray-200/80 shadow-lg p-2 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {filterOptions.map((option) => {
+                    const isSelected = filterType === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => {
+                          setFilterType(option);
+                          setIsTypeFilterOpen(false);
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl text-left text-[13px] font-black uppercase tracking-wider text-[#2b313a] hover:bg-white/70 transition-colors flex items-center justify-between"
+                      >
+                        <span>{option.toUpperCase()}</span>
+                        {isSelected && <Check size={14} className="text-[#facc15]" strokeWidth={3} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="bg-[#fff9e6] text-[#d4a017] px-5 py-3 rounded-xl text-[11px] font-extrabold uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm border border-yellow-200/50 whitespace-nowrap">
