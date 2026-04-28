@@ -1,8 +1,11 @@
 'use client';
-import React, { useEffect, useState, use } from 'react';
+
+import React, { use, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { ArrowRight, Plus } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, Filter, Plus, Users } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
+import CreateTaskModal, { StaffOption, VendorOption } from '@/app/admin/tasks/CreateTaskModal';
 
 type TaskItem = {
   id: string;
@@ -15,6 +18,7 @@ type TaskItem = {
   dueDate: string;
   dueTime: string;
   assignee: string;
+  assignees: { name: string; avatarUrl?: string | null }[];
   vendor: string;
 };
 
@@ -28,24 +32,37 @@ type TaskRecord = {
   due?: { date?: string; time?: string };
   dueDate?: string;
   dueTime?: string;
+  assignees?: Array<{ name?: string; avatarUrl?: string | null } | string>;
   assignee?: { name?: string } | string;
   vendor?: { name?: string } | string;
 };
 
 type OptionRecord = {
+  _id?: string | { $oid?: string };
+  uid?: string;
   name?: string;
+  vendorName?: string;
+  company?: string;
+  businessName?: string;
+  title?: string;
   firstName?: string;
   lastName?: string;
+  role?: string;
+  appRole?: string;
+  avatarUrl?: string | null;
+  category?: string;
+  serviceCategory?: string;
+  vendorCategory?: string;
+  type?: string;
+  serviceType?: string;
 };
 
 const normalizeStatus = (value?: string) => {
   if (!value) return 'TO DO';
   const normalized = value.toUpperCase().replace(/[_-]/g, ' ').trim();
-
   if (normalized === 'TODO' || normalized === 'TO DO') return 'TO DO';
   if (normalized === 'INPROGRESS' || normalized === 'IN PROGRESS') return 'IN PROGRESS';
   if (normalized === 'COMPLETE' || normalized === 'COMPLETED') return 'COMPLETED';
-
   return normalized;
 };
 
@@ -68,10 +85,32 @@ const getStringId = (value?: unknown) => {
   if (!value) return undefined;
   if (typeof value === 'string') return value;
   if (typeof value === 'object' && value !== null && '$oid' in value) {
-    const oidValue = (value as { $oid?: string }).$oid;
-    return oidValue || undefined;
+    return (value as { $oid?: string }).$oid || undefined;
   }
   return String(value);
+};
+
+const resolveAssignees = (
+  value?: Array<{ name?: string; avatarUrl?: string | null } | string>,
+  fallbackAssignee?: { name?: string } | string
+) => {
+  const fromList = Array.isArray(value)
+    ? value
+        .map((entry) => {
+          if (typeof entry === 'string') {
+            return entry.trim() ? { name: entry.trim(), avatarUrl: null } : null;
+          }
+          if (entry?.name?.trim()) {
+            return { name: entry.name.trim(), avatarUrl: entry.avatarUrl || null };
+          }
+          return null;
+        })
+        .filter(Boolean) as { name: string; avatarUrl?: string | null }[]
+    : [];
+
+  if (fromList.length > 0) return fromList;
+  const fallbackName = resolveName(fallbackAssignee, 'Unassigned');
+  return fallbackName && fallbackName !== 'Unassigned' ? [{ name: fallbackName, avatarUrl: null }] : [];
 };
 
 const mapTaskRecord = (task: TaskRecord, index: number): TaskItem => {
@@ -79,6 +118,7 @@ const mapTaskRecord = (task: TaskRecord, index: number): TaskItem => {
   const dueTime = task.dueTime ?? task.due?.time;
   const dbId = getStringId(task._id);
   const taskCode = task.taskId || undefined;
+  const assignees = resolveAssignees(task.assignees, task.assignee);
   const idValue = dbId || taskCode || `TSK-${String(index + 1).padStart(3, '0')}`;
 
   return {
@@ -91,202 +131,548 @@ const mapTaskRecord = (task: TaskRecord, index: number): TaskItem => {
     priority: normalizePriority(task.priority),
     dueDate: formatDateLabel(dueDate),
     dueTime: dueTime || '',
-    assignee: resolveName(task.assignee, 'Unassigned'),
+    assignee: assignees.length ? assignees.map((entry) => entry.name).join(', ') : 'Unassigned',
+    assignees,
     vendor: resolveName(task.vendor, 'None'),
   };
 };
 
-const extractNames = (payload: any): string[] => {
-  const records = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.users)
-      ? payload.users
-      : [];
+const extractStaff = (payload: any): StaffOption[] => {
+  const records = Array.isArray(payload) ? payload : Array.isArray(payload?.users) ? payload.users : [];
 
   return records
     .map((record: OptionRecord) => {
-      if (record?.name && record.name.trim()) return record.name.trim();
-      const fullName = `${record?.firstName || ''} ${record?.lastName || ''}`.trim();
-      return fullName;
+      const name = record?.name?.trim() || `${record?.firstName || ''} ${record?.lastName || ''}`.trim();
+      if (!name) return null;
+
+      return {
+        uid: record.uid || name,
+        name,
+        role: record.role || 'PRODUCTION STAFF',
+        appRole: record.appRole || 'staff',
+        avatarUrl: record.avatarUrl || null,
+      };
     })
-    .filter(Boolean);
+    .filter((record): record is StaffOption => Boolean(record));
 };
+
+const extractVendorOptions = (payload: any): VendorOption[] => {
+  const records = Array.isArray(payload) ? payload : Array.isArray(payload?.vendors) ? payload.vendors : [];
+
+  return records
+    .map((record: OptionRecord | string) => {
+      if (typeof record === 'string') {
+        const normalized = record.trim();
+        return normalized ? { name: normalized, category: '' } : null;
+      }
+
+      const name =
+        record?.name?.trim() ||
+        record?.vendorName?.trim() ||
+        record?.company?.trim() ||
+        record?.businessName?.trim() ||
+        record?.title?.trim() ||
+        `${record?.firstName || ''} ${record?.lastName || ''}`.trim();
+      if (!name) return null;
+
+      return {
+        name,
+        category:
+          record.category?.trim() ||
+          record.serviceCategory?.trim() ||
+          record.vendorCategory?.trim() ||
+          record.serviceType?.trim() ||
+          record.type?.trim() ||
+          '',
+      };
+    })
+    .filter((record): record is VendorOption => Boolean(record));
+};
+
+function useDropdownLayer<T extends HTMLElement, U extends HTMLElement>(isOpen: boolean, onClose: () => void) {
+  const triggerRef = useRef<T>(null);
+  const panelRef = useRef<U>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      onClose();
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, onClose]);
+
+  return { triggerRef, panelRef };
+}
+
+function FloatingDropdown({
+  isOpen,
+  anchorRef,
+  panelRef,
+  children,
+  className,
+  align = 'start',
+  width,
+  preferredHeight = 280,
+}: {
+  isOpen: boolean;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
+  className: string;
+  align?: 'start' | 'center' | 'end';
+  width: number;
+  preferredHeight?: number;
+}) {
+  const [style, setStyle] = useState<React.CSSProperties | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      let left = rect.left;
+      if (align === 'center') {
+        left = rect.left + rect.width / 2 - width / 2;
+      } else if (align === 'end') {
+        left = rect.right - width;
+      }
+
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+      const openUp = spaceBelow < Math.min(preferredHeight, 220) && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(160, Math.min(preferredHeight, openUp ? spaceAbove : spaceBelow));
+
+      setStyle({
+        position: 'fixed',
+        ...(openUp ? { bottom: viewportHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
+        left: Math.min(Math.max(12, left), Math.max(12, window.innerWidth - width - 12)),
+        width,
+        zIndex: 240,
+        maxHeight,
+        overflowY: 'auto',
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [align, anchorRef, isOpen, preferredHeight, width]);
+
+  if (!isOpen || !style || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div ref={panelRef} style={style} className={className}>
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+function FilterDropdown({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
+  const options = [
+    { value: 'ALL', label: 'All Status', sublabel: 'Display every task in the registry' },
+    { value: 'TO DO', label: 'To Do', sublabel: 'New or queued deliverables' },
+    { value: 'IN PROGRESS', label: 'In Progress', sublabel: 'Work that is currently underway' },
+    { value: 'COMPLETED', label: 'Completed', sublabel: 'Finished and closed tasks' },
+  ];
+
+  return (
+    <div className="relative" ref={triggerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className="flex items-center justify-center gap-2 pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-[12px] font-black text-gray-700 tracking-widest uppercase hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer relative"
+      >
+        <Filter className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        {options.find((option) => option.value === value)?.label || 'All Status'}
+        <ChevronDown className={`w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        align="end"
+        width={280}
+        preferredHeight={240}
+        className="rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              className="w-full rounded-xl px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
+            >
+              <div>
+                <div className="text-[12px] font-extrabold text-gray-900 uppercase tracking-wider">{option.label}</div>
+                <div className="text-[10px] font-bold text-gray-400">{option.sublabel}</div>
+              </div>
+              {value === option.value && <Check className="w-4 h-4 text-[#facc15]" />}
+            </button>
+          ))}
+        </div>
+      </FloatingDropdown>
+    </div>
+  );
+}
+
+function StatusDropdown({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
+  const options = ['TO DO', 'IN PROGRESS', 'COMPLETED'];
+  const toneMap: Record<string, string> = {
+    'TO DO': 'text-gray-500 bg-gray-100',
+    'IN PROGRESS': 'text-[#b48600] bg-[#facc15]/20',
+    COMPLETED: 'text-emerald-700 bg-emerald-50',
+  };
+  const dotMap: Record<string, string> = {
+    'TO DO': 'bg-gray-400',
+    'IN PROGRESS': 'bg-[#facc15]',
+    COMPLETED: 'bg-emerald-500',
+  };
+
+  return (
+    <div className="relative inline-flex items-center" ref={triggerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className={`inline-flex items-center gap-2 pl-5 pr-7 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-widest ${toneMap[value] || toneMap['TO DO']} relative`}
+      >
+        <span className={`absolute left-2.5 w-1.5 h-1.5 rounded-full ${dotMap[value] || dotMap['TO DO']}`} />
+        {value}
+        <ChevronDown className={`w-3 h-3 text-current absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        align="center"
+        width={220}
+        preferredHeight={220}
+        className="rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div>
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                onChange(option);
+                setIsOpen(false);
+              }}
+              className="w-full rounded-xl px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <span className={`w-2 h-2 rounded-full ${dotMap[option]}`} />
+                <div>
+                  <div className="text-[12px] font-extrabold text-gray-900 uppercase tracking-wider">{option}</div>
+                </div>
+              </div>
+              {value === option && <Check className="w-4 h-4 text-[#facc15]" />}
+            </button>
+          ))}
+        </div>
+      </FloatingDropdown>
+    </div>
+  );
+}
+
+function VendorDropdown({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: VendorOption[];
+  onChange: (next: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
+
+  return (
+    <div className="relative inline-block w-full max-w-[140px]" ref={triggerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className="w-full pl-3 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-md text-[10px] font-bold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors outline-none text-center truncate relative"
+      >
+        <span className="block truncate">{value || 'None'}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        align="end"
+        width={240}
+        preferredHeight={260}
+        className="rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div className="pr-1">
+          {options.map((option, index) => (
+            <button
+              key={`${option.name}-${option.category || 'uncategorized'}-${index}`}
+              type="button"
+              onClick={() => {
+                onChange(option.name);
+                setIsOpen(false);
+              }}
+              className="w-full rounded-xl px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
+            >
+              <div>
+                <div className="text-[12px] font-extrabold text-gray-900 truncate">{option.name}</div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{option.category || ''}</div>
+              </div>
+              {value === option.name && <Check className="w-4 h-4 text-[#facc15]" />}
+            </button>
+          ))}
+        </div>
+      </FloatingDropdown>
+    </div>
+  );
+}
+
+function AssigneeDropdown({
+  task,
+  staffOptions,
+  onChange,
+}: {
+  task: TaskItem;
+  staffOptions: StaffOption[];
+  onChange: (next: string[]) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
+  const selectedNames = task.assignees.map((assignee) => assignee.name);
+  const selectedStaff = staffOptions.filter((member) => selectedNames.includes(member.name));
+
+  return (
+    <div className="relative" ref={triggerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className="pl-3 pr-8 py-1.5 bg-white border border-gray-200 rounded-md text-[11px] font-bold text-[#1d1d1f] hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer relative min-w-[148px] text-left"
+      >
+        <span className="block truncate">{selectedNames.length ? `${selectedNames.length} assigned` : 'Unassigned'}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        align="end"
+        width={320}
+        preferredHeight={300}
+        className="rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div className="pr-1">
+          {staffOptions.map((member) => {
+            const selected = selectedNames.includes(member.name);
+
+            return (
+              <button
+                key={member.uid}
+                type="button"
+                onClick={() => {
+                  const next = selected ? selectedNames.filter((name) => name !== member.name) : [...selectedNames, member.name];
+                  onChange(next);
+                }}
+                className="w-full rounded-xl px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-100" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gray-100 border border-gray-100 flex items-center justify-center text-[11px] font-black text-gray-500 uppercase">
+                      {member.name.charAt(0)}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] font-extrabold text-gray-900 break-words whitespace-normal leading-tight">{member.name}</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider break-words whitespace-normal">{member.role}</div>
+                  </div>
+                </div>
+                <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${selected ? 'border-[#facc15] bg-[#fff8d6]' : 'border-gray-200 bg-white'}`}>
+                  {selected && <Check className="w-3.5 h-3.5 text-[#d4a017]" />}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </FloatingDropdown>
+
+      <div className="mt-2 flex items-center justify-end gap-1.5">
+        {selectedStaff.slice(0, 3).map((member) => (
+          <div key={member.uid} className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-[10px] font-black border border-white shadow-sm overflow-hidden shrink-0">
+            {member.avatarUrl ? <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" /> : member.name.charAt(0)}
+          </div>
+        ))}
+        {selectedStaff.length > 3 && (
+          <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-[10px] font-black border border-white shadow-sm overflow-hidden shrink-0">
+            +{selectedStaff.length - 3}
+          </div>
+        )}
+        {selectedStaff.length === 0 && (
+          <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center border border-white shadow-sm overflow-hidden shrink-0">
+            <Users className="w-3.5 h-3.5" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function TasksAdminPage({ params }: { params: Promise<{ slug: string }> }) {
   const unwrappedParams = use(params);
   const eventId = unwrappedParams.slug;
-  const [eventTitle, setEventTitle] = useState('');
-
   const { user } = useAuth();
+
+  const [eventTitle, setEventTitle] = useState('');
   const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [staffOptions, setStaffOptions] = useState<string[]>([]);
-  const [vendorOptions, setVendorOptions] = useState<string[]>([]);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const filteredTasks = filterStatus === 'ALL' ? tasks : tasks.filter(t => t.status === filterStatus);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const filteredTasks = filterStatus === 'ALL' ? tasks : tasks.filter((task) => task.status === filterStatus);
+  const vendorOptionValues = useMemo(() => {
+    const deduped = Array.from(new Map(vendorOptions.map((option) => [option.name, option])).values());
+    return [{ name: 'None', category: '' }, ...deduped.filter((option) => option.name !== 'None')];
+  }, [vendorOptions]);
+  const tasksPerPage = 5;
+  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / tasksPerPage));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const paginatedTasks = filteredTasks.slice((currentPageSafe - 1) * tasksPerPage, currentPageSafe * tasksPerPage);
+  const emptyRows = Math.max(0, tasksPerPage - paginatedTasks.length);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   useEffect(() => {
     if (!user) return;
 
-    const fetchEventTitle = async () => {
+    const fetchPageData = async () => {
       try {
         const idToken = await user.getIdToken();
-        const response = await fetch(`/api/events/${eventId}`, {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const eventData = await response.json();
-        if (eventData?.title) {
-          setEventTitle(eventData.title);
-        }
-      } catch (error) {
-        console.error('Failed to load event title:', error);
-      }
-    };
-
-    const fetchTasks = async () => {
-      try {
-  console.info('[TasksAdmin] Fetching tasks', { eventId });
-        const idToken = await user.getIdToken();
-  const requestUrl = `/api/tasks?eventId=${eventId}`;
-        console.info('[TasksAdmin] Request', requestUrl);
-        const response = await fetch(requestUrl, {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-
-        console.info('[TasksAdmin] Response status', response.status);
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error('[TasksAdmin] Error response', errorData);
-          throw new Error(errorData.error || 'Failed to fetch tasks');
-        }
-
-        const payload = await response.json();
-        console.info('[TasksAdmin] Payload', payload);
-
-        const records = Array.isArray(payload) ? payload : payload?.tasks || [];
-        console.info('[TasksAdmin] Records count', records.length);
-        setTasks(records.map((record: TaskRecord, index: number) => mapTaskRecord(record, index)));
-      } catch (error) {
-        console.error('Failed to load tasks:', error);
-        setTasks([]);
-      }
-    };
-
-    const fetchDropdownOptions = async () => {
-      try {
-        const idToken = await user.getIdToken();
-
-        const [staffResponse, vendorResponse] = await Promise.all([
-          fetch('/api/staffs', {
-            headers: { Authorization: `Bearer ${idToken}` },
-          }),
-          fetch('/api/vendors', {
-            headers: { Authorization: `Bearer ${idToken}` },
-          }),
+        const [eventResponse, taskResponse, staffResponse, vendorResponse] = await Promise.all([
+          fetch(`/api/events/${eventId}`, { headers: { Authorization: `Bearer ${idToken}` } }),
+          fetch(`/api/tasks?eventId=${eventId}`, { headers: { Authorization: `Bearer ${idToken}` } }),
+          fetch('/api/staff', { headers: { Authorization: `Bearer ${idToken}` } }),
+          fetch('/api/vendors', { headers: { Authorization: `Bearer ${idToken}` } }),
         ]);
 
+        if (eventResponse.ok) {
+          const eventData = await eventResponse.json();
+          if (eventData?.title) setEventTitle(eventData.title);
+        }
+
+        if (taskResponse.ok) {
+          const taskPayload = await taskResponse.json();
+          const records = Array.isArray(taskPayload) ? taskPayload : taskPayload?.tasks || [];
+          setTasks(records.map((record: TaskRecord, index: number) => mapTaskRecord(record, index)));
+        } else {
+          setTasks([]);
+        }
+
         if (staffResponse.ok) {
-          const staffPayload = await staffResponse.json();
-          const staffNames = extractNames(staffPayload);
-          setStaffOptions(Array.from(new Set([...staffNames, 'Unassigned'])));
+          setStaffOptions(extractStaff(await staffResponse.json()));
         }
 
         if (vendorResponse.ok) {
           const vendorPayload = await vendorResponse.json();
-          const vendorNames = extractNames(vendorPayload);
-          setVendorOptions(Array.from(new Set(['None', ...vendorNames])));
+          setVendorOptions(extractVendorOptions(vendorPayload));
+        } else {
+          console.error('Failed to fetch vendors for task page:', vendorResponse.status, await vendorResponse.text().catch(() => ''));
+          setVendorOptions([]);
         }
       } catch (error) {
-        console.error('Failed to load dropdown options:', error);
+        console.error('Failed to load tasks page data:', error);
+        setTasks([]);
+        setVendorOptions([]);
       }
     };
 
-    fetchEventTitle();
-    fetchTasks();
-    fetchDropdownOptions();
+    fetchPageData();
   }, [eventId, user]);
-  
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newTask, setNewTask] = useState({
-    title: '',
-    description: '',
-    status: 'TO DO',
-    priority: 'MEDIUM',
-    dueDate: '',
-      dueTime: '',
-      assignee: '',
-      vendor: 'None'
-    });
-
-    const handleAddTask = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!newTask.title || !newTask.assignee) return;
-
-      try {
-        const idToken = await user?.getIdToken();
-        const response = await fetch('/api/tasks', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
-          },
-          body: JSON.stringify({
-            eventId,
-            title: newTask.title,
-            description: newTask.description,
-            status: newTask.status,
-            priority: newTask.priority,
-            dueDate: newTask.dueDate,
-            dueTime: newTask.dueTime,
-            assignee: newTask.assignee,
-            vendor: newTask.vendor,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to create task');
-        }
-
-        const createdTask = await response.json();
-        setTasks((prevTasks) => [mapTaskRecord(createdTask, 0), ...prevTasks]);
-        setIsModalOpen(false);
-        setNewTask({
-          title: '',
-          description: '',
-          status: 'TO DO',
-          priority: 'MEDIUM',
-          dueDate: '',
-          dueTime: '',
-          assignee: '',
-          vendor: 'None'
-        });
-      } catch (error) {
-        console.error('Failed to create task:', error);
-      }
-    };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'HIGH': return 'text-red-700 bg-red-50 border-red-200';
-      case 'MEDIUM': return 'text-amber-700 bg-amber-50 border-amber-200';
-      case 'LOW': return 'text-emerald-700 bg-emerald-50 border-emerald-200';
-      default: return 'text-gray-700 bg-gray-50 border-gray-200';
+      case 'HIGH':
+        return 'text-red-700 bg-red-50 border-red-200';
+      case 'MEDIUM':
+        return 'text-amber-700 bg-amber-50 border-amber-200';
+      case 'LOW':
+        return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+      default:
+        return 'text-gray-700 bg-gray-50 border-gray-200';
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'TO DO': return 'bg-gray-100 text-gray-500';
-      case 'IN PROGRESS': return 'bg-[#facc15]/20 text-[#b48600]';
-      case 'COMPLETED': return 'bg-emerald-100 text-emerald-700';
-      default: return 'bg-gray-100 text-gray-500';
+  const handleAddTask = async (newTask: {
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    dueDate: string;
+    dueTime: string;
+    assignees: string[];
+    vendor: string;
+  }) => {
+    try {
+      const idToken = await user?.getIdToken();
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          eventId,
+          ...newTask,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create task');
+      }
+
+      const createdTask = await response.json();
+      setTasks((prevTasks) => [mapTaskRecord(createdTask, 0), ...prevTasks]);
+    } catch (error) {
+      console.error('Failed to create task:', error);
+      throw error;
     }
   };
 
@@ -326,11 +712,11 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
     }
   };
 
-  const updateTaskField = async (taskToUpdate: TaskItem, field: 'assignee' | 'vendor', value: string) => {
-    const previousValue = tasks.find((task) => task.id === taskToUpdate.id)?.[field];
+  const updateTaskVendor = async (taskToUpdate: TaskItem, vendor: string) => {
+    const previousValue = tasks.find((task) => task.id === taskToUpdate.id)?.vendor;
 
     setTasks((prevTasks) =>
-      prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, [field]: value } : task))
+      prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, vendor } : task))
     );
 
     try {
@@ -344,27 +730,79 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
         body: JSON.stringify({
           taskObjectId: taskToUpdate.dbId,
           taskId: taskToUpdate.taskCode || taskToUpdate.id,
-          [field]: value,
+          vendor,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to update ${field}`);
+        throw new Error(errorData.error || 'Failed to update vendor');
       }
     } catch (error) {
-      console.error(`Failed to update task ${field}:`, error);
+      console.error('Failed to update task vendor:', error);
       if (previousValue) {
         setTasks((prevTasks) =>
-          prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, [field]: previousValue } : task))
+          prevTasks.map((task) => (task.id === taskToUpdate.id ? { ...task, vendor: previousValue } : task))
         );
       }
     }
   };
 
+  const updateTaskAssignees = async (taskToUpdate: TaskItem, assigneeNames: string[]) => {
+    const previousAssignees = tasks.find((task) => task.id === taskToUpdate.id)?.assignees || [];
+    const selectedAssignees = staffOptions
+      .filter((member) => assigneeNames.includes(member.name))
+      .map((member) => ({ name: member.name, avatarUrl: member.avatarUrl || null }));
+
+    setTasks((prevTasks) =>
+      prevTasks.map((task) =>
+        task.id === taskToUpdate.id
+          ? {
+              ...task,
+              assignees: selectedAssignees,
+              assignee: selectedAssignees.length ? selectedAssignees.map((entry) => entry.name).join(', ') : 'Unassigned',
+            }
+          : task
+      )
+    );
+
+    try {
+      const idToken = await user?.getIdToken();
+      const response = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          taskObjectId: taskToUpdate.dbId,
+          taskId: taskToUpdate.taskCode || taskToUpdate.id,
+          assignees: assigneeNames,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update assignees');
+      }
+    } catch (error) {
+      console.error('Failed to update task assignees:', error);
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.id === taskToUpdate.id
+            ? {
+                ...task,
+                assignees: previousAssignees,
+                assignee: previousAssignees.length ? previousAssignees.map((entry) => entry.name).join(', ') : 'Unassigned',
+              }
+            : task
+        )
+      );
+    }
+  };
+
   return (
-    <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2">
-      {/* Header Section */}
+    <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2" style={{ scrollbarGutter: 'stable' }}>
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2">
         <div className="max-w-3xl">
           <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
@@ -377,7 +815,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
             Monitor deliverables across all your events. Keep your production timeline running seamlessly and easily assign responsibilities to staff.
           </p>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-colors rounded-xl shadow-md shadow-[#eebf43]/20 shrink-0"
         >
@@ -386,33 +824,16 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
         </button>
       </div>
 
-      {/* Main Registry Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {/* Tool bar */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-visible">
         <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100">
           <h2 className="text-[15px] font-extrabold text-gray-900 uppercase tracking-widest">LIVE TASKS REGISTRY</h2>
           <div className="flex items-center gap-4">
-            {/* Filter Button / Select */}
-            <div className="relative">
-              <select 
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="appearance-none flex items-center justify-center gap-2 pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-[12px] font-black text-gray-700 tracking-widest uppercase hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer"
-              >
-                <option value="ALL">ALL STATUS</option>
-                <option value="TO DO">TO DO</option>
-                <option value="IN PROGRESS">IN PROGRESS</option>
-                <option value="COMPLETED">COMPLETED</option>
-              </select>
-              <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-              <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            </div>
+            <FilterDropdown value={filterStatus} onChange={setFilterStatus} />
           </div>
         </div>
 
-        {/* Table View */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[900px]">
+          <table className="w-full table-fixed text-left border-collapse min-w-[900px]">
             <thead>
               <tr className="bg-gray-50/50 border-b border-gray-100">
                 <th className="px-4 md:px-6 py-4 text-[10px] font-extrabold text-gray-400 uppercase tracking-[0.2em] w-[35%]">TASK DETAILS</th>
@@ -423,252 +844,91 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredTasks.length === 0 ? (
+              {paginatedTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500 font-medium text-[13px]">
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500 font-medium text-[13px]">
                     No tasks found matching your criteria.
                   </td>
                 </tr>
-              ) : filteredTasks.map((task) => {
-                let statusColor = "text-gray-500 bg-gray-50";
-                let dotColor = "bg-gray-400";
-                if (task.status === 'COMPLETED') {
-                  statusColor = "text-emerald-700 bg-emerald-50";
-                  dotColor = "bg-emerald-500";
-                } else if (task.status === 'IN PROGRESS') {
-                  statusColor = "text-[#b48600] bg-[#facc15]/20";
-                  dotColor = "bg-[#facc15]";
-                }
-
-                return (
-                  <tr key={task.id} className="hover:bg-gray-50/30 transition-colors group">
-                    <td className="px-4 md:px-6 py-4">
-                      <div className="font-extrabold text-[14px] text-gray-900 group-hover:text-[#eebf43] transition-colors mb-1">{task.title}</div>
-                      <div className="text-[12px] font-medium text-[#71717a] line-clamp-2">
-                        {task.description}
-                      </div>
-                      <div className="mt-2">
-                         <span className={`px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest rounded-sm ${getPriorityColor(task.priority)}`}>
+              ) : (
+                <>
+                  {paginatedTasks.map((task) => (
+                    <tr key={task.id} className="hover:bg-gray-50/30 transition-colors group">
+                      <td className="px-4 md:px-6 py-4">
+                        <div className="font-extrabold text-[14px] text-gray-900 group-hover:text-[#eebf43] transition-colors mb-1 truncate">{task.title}</div>
+                        <div className="text-[12px] font-medium text-[#71717a] line-clamp-2 break-words">{task.description}</div>
+                        <div className="mt-2">
+                          <span className={`px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest rounded-sm ${getPriorityColor(task.priority)}`}>
                             {task.priority} PRIORITY
-                         </span>
-                      </div>
-                    </td>
+                          </span>
+                        </div>
+                      </td>
 
-                    <td className="px-4 md:px-6 py-4 text-center align-middle">
-                      <div className="relative inline-flex items-center">
-                        <span className={`absolute left-2.5 w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                        <select
-                          value={task.status}
-                          onChange={(e) => updateTaskStatus(task, e.target.value)}
-                          className={`appearance-none inline-flex items-center gap-2 pl-5 pr-7 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-widest ${statusColor} cursor-pointer`}
-                        >
-                          <option value="TO DO">TO DO</option>
-                          <option value="IN PROGRESS">IN PROGRESS</option>
-                          <option value="COMPLETED">COMPLETED</option>
-                        </select>
-                        <svg className="w-3 h-3 text-current absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                      </div>
-                    </td>
+                      <td className="px-4 md:px-6 py-4 text-center align-middle">
+                        <StatusDropdown value={task.status} onChange={(value) => updateTaskStatus(task, value)} />
+                      </td>
 
-                    <td className="px-4 md:px-6 py-4 text-center align-middle">
-                      <div className="text-[11px] font-bold text-gray-600">{task.dueDate}</div>
-                      <div className="text-[10px] font-bold text-gray-400 mt-0.5">{task.dueTime || 'EOD'}</div>
-                    </td>
+                      <td className="px-4 md:px-6 py-4 text-center align-middle">
+                        <div className="text-[11px] font-bold text-gray-600 truncate">{task.dueDate}</div>
+                        <div className="text-[10px] font-bold text-gray-400 mt-0.5 truncate">{task.dueTime || 'EOD'}</div>
+                      </td>
 
-                    <td className="px-4 md:px-6 py-4 text-center align-middle">
-                      <div className="relative inline-block w-full max-w-[140px]">
-                         <select 
-                            value={task.vendor || 'None'}
-                            onChange={(e) => updateTaskField(task, 'vendor', e.target.value)}
-                            className="appearance-none w-full pl-3 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-md text-[10px] font-bold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors outline-none cursor-pointer text-center truncate"
-                          >
-                            {[...new Set(['None', ...(vendorOptions.length ? vendorOptions : [task.vendor || 'None'])])].map((vendorName) => (
-                              <option key={vendorName} value={vendorName}>{vendorName}</option>
-                            ))}
-                          </select>
-                          <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                      </div>
-                    </td>
+                      <td className="px-4 md:px-6 py-4 text-center align-middle">
+                        <VendorDropdown value={task.vendor || 'None'} options={vendorOptionValues} onChange={(value) => updateTaskVendor(task, value)} />
+                      </td>
 
-                    <td className="px-4 md:px-6 py-4 text-right align-middle">
-                       <div className="flex items-center justify-end gap-3">
-                         <div className="relative">
-                            <select 
-                               value={task.assignee}
-                               onChange={(e) => updateTaskField(task, 'assignee', e.target.value)}
-                               className="appearance-none pl-3 pr-8 py-1.5 bg-white border border-gray-200 rounded-md text-[11px] font-bold text-[#1d1d1f] hover:bg-gray-50 transition-colors shrink-0 outline-none cursor-pointer"
-                             >
-                               {[...new Set(['Unassigned', ...(staffOptions.length ? staffOptions : [task.assignee || 'Unassigned'])])].map((staffName) => (
-                                 <option key={staffName} value={staffName}>{staffName}</option>
-                               ))}
-                             </select>
-                             <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                         </div>
-                         <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-[10px] font-black border border-white shadow-sm overflow-hidden shrink-0">
-                           <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assignee}`} alt={task.assignee} className="w-full h-full object-cover" />
-                         </div>
-                       </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                      <td className="px-4 md:px-6 py-4 text-right align-middle">
+                        <div className="flex flex-col items-end">
+                          <AssigneeDropdown task={task} staffOptions={staffOptions} onChange={(value) => updateTaskAssignees(task, value)} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {Array.from({ length: emptyRows }).map((_, index) => (
+                    <tr key={`empty-row-${currentPageSafe}-${index}`} className="pointer-events-none">
+                      <td className="px-4 md:px-6 py-4 h-[92px]" colSpan={5}>
+                        <div className="w-full h-full rounded-lg border border-dashed border-transparent" />
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Footer info & inline Pagination */}
         <div className="p-4 md:p-5 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50/30">
           <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">
-            SHOWING 1-{filteredTasks.length} OF {tasks.length} TASKS
+            SHOWING {filteredTasks.length === 0 ? 0 : (currentPageSafe - 1) * tasksPerPage + 1}-{Math.min(currentPageSafe * tasksPerPage, filteredTasks.length)} OF {filteredTasks.length} TASKS
           </div>
           <div className="flex gap-2">
-            <button className="px-4 py-2 border border-gray-200 bg-white rounded-lg text-[11px] font-extrabold text-gray-500 uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-colors shadow-sm">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPageSafe === 1}
+              className="px-4 py-2 border border-gray-200 bg-white rounded-lg text-[11px] font-extrabold text-gray-500 uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               PREV
             </button>
-            <button className="px-4 py-2 bg-[#facc15] border border-[#eab308] rounded-lg text-[11px] font-extrabold text-gray-900 uppercase tracking-widest hover:bg-[#eab308] transition-colors shadow-sm">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPageSafe === totalPages || filteredTasks.length === 0}
+              className="px-4 py-2 bg-[#facc15] border border-[#eab308] rounded-lg text-[11px] font-extrabold text-gray-900 uppercase tracking-widest hover:bg-[#eab308] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               NEXT
             </button>
           </div>
         </div>
       </div>
 
-      {/* Add Task Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-gray-900">Add New Task</h3>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            
-            <form onSubmit={handleAddTask} className="p-6 space-y-5">
-              <div>
-                <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Task Title</label>
-                <input 
-                  type="text"
-                  required
-                  value={newTask.title}
-                  onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none"
-                  placeholder="e.g., Finalize floral arrangements"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Detailed Description</label>
-                <textarea 
-                  required
-                  rows={3}
-                  value={newTask.description}
-                  onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none resize-none"
-                  placeholder="Include specific requirements, vendor contacts, or special instructions..."
-                ></textarea>
-              </div>
-
-              <div>
-                <div>
-                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Priority Level</label>
-                  <select 
-                    value={newTask.priority}
-                    onChange={(e) => setNewTask({...newTask, priority: e.target.value as any})}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
-                  >
-                    <option value="CRITICAL">🔴 Critical</option>
-                    <option value="HIGH">🟠 High</option>
-                    <option value="MEDIUM">🟡 Medium</option>
-                    <option value="LOW">🟢 Low</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Due Date</label>
-                  <input 
-                    type="date"
-                    required
-                    value={newTask.dueDate}
-                    onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Due Time</label>
-                  <input 
-                    type="time"
-                    required
-                    value={newTask.dueTime}
-                    onChange={(e) => setNewTask({...newTask, dueTime: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Assignee (Staff Pool)</label>
-                  <div className="relative">
-                    <select 
-                      required
-                      value={newTask.assignee}
-                      onChange={(e) => setNewTask({...newTask, assignee: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
-                    >
-                      <option value="" disabled>Select a team member...</option>
-                      {(staffOptions.length ? staffOptions : ['Unassigned']).map((staffName) => (
-                        <option key={staffName} value={staffName}>{staffName}</option>
-                      ))}
-                    </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Vendor Partner</label>
-                  <div className="relative">
-                    <select 
-                      value={newTask.vendor}
-                      onChange={(e) => setNewTask({...newTask, vendor: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none appearance-none cursor-pointer"
-                    >
-                      {(vendorOptions.length ? vendorOptions : ['None']).map((vendorName) => (
-                        <option key={vendorName} value={vendorName}>{vendorName}</option>
-                      ))}
-                    </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-[#71717a]">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-5 mt-2 flex items-center justify-end gap-3 border-t border-gray-100">
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-6 py-3 text-[12px] font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-wider"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="px-8 py-3 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[12px] font-extrabold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#eebf43]/20"
-                >
-                  Create Task
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateTaskModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onCreate={handleAddTask}
+        staffOptions={staffOptions}
+        vendorOptions={vendorOptionValues}
+      />
     </div>
   );
 }

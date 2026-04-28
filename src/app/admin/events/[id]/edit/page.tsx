@@ -2,7 +2,7 @@
 import React, { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Save, User, Briefcase, MapPin, Tag, Mail, Phone, AlertTriangle, Trash2, Plus, ArrowRight, X, Minus } from 'lucide-react';
-import { CustomSelect, CustomDatePicker } from '@/components/ui/CustomInputs';
+import { CustomSelect, CustomDatePicker, CustomTimePicker } from '@/components/ui/CustomInputs';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Link from 'next/link';
 
@@ -36,6 +36,37 @@ interface EventData {
   };
 }
 
+const extractDatePart = (value: string) => {
+  if (!value) return '';
+
+  const directMatch = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (directMatch) return directMatch[1];
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+};
+
+const extractTimePart = (value: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+
+  const directMatch = value.match(/T(\d{2}:\d{2})/);
+  if (directMatch) return directMatch[1];
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+
+  return `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
+};
+
+const combineEventDateTime = (date: string, time: string) => {
+  if (!date) return '';
+  if (!time) return date;
+  return `${date}T${time}:00`;
+};
+
 export default function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuth();
@@ -50,6 +81,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     title: '',
     type: '',
     date: '',
+    time: '',
     location: '',
     leadAssigned: '',
     status: '',
@@ -93,7 +125,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       setFormData({
         title: eventData.title,
         type: eventData.type,
-        date: eventData.date,
+        date: extractDatePart(eventData.date),
+        time: extractTimePart(eventData.date),
         location: eventData.location,
         leadAssigned: eventData.leadAssigned,
         status: eventData.status || 'Active',
@@ -140,13 +173,25 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     setIsSubmitting(true);
     setError('');
 
+    if (!formData.date) {
+      setError('Production date is required.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!formData.time) {
+      setError('Production time is required.');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const idToken = await user!.getIdToken();
 
       const data = new FormData();
       data.append('title', formData.title);
       data.append('type', formData.type);
-      data.append('date', formData.date);
+      data.append('date', combineEventDateTime(formData.date, formData.time));
       data.append('location', formData.location);
       data.append('leadAssigned', formData.leadAssigned);
       data.append('status', formData.status);
@@ -301,10 +346,26 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                   onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
                 />
 
-                <div className="md:col-span-2 space-y-2">
+                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Venue Location</label>
                   <input required type="text" name="location" value={formData.location} onChange={(e) => setFormData(p => ({ ...p, location: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
                 </div>
+
+                <CustomTimePicker
+                  label="Production Time"
+                  value={formData.time}
+                  selectedDate={formData.date}
+                  trailingIcon="chevron"
+                  disablePastForToday
+                  labelClassName="text-gray-400"
+                  triggerClassName="w-full px-5 py-4 bg-gray-50 border-2 rounded-2xl outline-none"
+                  openTriggerClassName="border-[#facc15] bg-white"
+                  closedTriggerClassName="border-gray-100 hover:bg-white hover:border-[#facc15]"
+                  textClassName="text-[15px]"
+                  selectedTextClassName="font-extrabold text-gray-900"
+                  placeholderTextClassName="font-extrabold text-gray-400"
+                  onChange={(val) => setFormData(prev => ({ ...prev, time: val }))}
+                />
               </div>
            </div>
         </div>

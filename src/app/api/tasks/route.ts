@@ -4,6 +4,35 @@ import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 import { writeAuditLog } from "@/lib/audit";
 
+const normalizeAssigneeNames = (input: unknown): string[] => {
+  if (Array.isArray(input)) {
+    return Array.from(
+      new Set(
+        input
+          .map((value) => (typeof value === "string" ? value.trim() : ""))
+          .filter(Boolean)
+      )
+    );
+  }
+
+  if (typeof input === "string" && input.trim()) {
+    return [input.trim()];
+  }
+
+  return [];
+};
+
+const validateDueDateTime = (dueDate: unknown, dueTime: unknown) => {
+  if (typeof dueDate !== "string" || typeof dueTime !== "string" || !dueDate || !dueTime) {
+    return;
+  }
+
+  const dueAt = new Date(`${dueDate}T${dueTime}:00`);
+  if (!Number.isNaN(dueAt.getTime()) && dueAt.getTime() < Date.now()) {
+    throw new Error("Past due date and time cannot be selected.");
+  }
+};
+
 export async function GET(request: NextRequest) {
   try {
     await requireAuthenticatedUser(request);
@@ -28,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     const assignee = searchParams.get("assignee");
     if (assignee) {
-      filter["assignee.name"] = assignee;
+      filter.$or = [{ "assignee.name": assignee }, { "assignees.name": assignee }];
     }
 
     console.info("[Tasks API] Query params", { eventId: eventIdValue, taskStatus });
@@ -90,8 +119,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid eventId." }, { status: 400 });
     }
 
+    validateDueDateTime(body?.dueDate, body?.dueTime);
+
     const db = await getMongoDb();
     const tasksCollection = db.collection("event_tasks");
+    const assigneeNames = normalizeAssigneeNames(body?.assignees ?? body?.assignee);
+    const primaryAssignee = assigneeNames[0] || "Unassigned";
 
     const newTask = {
       taskId: body?.taskId || `TSK-${Date.now()}`,
@@ -105,8 +138,9 @@ export async function POST(request: NextRequest) {
         time: body?.dueTime || "",
       },
       assignee: {
-        name: body?.assignee || "Unassigned",
+        name: primaryAssignee,
       },
+      assignees: assigneeNames.map((name) => ({ name })),
       vendor: {
         name: body?.vendor || "None",
       },
@@ -120,7 +154,7 @@ export async function POST(request: NextRequest) {
       request,
       category: "TASK_MANAGEMENT",
       action: "TASK_ASSIGNED",
-      message: `Task "${newTask.title}" assigned to ${newTask.assignee.name}`,
+      message: `Task "${newTask.title}" assigned to ${assigneeNames.length ? assigneeNames.join(", ") : "Unassigned"}`,
       actor: {
         uid: user.uid,
         email: user.email,
@@ -132,7 +166,7 @@ export async function POST(request: NextRequest) {
       },
       details: {
         taskTitle: newTask.title,
-        assignee: newTask.assignee.name,
+        assignee: assigneeNames.length ? assigneeNames.join(", ") : "Unassigned",
         eventId: newTask.eventId.toString(),
       },
     });
@@ -141,6 +175,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof AuthGuardError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    if (error instanceof Error && error.message === "Past due date and time cannot be selected.") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("Error creating task:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
@@ -156,14 +193,16 @@ export async function PATCH(request: NextRequest) {
     const taskId = typeof body?.taskId === "string" ? body.taskId.trim() : "";
     const status = typeof body?.status === "string" ? body.status.trim() : "";
     const assignee = typeof body?.assignee === "string" ? body.assignee.trim() : "";
+    const assignees = normalizeAssigneeNames(body?.assignees);
     const vendor = typeof body?.vendor === "string" ? body.vendor.trim() : "";
+    const hasAssigneesUpdate = Array.isArray(body?.assignees);
 
     if (!taskObjectId && !taskId) {
       return NextResponse.json({ error: "Missing taskId." }, { status: 400 });
     }
 
     if (!status) {
-      if (!assignee && !vendor) {
+      if (!assignee && !vendor && !hasAssigneesUpdate) {
         return NextResponse.json({ error: "No updates provided." }, { status: 400 });
       }
     }
@@ -176,6 +215,12 @@ export async function PATCH(request: NextRequest) {
 
     if (assignee) {
       updates.assignee = { name: assignee };
+      updates.assignees = [{ name: assignee }];
+    }
+
+    if (hasAssigneesUpdate) {
+      updates.assignees = assignees.map((name) => ({ name }));
+      updates.assignee = { name: assignees[0] || "Unassigned" };
     }
 
     if (vendor) {
