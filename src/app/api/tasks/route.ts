@@ -3,6 +3,25 @@ import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
+function normalizeAssignees(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value.trim() ? [value.trim()] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .filter((entry): entry is string => typeof entry === "string")
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  return [];
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAuthenticatedUser(request);
@@ -91,6 +110,7 @@ export async function POST(request: NextRequest) {
 
     const db = await getMongoDb();
     const tasksCollection = db.collection("event_tasks");
+    const assignees = normalizeAssignees(body?.assignee);
 
     const newTask = {
       taskId: body?.taskId || `TSK-${Date.now()}`,
@@ -103,9 +123,7 @@ export async function POST(request: NextRequest) {
         date: body?.dueDate || "",
         time: body?.dueTime || "",
       },
-      assignee: {
-        name: body?.assignee || "Unassigned",
-      },
+      assignee: assignees.length > 0 ? { names: assignees } : { names: [] },
       vendor: {
         name: body?.vendor || "None",
       },
@@ -133,7 +151,7 @@ export async function PATCH(request: NextRequest) {
     const taskObjectId = typeof body?.taskObjectId === "string" ? body.taskObjectId.trim() : "";
     const taskId = typeof body?.taskId === "string" ? body.taskId.trim() : "";
     const status = typeof body?.status === "string" ? body.status.trim() : "";
-    const assignee = typeof body?.assignee === "string" ? body.assignee.trim() : "";
+    const assignees = normalizeAssignees(body?.assignee);
     const vendor = typeof body?.vendor === "string" ? body.vendor.trim() : "";
 
     if (!taskObjectId && !taskId) {
@@ -141,7 +159,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (!status) {
-      if (!assignee && !vendor) {
+      if (body?.assignee === undefined && !vendor) {
         return NextResponse.json({ error: "No updates provided." }, { status: 400 });
       }
     }
@@ -152,8 +170,8 @@ export async function PATCH(request: NextRequest) {
       updates.status = status;
     }
 
-    if (assignee) {
-      updates.assignee = { name: assignee };
+    if (body?.assignee !== undefined) {
+      updates.assignee = { names: assignees };
     }
 
     if (vendor) {
