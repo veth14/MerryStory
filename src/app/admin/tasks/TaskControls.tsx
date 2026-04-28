@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowDown, ArrowUp, Calendar, Check, ChevronDown, Clock3, Minus } from 'lucide-react';
+import { Calendar, Check, ChevronDown, Circle, Clock, Flame, Zap } from 'lucide-react';
 
 export type TaskSelectOption = {
   value: string;
@@ -17,10 +17,10 @@ type AlignMode = 'left' | 'right';
 const cn = (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' ');
 
 export const TASK_PRIORITY_OPTIONS: TaskSelectOption[] = [
-  { value: 'CRITICAL', label: 'Critical', icon: <AlertTriangle className="h-4 w-4" /> },
-  { value: 'HIGH', label: 'High', icon: <ArrowUp className="h-4 w-4" /> },
-  { value: 'MEDIUM', label: 'Medium', icon: <Minus className="h-4 w-4" /> },
-  { value: 'LOW', label: 'Low', icon: <ArrowDown className="h-4 w-4" /> },
+  { value: 'CRITICAL', label: 'Critical', icon: <Flame className="h-4 w-4" /> },
+  { value: 'HIGH', label: 'High', icon: <Zap className="h-4 w-4" /> },
+  { value: 'MEDIUM', label: 'Medium', icon: <Circle className="h-4 w-4" /> },
+  { value: 'LOW', label: 'Low', icon: <Circle className="h-4 w-4" /> },
 ];
 
 const CONTROL_STYLES: Record<
@@ -686,40 +686,211 @@ export function TaskTimeField({
   className?: string;
   triggerClassName?: string;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draftHour, setDraftHour] = useState(12);
+  const [draftMinute, setDraftMinute] = useState('00');
+  const [draftPeriod, setDraftPeriod] = useState<'AM' | 'PM'>('AM');
   const styles = CONTROL_STYLES[size];
-  const inputRef = useRef<HTMLInputElement>(null);
+  const { mounted, style, triggerRef, overlayRef, syncPosition } = useAnchoredOverlay({
+    isOpen,
+    onClose: () => setIsOpen(false),
+    overlayMinWidth: size === 'modal' ? 280 : 220,
+    preferredHeight: 320,
+  });
+
+  useEffect(() => {
+    if (!value) {
+      return;
+    }
+    const [hourString, minuteString] = value.split(':');
+    const hourValue = parseInt(hourString, 10);
+    const periodValue = hourValue >= 12 ? 'PM' : 'AM';
+    const hour12 = hourValue === 0 ? 12 : hourValue > 12 ? hourValue - 12 : hourValue;
+    setDraftHour(hour12);
+    setDraftMinute(minuteString);
+    setDraftPeriod(periodValue);
+  }, [value]);
+
+  const hours = Array.from({ length: 12 }, (_, i) => i + 1);
+  const minutes = Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0'));
+
+  const formatTime12Hour = (time24: string) => {
+    if (!time24) return '';
+    const [hours, mins] = time24.split(':');
+    const hour = parseInt(hours, 10);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${hour12}:${mins} ${period}`;
+  };
+
+  const convertTo24Hour = (hour: number, minute: string, period: 'AM' | 'PM') => {
+    let hour24 = hour;
+    if (period === 'AM' && hour === 12) hour24 = 0;
+    if (period === 'PM' && hour !== 12) hour24 = hour + 12;
+    return `${String(hour24).padStart(2, '0')}:${minute}`;
+  };
+
+  const buttonLabel = value ? formatTime12Hour(value) : placeholder;
+
+  const isTimeDisabled = (hour: number, minute: string, period: 'AM' | 'PM') => {
+    if (!min) return false;
+    const timeValue = convertTo24Hour(hour, minute, period);
+    return timeValue < min;
+  };
+
+  const draftTimeValue = convertTo24Hour(draftHour, draftMinute, draftPeriod);
+  const isConfirmDisabled = isTimeDisabled(draftHour, draftMinute, draftPeriod);
 
   return (
     <div className={cn('space-y-2', className)}>
       <TaskFieldLabel label={label} />
-      <div
+      <button
+        ref={triggerRef}
+        type="button"
         onClick={() => {
-          inputRef.current?.focus();
-          inputRef.current?.showPicker?.();
+          if (isOpen) {
+            setIsOpen(false);
+            return;
+          }
+
+          if (value) {
+            const [hourString, minuteString] = value.split(':');
+            const hourValue = parseInt(hourString, 10);
+            const periodValue = hourValue >= 12 ? 'PM' : 'AM';
+            const hour12 = hourValue === 0 ? 12 : hourValue > 12 ? hourValue - 12 : hourValue;
+            setDraftHour(hour12);
+            setDraftMinute(minuteString);
+            setDraftPeriod(periodValue);
+          }
+
+          syncPosition();
+          setIsOpen(true);
         }}
         className={cn(
-          'relative flex w-full items-center justify-between gap-3 overflow-hidden bg-white text-left text-[#1f1c14] transition-colors duration-200',
-          'border border-[#e7dfc9] hover:border-[#d7cbab] hover:bg-[#fffdf7]',
-          'focus-within:ring-2 focus-within:ring-[#f4d66f]/40',
+          'flex w-full items-center justify-between gap-3 bg-white text-left text-[#1f1c14] transition-colors duration-200',
+          'border-[#e7dfc9] hover:border-[#d7cbab] hover:bg-[#fffdf7]',
+          'focus:outline-none focus:ring-2 focus:ring-[#f4d66f]/40',
           styles.trigger,
           triggerClassName
         )}
       >
-        <span className={cn(styles.label, 'truncate', value ? 'text-[#1f1c14]' : 'font-bold text-[#9d9582]')}>
-          {value || placeholder}
+        <span
+          className={cn(
+            styles.label,
+            'truncate font-semibold tracking-normal',
+            value ? 'text-[#1f1c14]' : 'text-[#9d9582]'
+          )}
+        >
+          {buttonLabel}
         </span>
-        <Clock3 className="h-4 w-4 shrink-0 text-[#a08e64] pointer-events-none" />
-        <input
-          ref={inputRef}
-          required
-          type="time"
-          value={value}
-          min={min}
-          onChange={(event) => onChange(event.target.value)}
-          aria-label={label || 'Time'}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </div>
+        <Clock className="h-4 w-4 shrink-0 text-[#a08e64]" />
+      </button>
+
+      {mounted && isOpen
+        ? createPortal(
+            <div
+              ref={overlayRef}
+              style={style}
+              className="overflow-hidden rounded-2xl border border-[#efe7d1] bg-white p-3 shadow-[0_24px_60px_rgba(26,20,8,0.14)]"
+            >
+              <div className="grid grid-cols-3 gap-2 pb-2 text-center text-[9px] font-semibold uppercase tracking-[0.16em] text-[#b29d61]">
+                <span>Hour</span>
+                <span>Min</span>
+                <span>Period</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="h-48 space-y-1 overflow-y-auto pr-1">
+                  {hours.map((hour) => (
+                    <button
+                      key={hour}
+                      type="button"
+                      onClick={() => {
+                        setDraftHour(hour);
+                      }}
+                      disabled={isTimeDisabled(hour, draftMinute, draftPeriod)}
+                      className={cn(
+                        'w-full rounded-md px-2 py-2 text-[12px] font-semibold transition-colors',
+                        draftHour === hour && 'bg-[#d2a721] text-white',
+                        draftHour !== hour &&
+                          !isTimeDisabled(hour, draftMinute, draftPeriod) &&
+                          'text-[#1f1c14] hover:bg-[#faf5e6]',
+                        isTimeDisabled(hour, draftMinute, draftPeriod) && 'cursor-not-allowed text-[#c8c0ad] opacity-50'
+                      )}
+                    >
+                      {hour}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="h-48 space-y-1 overflow-y-auto pr-1">
+                  {minutes.map((minute) => {
+                    const hour12 = draftHour;
+                    const currentPeriod = draftPeriod;
+
+                    return (
+                      <button
+                        key={minute}
+                        type="button"
+                        onClick={() => {
+                          setDraftMinute(minute);
+                        }}
+                        disabled={isTimeDisabled(hour12, minute, currentPeriod)}
+                        className={cn(
+                          'w-full rounded-md px-2 py-2 text-[12px] font-semibold transition-colors',
+                          draftMinute === minute && 'bg-[#d2a721] text-white',
+                          draftMinute !== minute &&
+                            !isTimeDisabled(hour12, minute, currentPeriod) &&
+                            'text-[#1f1c14] hover:bg-[#faf5e6]',
+                          isTimeDisabled(hour12, minute, currentPeriod) && 'cursor-not-allowed text-[#c8c0ad] opacity-50'
+                        )}
+                      >
+                        {minute}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex h-48 flex-col items-end">
+                  <div className="space-y-1">
+                    {(['AM', 'PM'] as const).map((slot) => (
+                      <button
+                        key={slot}
+                        type="button"
+                        onClick={() => setDraftPeriod(slot)}
+                        className={cn(
+                          'w-full rounded-md px-2 py-2 text-[12px] font-semibold transition-colors',
+                          draftPeriod === slot
+                            ? 'border border-[#d2a721] bg-[#d2a721] text-white'
+                            : 'border border-[#e8e0ca] text-[#8d7a4b] hover:bg-[#faf5e6]'
+                        )}
+                      >
+                        {slot}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(draftTimeValue);
+                      setIsOpen(false);
+                    }}
+                    disabled={isConfirmDisabled}
+                    className={cn(
+                      'mt-auto inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors',
+                      isConfirmDisabled
+                        ? 'cursor-not-allowed border-[#e8e0ca] text-[#c8c0ad]'
+                        : 'border-[#d2a721] bg-[#d2a721] text-white hover:bg-[#c69b08]'
+                    )}
+                    aria-label="Confirm time"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

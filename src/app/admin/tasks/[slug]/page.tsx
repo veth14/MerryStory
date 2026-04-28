@@ -239,6 +239,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     if (!user) return;
@@ -339,6 +340,15 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
       }),
     [priorityFilter, statusFilter, tasks]
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [priorityFilter, statusFilter, tasks.length]);
+
+  const pageSize = 5;
+  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedTasks = filteredTasks.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const updateTaskStatus = async (taskToUpdate: TaskItem, nextStatus: string) => {
     const previousStatus = taskToUpdate.status;
@@ -534,7 +544,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                   </td>
                 </tr>
               ) : (
-                filteredTasks.map((task) => {
+                pagedTasks.map((task) => {
                   const statusTone = getStatusTone(task.status);
 
                   return (
@@ -628,13 +638,32 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
 
         <div className="flex flex-col items-center justify-between gap-3 border-t border-[#f2ecdd] bg-[#fffdf7] px-4 py-4 md:flex-row md:px-5">
           <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#9f9682]">
-            Showing {filteredTasks.length} of {tasks.length} Tasks
+            Showing {(filteredTasks.length === 0 ? 0 : (safePage - 1) * pageSize + 1)}-
+            {Math.min(safePage * pageSize, filteredTasks.length)} of {filteredTasks.length} Tasks
           </div>
           <div className="flex gap-2">
-            <button className="rounded-lg border border-[#e8e0ca] bg-white px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#8b8371] transition-colors hover:border-[#d8cfbb] hover:text-[#1f1c14]">
+            <button
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={safePage === 1}
+              className={cn(
+                'rounded-lg border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors',
+                safePage === 1
+                  ? 'cursor-not-allowed border-[#efe7d1] bg-[#f8f4ea] text-[#b8ae9a]'
+                  : 'border-[#e8e0ca] bg-white text-[#8b8371] hover:border-[#d8cfbb] hover:text-[#1f1c14]'
+              )}
+            >
               Prev
             </button>
-            <button className="rounded-lg border border-[#e4be4f] bg-[#facc15] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-900 transition-colors hover:bg-[#eab308]">
+            <button
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={safePage === totalPages}
+              className={cn(
+                'rounded-lg border px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors',
+                safePage === totalPages
+                  ? 'cursor-not-allowed border-[#efe7d1] bg-[#f8f4ea] text-[#b8ae9a]'
+                  : 'border-[#e4be4f] bg-[#facc15] text-gray-900 hover:bg-[#eab308]'
+              )}
+            >
               Next
             </button>
           </div>
