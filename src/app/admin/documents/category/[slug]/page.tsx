@@ -7,6 +7,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 const CATEGORY_NAMES: Record<string, string> = {
   'contracts': 'Contracts & Agreements',
   'invoices': 'Invoices & Receipts',
+  'expenses': 'Expense Records',
   'plans': 'Event Plans & Moodboards',
   'uploads': 'Client Uploads'
 };

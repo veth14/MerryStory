@@ -4,6 +4,16 @@ import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { ObjectId } from "mongodb";
 
+const PESO_SYMBOL = "\u20B1";
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** exponent;
+  return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -139,6 +149,30 @@ export async function POST(
       { _id: eventObjectId },
       { $set: { "budget.utilized": currentUtilized + amount } }
     );
+
+    const documentsCollection = db.collection("documents");
+    const eventTitle = event?.title || "Untitled Event";
+    const receiptName = attachmentName || `${description || vendor} Expense Receipt`;
+
+    await documentsCollection.insertOne({
+      name: receiptName,
+      type: attachmentName?.split(".").pop()?.toUpperCase() || "EXPENSE",
+      size: attachment instanceof File && attachment.size > 0 ? formatBytes(attachment.size) : `${PESO_SYMBOL}${amount.toLocaleString()}`,
+      eventId: eventObjectId,
+      event: eventTitle,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      status,
+      category: "expenses",
+      icon: attachmentType?.startsWith("image/") ? "image" : "file",
+      fileUrl: attachmentUrl,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
+      sourceKind: "expense",
+      sourceExpenseId: result.insertedId,
+      createdBy: user.uid,
+      createdAt: new Date()
+    });
     
     // TODO: Add audit log for expense creation
     

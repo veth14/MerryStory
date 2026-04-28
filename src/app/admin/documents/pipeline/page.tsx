@@ -12,6 +12,16 @@ interface Contract {
   lastUpdated: string;
   status: 'drafting' | 'sent' | 'signed';
   platform?: string;
+  eventId?: string;
+  eventName?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileType?: string;
+  recipientEmail?: string;
+  recipientName?: string;
+  reviewLink?: string;
+  signedByName?: string;
+  signatureDataUrl?: string;
 }
 
 interface Pipeline {
@@ -20,12 +30,44 @@ interface Pipeline {
   signed: Contract[];
 }
 
+const PESO_SYMBOL = '\u20B1';
+
+function formatContractValue(value: string) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return `${PESO_SYMBOL}0`;
+  return trimmed.startsWith(PESO_SYMBOL) ? trimmed : `${PESO_SYMBOL}${trimmed}`;
+}
+
+function openBlobPreview(objectUrl: string) {
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+function openLinkInNewTab(url: string) {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
 export default function PipelinePage() {
   const { user } = useAuth();
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '' });
   const [createContractOpen, setCreateContractOpen] = useState(false);
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [submittingContract, setSubmittingContract] = useState(false);
   const [pipeline, setPipeline] = useState<Pipeline>({ drafting: [], sent: [], signed: [] });
   const [events, setEvents] = useState<Array<{ _id: string; title: string }>>([]);
@@ -35,46 +77,71 @@ export default function PipelinePage() {
     type: 'Service Agreement',
     value: '',
     platform: 'DocuSign',
+    recipientName: '',
+    recipientEmail: '',
+    contractFile: null as File | null,
+    existingFileName: '',
   });
 
   useEffect(() => {
     setHydrated(true);
   }, []);
 
+  const resetContractForm = () => {
+    setContractForm({
+      name: '',
+      eventId: '',
+      type: 'Service Agreement',
+      value: '',
+      platform: 'DocuSign',
+      recipientName: '',
+      recipientEmail: '',
+      contractFile: null,
+      existingFileName: '',
+    });
+  };
+
+  const closeContractModal = () => {
+    setCreateContractOpen(false);
+    setEditingContractId(null);
+    resetContractForm();
+  };
+
+  const fetchPipeline = async (tokenOverride?: string) => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      const token = tokenOverride || await user.getIdToken();
+
+      const [pipelineRes, eventsRes] = await Promise.all([
+        fetch('/api/admin/contracts/pipeline', {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch('/api/events', {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+      ]);
+
+      if (pipelineRes.ok) {
+        const pipelineData = await pipelineRes.json();
+        setPipeline(pipelineData);
+      }
+
+      if (eventsRes.ok) {
+        const eventsData = await eventsRes.json();
+        setEvents(Array.isArray(eventsData) ? eventsData : []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch pipeline:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!hydrated || !user) return;
-
-    const fetchPipeline = async () => {
-      try {
-        setLoading(true);
-        const token = await user.getIdToken();
-
-        const [pipelineRes, eventsRes] = await Promise.all([
-          fetch('/api/admin/contracts/pipeline', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }),
-          fetch('/api/events', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }),
-        ]);
-
-        if (pipelineRes.ok) {
-          const pipelineData = await pipelineRes.json();
-          setPipeline(pipelineData);
-        }
-
-        if (eventsRes.ok) {
-          const eventsData = await eventsRes.json();
-          setEvents(Array.isArray(eventsData) ? eventsData : []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch pipeline:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPipeline();
+    void fetchPipeline();
   }, [hydrated, user]);
 
   const triggerModal = (title: string, message: string) => {
@@ -114,41 +181,81 @@ export default function PipelinePage() {
         return;
       }
 
-      const newWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
-      if (!newWindow) {
-        URL.revokeObjectURL(objectUrl);
-        throw new Error('Popup blocked while opening PDF preview.');
-      }
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      openBlobPreview(objectUrl);
     } catch (error) {
       console.error('Failed to open contract PDF:', error);
       triggerModal('PDF Error', (error as Error).message || 'Failed to load PDF.');
     }
   };
 
+  const handleEditDrafting = async (id: string) => {
+    if (!user) return;
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/admin/contracts/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to load contract details');
+      }
+
+      const contract = await response.json();
+      setEditingContractId(id);
+      setCreateContractOpen(true);
+      setContractForm({
+        name: contract.name || '',
+        eventId: contract.eventId || '',
+        type: contract.type || 'Service Agreement',
+        value: contract.value || '',
+        platform: contract.platform || 'DocuSign',
+        recipientName: contract.recipientName || '',
+        recipientEmail: contract.recipientEmail || '',
+        contractFile: null,
+        existingFileName: contract.fileName || '',
+      });
+    } catch (error) {
+      console.error('Failed to load draft contract:', error);
+      triggerModal('Edit Error', (error as Error).message || 'Failed to load contract details.');
+    }
+  };
+
   const handleCreateContract = async () => {
-    if (!user || !contractForm.name || !contractForm.eventId || !contractForm.value) return;
+    if (!user) return;
+
+    if (!contractForm.name || !contractForm.eventId || !contractForm.value || !contractForm.recipientEmail) {
+      triggerModal('Missing Details', 'Please complete the contract title, event, value, and recipient email before saving.');
+      return;
+    }
 
     try {
       setSubmittingContract(true);
       const token = await user.getIdToken();
       const selectedEvent = events.find((event) => event._id === contractForm.eventId);
-      const response = await fetch('/api/admin/contracts', {
-        method: 'POST',
+      const payload = new FormData();
+      payload.append('name', contractForm.name);
+      payload.append('eventId', contractForm.eventId);
+      payload.append('eventName', selectedEvent?.title || 'Unassigned Event');
+      payload.append('type', contractForm.type);
+      payload.append('value', formatContractValue(contractForm.value));
+      payload.append('platform', contractForm.platform);
+      payload.append('recipientName', contractForm.recipientName);
+      payload.append('recipientEmail', contractForm.recipientEmail);
+      payload.append('status', 'drafting');
+      if (contractForm.contractFile) {
+        payload.append('contractFile', contractForm.contractFile);
+      }
+
+      const response = await fetch(editingContractId ? `/api/admin/contracts/${editingContractId}` : '/api/admin/contracts', {
+        method: editingContractId ? 'PUT' : 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          name: contractForm.name,
-          eventId: contractForm.eventId,
-          eventName: selectedEvent?.title || 'Unassigned Event',
-          type: contractForm.type,
-          value: contractForm.value,
-          lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          platform: contractForm.platform,
-          status: 'drafting',
-        }),
+        body: payload,
       });
 
       if (!response.ok) {
@@ -156,27 +263,56 @@ export default function PipelinePage() {
         throw new Error(payload.error || 'Failed to create contract');
       }
 
-      setCreateContractOpen(false);
-      setContractForm({
-        name: '',
-        eventId: '',
-        type: 'Service Agreement',
-        value: '',
-        platform: 'DocuSign',
-      });
-      triggerModal('Contract Drafted', 'The new contract has been added to the drafting pipeline.');
-      const pipelineRes = await fetch('/api/admin/contracts/pipeline', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (pipelineRes.ok) {
-        const pipelineData = await pipelineRes.json();
-        setPipeline(pipelineData);
-      }
+      closeContractModal();
+      triggerModal(
+        editingContractId ? 'Contract Updated' : 'Contract Drafted',
+        editingContractId
+          ? 'The drafting contract has been updated successfully.'
+          : 'The new contract has been added to the drafting pipeline.'
+      );
+      await fetchPipeline(token);
     } catch (error) {
       console.error('Failed to create contract:', error);
-      triggerModal('Contract Error', (error as Error).message || 'Failed to create contract.');
+      triggerModal('Contract Error', (error as Error).message || 'Failed to save contract.');
     } finally {
       setSubmittingContract(false);
+    }
+  };
+
+  const handleOpenSignedContract = (contract: Contract) => {
+    if (contract.reviewLink) {
+      openLinkInNewTab(contract.reviewLink);
+      return;
+    }
+
+    void openContractPdf(contract._id);
+  };
+
+  const handleSendContractEmail = async (id: string) => {
+    if (!user) {
+      triggerModal('Authentication Required', 'Please sign in again before sending contract emails.');
+      return;
+    }
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/admin/contracts/${id}/send`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to send contract email.');
+      }
+
+      triggerModal('Contract Sent', 'The review link has been sent to the recipient email.');
+      await fetchPipeline(token);
+    } catch (error) {
+      console.error('Failed to send contract email:', error);
+      triggerModal('Send Error', (error as Error).message || 'Failed to send contract email.');
     }
   };
 
@@ -209,7 +345,7 @@ export default function PipelinePage() {
             Monitor the lifecycle of all event agreements. Track drafting progress, signature requests, and finalized executions in real-time.
           </p>
         </div>
-        <button onClick={() => setCreateContractOpen(true)} className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-all rounded-xl shadow-md hover:-translate-y-0.5 active:translate-y-0 shadow-[#eebf43]/20 shrink-0">
+        <button onClick={() => { setEditingContractId(null); resetContractForm(); setCreateContractOpen(true); }} className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-all rounded-xl shadow-md hover:-translate-y-0.5 active:translate-y-0 shadow-[#eebf43]/20 shrink-0">
           <Plus size={14} className="text-white" /> Create Contract
         </button>
       </div>
@@ -239,12 +375,12 @@ export default function PipelinePage() {
                 <p className="text-xs font-semibold text-gray-500 mb-6">{contract.type}</p>
                 
                 <div className="mt-auto border-t border-gray-50 pt-4 flex items-center justify-between">
-                  <div className="text-sm font-black text-[#1d1d1f]">{contract.value}</div>
+                  <div className="text-sm font-black text-[#1d1d1f]">{formatContractValue(contract.value)}</div>
                   <div className="flex gap-2">
-                    <button onClick={() => openContractPdf(contract._id)} className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors" title="View PDF">
+                    <button onClick={() => handleEditDrafting(contract._id)} className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors" title="Edit Draft">
                        <Edit size={14} />
                     </button>
-                    <button onClick={() => openContractPdf(contract._id, true)} className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center text-white hover:bg-black transition-colors" title="Download PDF">
+                    <button onClick={() => handleSendContractEmail(contract._id)} className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center text-white hover:bg-black transition-colors" title="Send To Email">
                        <Send size={14} />
                     </button>
                   </div>
@@ -276,7 +412,7 @@ export default function PipelinePage() {
                 <p className="text-xs font-semibold text-gray-500 mb-6">{contract.type}</p>
                 
                 <div className="mt-auto border-t border-gray-50 pt-4 flex items-center justify-between">
-                  <div className="text-sm font-black text-[#1d1d1f]">{contract.value}</div>
+                  <div className="text-sm font-black text-[#1d1d1f]">{formatContractValue(contract.value)}</div>
                   <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest bg-gray-100 px-2 py-1 rounded-md">
                     {contract.platform}
                   </div>
@@ -308,8 +444,8 @@ export default function PipelinePage() {
                 <p className="text-xs font-semibold text-gray-500 mb-6">{contract.type}</p>
                 
                 <div className="mt-auto border-t border-gray-50 pt-4 flex items-center justify-between">
-                  <div className="text-sm font-black text-[#1d1d1f]">{contract.value}</div>
-                  <button onClick={() => openContractPdf(contract._id)} className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:text-emerald-700 transition-colors flex items-center gap-1">
+                  <div className="text-sm font-black text-[#1d1d1f]">{formatContractValue(contract.value)}</div>
+                  <button onClick={() => handleOpenSignedContract(contract)} className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:text-emerald-700 transition-colors flex items-center gap-1">
                     VIEW PDF <ExternalLink size={12} />
                   </button>
                 </div>
@@ -348,12 +484,12 @@ export default function PipelinePage() {
         </div>
       )}
 
-      {/* Create Contract Modal */}
+      {/* Create / Edit Contract Modal */}
       {createContractOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200">
             <button 
-              onClick={() => setCreateContractOpen(false)}
+              onClick={closeContractModal}
               className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
             >
               <X size={16} strokeWidth={2.5} />
@@ -362,10 +498,14 @@ export default function PipelinePage() {
               <div className="w-10 h-10 rounded-xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center">
                 <FileText size={18} className="text-[#eebf43]" />
               </div>
-              <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">New Contract</h3>
+              <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">{editingContractId ? 'Edit Draft Contract' : 'New Contract'}</h3>
             </div>
             
-            <p className="text-[13px] font-medium text-gray-500 mb-6 leading-relaxed">Enter the client's information and attach the drafted agreement file.</p>
+            <p className="text-[13px] font-medium text-gray-500 mb-6 leading-relaxed">
+              {editingContractId
+                ? 'Update the draft details and replace the attached file if needed.'
+                : 'Enter the contract details and attach the drafted agreement file.'}
+            </p>
             
             <div className="space-y-5 mb-8">
               <div>
@@ -373,7 +513,7 @@ export default function PipelinePage() {
                 <input value={contractForm.name} onChange={(event) => setContractForm((current) => ({ ...current, name: event.target.value }))} type="text" placeholder="e.g. Maria Santos Contract" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
               </div>
               <div>
-                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Client Name</label>
+                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Contract Type</label>
                 <input value={contractForm.type} onChange={(event) => setContractForm((current) => ({ ...current, type: event.target.value }))} type="text" placeholder="e.g. Floral Services" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
               </div>
               <div>
@@ -387,24 +527,59 @@ export default function PipelinePage() {
               </div>
               <div>
                 <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Value</label>
-                <input value={contractForm.value} onChange={(event) => setContractForm((current) => ({ ...current, value: event.target.value }))} type="text" placeholder="e.g. ₱45,000" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
+                <input value={contractForm.value} onChange={(event) => setContractForm((current) => ({ ...current, value: event.target.value }))} type="text" placeholder={`e.g. ${PESO_SYMBOL}45,000`} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Name</label>
+                  <input
+                    value={contractForm.recipientName}
+                    onChange={(event) => setContractForm((current) => ({ ...current, recipientName: event.target.value }))}
+                    type="text"
+                    placeholder="e.g. Ian Angelo Valomores"
+                    className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Email</label>
+                  <input
+                    value={contractForm.recipientEmail}
+                    onChange={(event) => setContractForm((current) => ({ ...current, recipientEmail: event.target.value }))}
+                    type="email"
+                    placeholder="name@example.com"
+                    className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
+                  />
+                </div>
               </div>
               
               <div>
                 <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Contract File</label>
-                <div className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-[#fef9ec]/50 hover:border-[#eebf43]/50 transition-colors cursor-pointer group">
+                <label className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-[#fef9ec]/50 hover:border-[#eebf43]/50 transition-colors cursor-pointer group">
                   <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
                     <Upload size={16} className="text-[#eebf43]" />
                   </div>
-                  <span className="text-[12px] font-black text-[#1d1d1f]">Click to upload or drag & drop</span>
-                  <span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">PDF, DOCX (Max 10MB)</span>
-                </div>
+                  <span className="text-[12px] font-black text-[#1d1d1f]">{contractForm.contractFile ? contractForm.contractFile.name : 'Click to upload or drag & drop'}</span>
+                  <span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">
+                    {contractForm.existingFileName && !contractForm.contractFile ? `Current: ${contractForm.existingFileName}` : 'PDF, DOCX (Max 10MB)'}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={(event) =>
+                      setContractForm((current) => ({
+                        ...current,
+                        contractFile: event.target.files?.[0] || null,
+                      }))
+                    }
+                  />
+                </label>
               </div>
             </div>
 
             <div className="flex gap-3">
               <button 
-                onClick={() => setCreateContractOpen(false)}
+                onClick={closeContractModal}
                 className="flex-1 py-3.5 bg-gray-100 text-gray-500 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-gray-200 transition-colors"
               >
                 Cancel
@@ -414,7 +589,7 @@ export default function PipelinePage() {
                 disabled={submittingContract}
                 className="flex-1 py-3.5 bg-[#eebf43] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors shadow-md shadow-[#eebf43]/20 disabled:opacity-70"
               >
-                {submittingContract ? 'Saving...' : 'Create Contract'}
+                {submittingContract ? 'Saving...' : editingContractId ? 'Save Changes' : 'Create Contract'}
               </button>
             </div>
           </div>
@@ -423,3 +598,4 @@ export default function PipelinePage() {
     </div>
   );
 }
+

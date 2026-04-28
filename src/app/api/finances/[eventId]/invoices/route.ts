@@ -3,6 +3,8 @@ import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
+const PESO_SYMBOL = "\u20B1";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -87,6 +89,25 @@ export async function POST(
     };
     
     const result = await invoicesCollection.insertOne(newInvoice);
+
+    const event = await db.collection("events").findOne({ _id: eventObjectId });
+    await db.collection("documents").insertOne({
+      name: `${invoiceNumber} - ${clientName}`,
+      type: "INVOICE",
+      size: `${PESO_SYMBOL}${Number(amount).toLocaleString()}`,
+      eventId: eventObjectId,
+      event: event?.title || "Untitled Event",
+      date: new Date(issueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      status,
+      category: "invoices",
+      icon: "file",
+      sourceKind: "invoice",
+      sourceInvoiceId: result.insertedId,
+      invoiceNumber,
+      description,
+      createdBy: user.uid,
+      createdAt: new Date()
+    });
     
     // TODO: Add audit log for invoice creation
     

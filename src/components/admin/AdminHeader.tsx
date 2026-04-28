@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Search, User, MessageSquare, Briefcase } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, Search, User, MessageSquare, Briefcase, FileSignature } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function AdminHeader() {
+  const router = useRouter();
   const [activeDropdown, setActiveDropdown] = useState<'notifications' | 'profile' | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
@@ -61,6 +63,13 @@ export default function AdminHeader() {
     setActiveDropdown(activeDropdown === dropdown ? null : dropdown);
   };
 
+  const handleNotificationClick = (notification: any) => {
+    setActiveDropdown(null);
+    if (notification?.href) {
+      router.push(notification.href);
+    }
+  };
+
   return (
     <header className="bg-[#fafafa]/80 backdrop-blur-md h-20 flex items-center justify-between px-10 relative border-b border-gray-100/50">
       <div className="flex items-center w-full max-w-md relative">
@@ -97,11 +106,13 @@ export default function AdminHeader() {
                 ) : (
                   notifications.map((notif) => {
                     const timeString = new Date(notif.time).toLocaleDateString() + ' ' + new Date(notif.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const isConsultation = notif.type === 'consultation';
+                    const isContract = notif.type === 'contract-signature' || notif.type === 'contract-revision' || notif.type === 'contract';
                     return (
-                      <div key={notif.id} className="p-3 hover:bg-[#fafafa] rounded-xl cursor-pointer transition-colors mb-1">
+                      <div key={notif.id} onClick={() => handleNotificationClick(notif)} className="p-3 hover:bg-[#fafafa] rounded-xl cursor-pointer transition-colors mb-1">
                         <div className="flex items-start gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${notif.type === 'consultation' ? 'bg-[#fef9ec] text-[#dcae32]' : 'bg-blue-50 text-blue-600'}`}>
-                            {notif.type === 'consultation' ? <Briefcase size={14} /> : <MessageSquare size={14} />}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isConsultation ? 'bg-[#fef9ec] text-[#dcae32]' : isContract ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                            {isConsultation ? <Briefcase size={14} /> : isContract ? <FileSignature size={14} /> : <MessageSquare size={14} />}
                           </div>
                           <div>
                             <p className="text-sm text-[#1d1d1f] font-medium leading-tight" dangerouslySetInnerHTML={{ __html: notif.title.replace(/(from\s+)(.*)/i, '$1<span class="font-bold">$2</span>') }}></p>

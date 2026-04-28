@@ -1,6 +1,7 @@
 'use client';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
   Bell,
@@ -20,8 +21,11 @@ import {
   Send,
   Upload,
   X,
+  Download,
+  Maximize2,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { CustomSelect } from '@/components/ui/CustomInputs';
 
 interface DocumentRecord {
   _id: string;
@@ -46,6 +50,15 @@ interface ContractRecord {
   eventName?: string;
   lastUpdated?: string;
   platform?: string;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileType?: string | null;
+  signedFileUrl?: string | null;
+  signedFileName?: string | null;
+  signedFileType?: string | null;
+  recipientEmail?: string;
+  recipientName?: string;
+  reviewLink?: string;
 }
 
 interface EventRecord {
@@ -53,12 +66,31 @@ interface EventRecord {
   title: string;
 }
 
+interface PreviewModalData {
+  isOpen: boolean;
+  kind: 'documents' | 'contracts' | null;
+  id: string | null;
+  name: string;
+  type: string;
+  event: string;
+  status: string;
+  value?: string;
+  date?: string;
+  fileUrl: string | null;
+  fileName?: string;
+  previewUrl?: string | null;
+  previewMode?: 'iframe' | 'external';
+}
+
 const CATEGORY_DEFINITIONS = [
   { name: 'Contracts & Agreements', slug: 'contracts' },
   { name: 'Invoices & Receipts', slug: 'invoices' },
+  { name: 'Expense Records', slug: 'expenses' },
   { name: 'Event Plans & Moodboards', slug: 'plans' },
   { name: 'Client Uploads', slug: 'uploads' },
 ] as const;
+
+const PESO_SYMBOL = '\u20B1';
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -81,13 +113,49 @@ function inferFileIcon(fileName: string) {
   return 'file';
 }
 
+function formatContractValue(value: string) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return `${PESO_SYMBOL}0`;
+  return trimmed.startsWith(PESO_SYMBOL) ? trimmed : `${PESO_SYMBOL}${trimmed}`;
+}
+
+function buildPdfPreviewUrl(fileUrl: string) {
+  return `${fileUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+}
+
+function resolvePreviewConfig(fileUrl: string | null, fileType?: string | null, fileName?: string | null) {
+  if (!fileUrl) return { previewUrl: null, previewMode: 'iframe' as const };
+
+  const normalizedType = String(fileType || '').toLowerCase();
+  const normalizedName = String(fileName || '').toLowerCase();
+  const isPdf = normalizedType.includes('pdf') || normalizedName.endsWith('.pdf');
+  const isOfficeDocument =
+    normalizedType.includes('wordprocessingml') ||
+    normalizedType.includes('msword') ||
+    normalizedName.endsWith('.doc') ||
+    normalizedName.endsWith('.docx');
+
+  if (isOfficeDocument) {
+    return { previewUrl: fileUrl, previewMode: 'external' as const };
+  }
+
+  if (isPdf) {
+    return { previewUrl: buildPdfPreviewUrl(fileUrl), previewMode: 'iframe' as const };
+  }
+
+  return { previewUrl: fileUrl, previewMode: 'iframe' as const };
+}
+
 export default function DocumentsAdminPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'contracts' | 'repository'>('contracts');
+  const [activeTab, setActiveTab] = useState<'contracts' | 'repository'>('repository');
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '' });
   const [createContractOpen, setCreateContractOpen] = useState(false);
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [uploadDocumentOpen, setUploadDocumentOpen] = useState(false);
   const [submittingContract, setSubmittingContract] = useState(false);
   const [submittingDocument, setSubmittingDocument] = useState(false);
@@ -97,12 +165,36 @@ export default function DocumentsAdminPage() {
   const [contracts, setContracts] = useState<ContractRecord[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [pipelineStats, setPipelineStats] = useState({ drafting: 0, sent: 0, signed: 0 });
+  const [previewModal, setPreviewModal] = useState<PreviewModalData>({
+    isOpen: false,
+    kind: null,
+    id: null,
+    name: '',
+    type: '',
+    event: '',
+    status: '',
+    value: '',
+    date: '',
+    fileUrl: null,
+    fileName: '',
+    previewUrl: null,
+    previewMode: 'iframe',
+  });
+  const [isLoadingPdf, setIsLoadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const handledNotificationRef = useRef<string | null>(null);
+  
   const [contractForm, setContractForm] = useState({
     name: '',
     eventId: '',
     type: 'Service Agreement',
     value: '',
     platform: 'DocuSign',
+    recipientName: '',
+    recipientEmail: '',
+    contractFile: null as File | null,
+    existingFileName: '',
   });
   const [documentForm, setDocumentForm] = useState({
     eventId: '',
@@ -186,6 +278,13 @@ export default function DocumentsAdminPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (requestedTab === 'contracts' || requestedTab === 'repository') {
+      setActiveTab(requestedTab);
+    }
+  }, [searchParams]);
+
   const triggerModal = (title: string, message: string) => {
     setModal({ isOpen: true, title, message });
   };
@@ -223,24 +322,153 @@ export default function DocumentsAdminPage() {
         return;
       }
 
-      const newWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
-      if (!newWindow) {
-        URL.revokeObjectURL(objectUrl);
-        throw new Error('Popup blocked while opening PDF preview.');
-      }
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      return objectUrl;
     } catch (error) {
       console.error('Failed to handle PDF action:', error);
       triggerModal('PDF Error', (error as Error).message || 'Failed to load PDF.');
+      return null;
     }
   };
 
-  const openPdf = (kind: 'documents' | 'contracts', id: string) => {
-    void handlePdfAction(kind, id, false);
+  const openPreviewModal = async (kind: 'documents' | 'contracts', id: string, item: any) => {
+    if (!user) return;
+
+    const contractPreviewUrl =
+      item.status === 'signed'
+        ? item.signedFileUrl || item.fileUrl || null
+        : item.fileUrl || null;
+    const contractPreviewName =
+      item.status === 'signed'
+        ? item.signedFileName || item.fileName || item.name
+        : item.fileName || item.name;
+    const contractPreviewType =
+      item.status === 'signed'
+        ? item.signedFileType || item.fileType || item.type
+        : item.fileType || item.type;
+    const directFileUrl = kind === 'contracts' ? contractPreviewUrl : null;
+
+    if (directFileUrl) {
+      const previewConfig = resolvePreviewConfig(directFileUrl, contractPreviewType, contractPreviewName);
+      setPdfError(null);
+      setIsLoadingPdf(false);
+      setPreviewModal({
+        isOpen: true,
+        kind,
+        id,
+        name: item.name,
+        type: item.fileType || item.type,
+        event: item.event || item.eventName || 'N/A',
+        status: item.status,
+        value: item.value,
+        date: item.date || item.lastUpdated,
+        fileUrl: directFileUrl,
+        fileName: contractPreviewName,
+        previewUrl: previewConfig.previewUrl,
+        previewMode: previewConfig.previewMode,
+      });
+      return;
+    }
+
+    setIsLoadingPdf(true);
+    setPdfError(null);
+
+    try {
+      const fileUrl = await handlePdfAction(kind, id, false);
+      
+      if (fileUrl) {
+        const previewConfig = resolvePreviewConfig(fileUrl, item.fileType || item.type, item.fileName || item.name);
+        setPreviewModal({
+          isOpen: true,
+          kind,
+          id,
+          name: item.name,
+          type: item.type,
+          event: item.event || item.eventName || 'N/A',
+          status: item.status,
+          value: item.value,
+          date: item.date || item.lastUpdated,
+          fileUrl,
+          fileName: item.fileName || item.name,
+          previewUrl: previewConfig.previewUrl,
+          previewMode: previewConfig.previewMode,
+        });
+      }
+    } catch (error) {
+      setPdfError('Failed to load document preview');
+    } finally {
+      setIsLoadingPdf(false);
+    }
   };
 
-  const downloadPdf = (kind: 'documents' | 'contracts', id: string) => {
-    void handlePdfAction(kind, id, true);
+  const closePreviewModal = () => {
+    if (previewModal.fileUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(previewModal.fileUrl);
+    }
+    setPreviewModal({
+      isOpen: false,
+      kind: null,
+      id: null,
+      name: '',
+      type: '',
+      event: '',
+      status: '',
+      value: '',
+      date: '',
+      fileUrl: null,
+      fileName: '',
+      previewUrl: null,
+      previewMode: 'iframe',
+    });
+    setPdfError(null);
+  };
+
+  const openPreviewInNewTab = () => {
+    if (!previewModal.fileUrl) return;
+    const anchor = document.createElement('a');
+    anchor.href = previewModal.fileUrl;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  };
+
+  const downloadCurrentPdf = async () => {
+    if (previewModal.kind === 'contracts' && previewModal.fileUrl && !previewModal.fileUrl.startsWith('blob:')) {
+      const anchor = document.createElement('a');
+      anchor.href = previewModal.fileUrl;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.download = previewModal.fileName || 'contract-draft';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      return;
+    }
+
+    if (previewModal.kind && previewModal.id) {
+      await handlePdfAction(previewModal.kind, previewModal.id, true);
+    }
+  };
+
+  const resetContractForm = () => {
+    setContractForm({
+      name: '',
+      eventId: '',
+      type: 'Service Agreement',
+      value: '',
+      platform: 'DocuSign',
+      recipientName: '',
+      recipientEmail: '',
+      contractFile: null,
+      existingFileName: '',
+    });
+  };
+
+  const closeContractModal = () => {
+    setCreateContractOpen(false);
+    setEditingContractId(null);
+    resetContractForm();
   };
 
   const selectedEventTitle = (eventId: string) => events.find((entry) => entry._id === eventId)?.title || 'Unassigned Event';
@@ -252,6 +480,16 @@ export default function DocumentsAdminPage() {
       [doc.name, doc.event, doc.type, doc.status].some((value) => String(value || '').toLowerCase().includes(normalized))
     );
   }, [documents, searchQuery]);
+
+  const contractEventOptions = useMemo(
+    () =>
+      events.map((event) => ({
+        value: event._id,
+        label: event.title,
+        sublabel: 'Associated event',
+      })),
+    [events]
+  );
 
   const folderCounts = useMemo(
     () =>
@@ -267,50 +505,93 @@ export default function DocumentsAdminPage() {
 
   const primaryContracts = contracts.slice(0, 3);
 
+  const handleEditContract = async (id: string) => {
+    if (!user) return;
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/admin/contracts/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to load contract details');
+      }
+
+      const contract = await response.json();
+      setEditingContractId(id);
+      setCreateContractOpen(true);
+      setContractForm({
+        name: contract.name || '',
+        eventId: contract.eventId || '',
+        type: contract.type || 'Service Agreement',
+        value: contract.value || '',
+        platform: contract.platform || 'DocuSign',
+        recipientName: contract.recipientName || '',
+        recipientEmail: contract.recipientEmail || '',
+        contractFile: null,
+        existingFileName: contract.fileName || '',
+      });
+    } catch (error) {
+      console.error('Failed to load contract:', error);
+      triggerModal('Edit Error', (error as Error).message || 'Failed to load contract details.');
+    }
+  };
+
   const handleCreateContract = async () => {
-    if (!user || !contractForm.name || !contractForm.eventId || !contractForm.value) {
+    if (!user) {
+      return;
+    }
+
+    if (!contractForm.name || !contractForm.eventId || !contractForm.value || !contractForm.recipientEmail) {
+      triggerModal('Missing Details', 'Please complete the contract title, event, value, and recipient email before saving.');
       return;
     }
 
     try {
       setSubmittingContract(true);
       const token = await user.getIdToken();
-      const response = await fetch('/api/admin/contracts', {
-        method: 'POST',
+      const payload = new FormData();
+      payload.append('name', contractForm.name);
+      payload.append('type', contractForm.type);
+      payload.append('value', formatContractValue(contractForm.value));
+      payload.append('eventId', contractForm.eventId);
+      payload.append('eventName', selectedEventTitle(contractForm.eventId));
+      payload.append('platform', contractForm.platform);
+      payload.append('recipientName', contractForm.recipientName);
+      payload.append('recipientEmail', contractForm.recipientEmail);
+      payload.append('status', 'drafting');
+      if (contractForm.contractFile) {
+        payload.append('contractFile', contractForm.contractFile);
+      }
+
+      const response = await fetch(editingContractId ? `/api/admin/contracts/${editingContractId}` : '/api/admin/contracts', {
+        method: editingContractId ? 'PUT' : 'POST',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          name: contractForm.name,
-          type: contractForm.type,
-          value: contractForm.value,
-          eventId: contractForm.eventId,
-          eventName: selectedEventTitle(contractForm.eventId),
-          platform: contractForm.platform,
-          lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          status: 'drafting',
-        }),
+        body: payload,
       });
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || 'Failed to create contract');
+        throw new Error(payload.error || 'Failed to save contract');
       }
 
-      setCreateContractOpen(false);
-      setContractForm({
-        name: '',
-        eventId: '',
-        type: 'Service Agreement',
-        value: '',
-        platform: 'DocuSign',
-      });
+      closeContractModal();
       await loadData();
-      triggerModal('Contract Created', 'The contract has been saved to the drafting pipeline.');
+      triggerModal(
+        editingContractId ? 'Contract Updated' : 'Contract Created',
+        editingContractId
+          ? 'The contract details have been updated successfully.'
+          : 'The contract has been saved to the drafting pipeline.'
+      );
     } catch (error) {
       console.error('Failed to create contract:', error);
-      triggerModal('Contract Error', (error as Error).message || 'Failed to create contract.');
+      triggerModal('Contract Error', (error as Error).message || 'Failed to save contract.');
     } finally {
       setSubmittingContract(false);
     }
@@ -367,6 +648,67 @@ export default function DocumentsAdminPage() {
     }
   };
 
+  useEffect(() => {
+    if (loading || !contracts.length) return;
+
+    const contractId = searchParams.get('contractId');
+    const contractView = searchParams.get('contractView');
+    const currentKey = `${contractId || ''}:${contractView || ''}`;
+
+    if (!contractId || !contractView || handledNotificationRef.current === currentKey) {
+      return;
+    }
+
+    const contract = contracts.find((entry) => entry._id === contractId);
+    if (!contract) {
+      handledNotificationRef.current = currentKey;
+      return;
+    }
+
+    handledNotificationRef.current = currentKey;
+    setActiveTab('contracts');
+
+    const run = async () => {
+      if (contractView === 'edit') {
+        await handleEditContract(contractId);
+      } else {
+        await openPreviewModal('contracts', contractId, contract);
+      }
+
+      router.replace('/admin/documents?tab=contracts', { scroll: false });
+    };
+
+    void run();
+  }, [contracts, loading, openPreviewModal, router, searchParams]);
+
+  const handleSendContractEmail = async (contractId: string) => {
+    if (!user) {
+      triggerModal('Authentication Required', 'Please sign in again before sending contract emails.');
+      return;
+    }
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/admin/contracts/${contractId}/send`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to send contract email.');
+      }
+
+      await loadData();
+      triggerModal('Contract Sent', 'The contract review link has been emailed to the selected recipient.');
+    } catch (error) {
+      console.error('Failed to send contract email:', error);
+      triggerModal('Send Error', (error as Error).message || 'Failed to send contract email.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-full max-w-none text-[#1d1d1f] pb-20 flex items-center justify-center py-20">
@@ -409,7 +751,7 @@ export default function DocumentsAdminPage() {
               <Upload size={14} strokeWidth={2.5} className="text-white" /> Upload Document
             </button>
           ) : (
-            <button onClick={() => setCreateContractOpen(true)} className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-colors rounded-xl shadow-md shadow-[#eebf43]/20 hover:-translate-y-0.5 active:translate-y-0">
+            <button onClick={() => { setEditingContractId(null); resetContractForm(); setCreateContractOpen(true); }} className="flex items-center justify-center gap-2 px-7 py-3.5 bg-[#eebf43] hover:bg-[#dcae32] text-white text-[11px] font-black tracking-[0.1em] uppercase transition-colors rounded-xl shadow-md shadow-[#eebf43]/20 hover:-translate-y-0.5 active:translate-y-0">
               <Plus size={14} strokeWidth={2.5} className="text-white" /> New Contract
             </button>
           )}
@@ -418,16 +760,16 @@ export default function DocumentsAdminPage() {
 
       <div className="flex gap-8 mb-8 border-b border-gray-200/60 pl-2">
         <button
-          onClick={() => setActiveTab('contracts')}
-          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors ${activeTab === 'contracts' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
-        >
-          Contract Management
-        </button>
-        <button
           onClick={() => setActiveTab('repository')}
           className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors ${activeTab === 'repository' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
         >
           Document Repository
+        </button>
+        <button
+          onClick={() => setActiveTab('contracts')}
+          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors ${activeTab === 'contracts' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
+        >
+          Contract Management
         </button>
       </div>
 
@@ -445,17 +787,20 @@ export default function DocumentsAdminPage() {
                     <p className="text-[#a1a1aa] font-bold text-sm tracking-wide">{primaryContracts[0].type}</p>
                   </div>
                   <div className="text-left md:text-right shrink-0">
-                    <div className="text-3xl lg:text-4xl font-black text-[#1d1d1f] mb-1 tracking-tight">{primaryContracts[0].value}</div>
+                    <div className="text-3xl lg:text-4xl font-black text-[#1d1d1f] mb-1 tracking-tight">{formatContractValue(primaryContracts[0].value)}</div>
                     <div className="text-[10px] font-extrabold text-[#a1a1aa] tracking-widest uppercase">UPDATED: {primaryContracts[0].lastUpdated || 'Today'}</div>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-4">
-                  <button onClick={() => openPdf('contracts', primaryContracts[0]._id)} className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white border border-gray-200 rounded-xl text-[11px] font-black text-[#1d1d1f] hover:bg-gray-50 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-sm uppercase tracking-widest">
-                    <Eye size={14} strokeWidth={2.5} /> View PDF
+                  <button onClick={() => handleEditContract(primaryContracts[0]._id)} className="flex items-center justify-center gap-2 px-6 py-3.5 bg-gray-100 border border-gray-200 rounded-xl text-[11px] font-black text-[#1d1d1f] hover:bg-gray-200 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-sm uppercase tracking-widest">
+                    <Edit size={14} strokeWidth={2.5} /> Edit Draft
                   </button>
-                  <button onClick={() => downloadPdf('contracts', primaryContracts[0]._id)} className="flex items-center justify-center gap-2 px-6 py-3.5 bg-[#eebf43] rounded-xl text-[11px] font-black text-white hover:bg-[#dcae32] transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md shadow-[#eebf43]/20 uppercase tracking-widest">
-                    <Upload size={14} strokeWidth={2.5} /> Download PDF
+                  <button onClick={() => openPreviewModal('contracts', primaryContracts[0]._id, primaryContracts[0])} className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white border border-gray-200 rounded-xl text-[11px] font-black text-[#1d1d1f] hover:bg-gray-50 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-sm uppercase tracking-widest">
+                    <Eye size={14} strokeWidth={2.5} /> View Draft
+                  </button>
+                  <button onClick={() => handleSendContractEmail(primaryContracts[0]._id)} className="flex items-center justify-center gap-2 px-6 py-3.5 bg-[#eebf43] rounded-xl text-[11px] font-black text-white hover:bg-[#dcae32] transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md shadow-[#eebf43]/20 uppercase tracking-widest">
+                    <Send size={14} strokeWidth={2.5} /> Send To Email
                   </button>
                 </div>
               </>
@@ -494,7 +839,7 @@ export default function DocumentsAdminPage() {
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-100 text-[9px] font-extrabold tracking-widest text-[#1d1d1f]">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#facc15]" /> {contract.status.toUpperCase()}
                   </div>
-                  <div className="text-2xl font-black text-[#1d1d1f] tracking-tight shrink-0">{contract.value}</div>
+                  <div className="text-2xl font-black text-[#1d1d1f] tracking-tight shrink-0">{formatContractValue(contract.value)}</div>
                 </div>
                 <h3 className="text-2xl font-black text-[#1d1d1f] tracking-tight leading-tight mb-2">{contract.name}</h3>
                 <p className="text-[#71717a] font-medium text-sm leading-relaxed">{contract.type}</p>
@@ -503,8 +848,9 @@ export default function DocumentsAdminPage() {
               <div className="flex justify-between items-center border-t border-gray-50 pt-5">
                 <div className="text-[10px] font-bold text-[#a1a1aa] tracking-widest uppercase">UPDATED: {contract.lastUpdated || 'Today'}</div>
                 <div className="flex gap-4 text-gray-400">
-                  <button className="hover:text-[#1d1d1f] transition-colors" onClick={() => openPdf('contracts', contract._id)} title="View PDF"><Eye size={18} strokeWidth={2.5} /></button>
-                  <button className="hover:text-[#1d1d1f] transition-colors" onClick={() => downloadPdf('contracts', contract._id)} title="Download PDF"><Bell size={18} strokeWidth={2.5} /></button>
+                  <button className="hover:text-[#1d1d1f] transition-colors" onClick={() => handleEditContract(contract._id)} title="Edit Draft"><Edit size={18} strokeWidth={2.5} /></button>
+                  <button className="hover:text-[#1d1d1f] transition-colors" onClick={() => openPreviewModal('contracts', contract._id, contract)} title="View Draft"><Eye size={18} strokeWidth={2.5} /></button>
+                  <button className="hover:text-[#1d1d1f] transition-colors" onClick={() => handleSendContractEmail(contract._id)} title="Send To Email"><Send size={18} strokeWidth={2.5} /></button>
                 </div>
               </div>
             </div>
@@ -595,7 +941,7 @@ export default function DocumentsAdminPage() {
                     <div className="w-12 h-12 rounded-xl bg-[#fef9ec] flex items-center justify-center">
                       {doc.icon === 'file' ? <FileText size={20} className="text-[#eebf43]" /> : <ImageIcon size={20} className="text-[#eebf43]" />}
                     </div>
-                    <button className="text-gray-300 hover:text-[#1d1d1f] transition-colors p-1" onClick={() => openPdf('documents', doc._id)} title="View PDF">
+                    <button className="text-gray-300 hover:text-[#1d1d1f] transition-colors p-1" onClick={() => openPreviewModal('documents', doc._id, doc)} title="View PDF">
                       <Eye size={16} />
                     </button>
                   </div>
@@ -613,6 +959,164 @@ export default function DocumentsAdminPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center">
+                  <FileText size={18} className="text-[#eebf43]" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">{previewModal.name}</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{previewModal.type}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={downloadCurrentPdf}
+                  className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
+                  title={previewModal.kind === 'contracts' ? 'Download Draft File' : 'Download PDF'}
+                >
+                  <Download size={18} />
+                </button>
+                {previewModal.previewMode === 'external' && (
+                  <button
+                    onClick={openPreviewInNewTab}
+                    className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
+                    title="Open Original File"
+                  >
+                    <Maximize2 size={18} />
+                  </button>
+                )}
+                <button 
+                  onClick={closePreviewModal}
+                  className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content - Split View */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left Panel - Document Info */}
+              <div className="w-80 bg-gray-50 border-r border-gray-100 p-6 overflow-y-auto">
+                <div className="space-y-6">
+                  {/* Status Badge */}
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Status</label>
+                    <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase ${
+                      previewModal.status === 'signed' || previewModal.status === 'Reconciled'
+                        ? 'bg-[#fef9ec] text-[#eebf43]'
+                        : previewModal.status === 'drafting' || previewModal.status === 'Pending'
+                        ? 'bg-gray-100 text-gray-600'
+                        : 'bg-blue-50 text-blue-600'
+                    }`}>
+                      {previewModal.status}
+                    </span>
+                  </div>
+
+                  {/* Associated Event */}
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Associated Event</label>
+                    <p className="text-sm font-semibold text-[#1d1d1f]">{previewModal.event}</p>
+                  </div>
+
+                  {/* Contract Value (if contract) */}
+                  {previewModal.value && (
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Contract Value</label>
+                      <p className="text-2xl font-black text-[#1d1d1f] tracking-tight">{formatContractValue(previewModal.value)}</p>
+                    </div>
+                  )}
+
+                  {/* Date */}
+                  {previewModal.date && (
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                      <p className="text-sm font-medium text-gray-700">{previewModal.date}</p>
+                    </div>
+                  )}
+
+                  {/* Document Type */}
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Document Type</label>
+                    <p className="text-sm font-medium text-gray-700">{previewModal.type}</p>
+                  </div>
+
+                  {/* Separator */}
+                  <div className="pt-4 border-t border-gray-200">
+                    <div className="flex gap-3">
+                    
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Panel - Draft / File Preview */}
+              <div className="flex-1 bg-gray-100 p-6 overflow-auto flex items-center justify-center">
+                {isLoadingPdf ? (
+                  <div className="text-center">
+                    <Loader className="animate-spin text-[#eebf43] mx-auto mb-4" size={48} />
+                    <p className="text-gray-500 font-medium">{previewModal.kind === 'contracts' ? 'Loading draft preview...' : 'Loading PDF preview...'}</p>
+                  </div>
+                ) : pdfError ? (
+                  <div className="text-center">
+                    <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+                      <FileText size={32} className="text-red-400" />
+                    </div>
+                    <p className="text-red-600 font-medium mb-2">{previewModal.kind === 'contracts' ? 'Failed to load draft file' : 'Failed to load PDF'}</p>
+                    <p className="text-gray-500 text-sm">{pdfError}</p>
+                  </div>
+                ) : previewModal.previewMode === 'external' ? (
+                  <div className="max-w-md text-center bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
+                    <div className="w-16 h-16 rounded-2xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center mx-auto mb-5">
+                      <FileText size={28} className="text-[#eebf43]" />
+                    </div>
+                    <h4 className="text-lg font-black text-[#1d1d1f] mb-3">Preview In New Tab</h4>
+                    <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                      This file type can’t be safely embedded in the modal because third-party viewers block iframe access.
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <button
+                        onClick={openPreviewInNewTab}
+                        className="px-5 py-3 bg-[#1d1d1f] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-black transition-colors"
+                      >
+                        Open Original
+                      </button>
+                      <button
+                        onClick={downloadCurrentPdf}
+                        className="px-5 py-3 bg-[#eebf43] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors"
+                      >
+                        Download File
+                      </button>
+                    </div>
+                  </div>
+                ) : previewModal.previewUrl ? (
+                  <iframe
+                    ref={iframeRef}
+                    src={previewModal.previewUrl}
+                    className="w-full h-full min-h-[500px] rounded-xl shadow-lg bg-white"
+                    title={previewModal.kind === 'contracts' ? 'Draft File Preview' : 'PDF Preview'}
+                    frameBorder="0"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                      <FileText size={32} className="text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 font-medium">No preview available</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -637,14 +1141,14 @@ export default function DocumentsAdminPage() {
       {createContractOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200">
-            <button onClick={() => setCreateContractOpen(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+            <button onClick={closeContractModal} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
               <X size={16} strokeWidth={2.5} />
             </button>
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center">
                 <FileText size={18} className="text-[#eebf43]" />
               </div>
-              <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">New Contract</h3>
+              <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">{editingContractId ? 'Edit Contract' : 'New Contract'}</h3>
             </div>
 
             <div className="space-y-5 mb-8">
@@ -653,13 +1157,14 @@ export default function DocumentsAdminPage() {
                 <input value={contractForm.name} onChange={(event) => setContractForm((current) => ({ ...current, name: event.target.value }))} type="text" placeholder="e.g. Santos Floral Agreement" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
               </div>
               <div>
-                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Associated Event</label>
-                <select value={contractForm.eventId} onChange={(event) => setContractForm((current) => ({ ...current, eventId: event.target.value }))} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all">
-                  <option value="">Select an event...</option>
-                  {events.map((event) => (
-                    <option key={event._id} value={event._id}>{event.title}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  label="Associated Event"
+                  value={contractForm.eventId}
+                  onChange={(value) => setContractForm((current) => ({ ...current, eventId: value }))}
+                  options={contractEventOptions}
+                  icon={FileText}
+                  placeholder="Select an event..."
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -668,17 +1173,62 @@ export default function DocumentsAdminPage() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Value</label>
-                  <input value={contractForm.value} onChange={(event) => setContractForm((current) => ({ ...current, value: event.target.value }))} type="text" placeholder="e.g. ₱45,000" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
+                  <input value={contractForm.value} onChange={(event) => setContractForm((current) => ({ ...current, value: event.target.value }))} type="text" placeholder={`e.g. ${PESO_SYMBOL}45,000`} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Name</label>
+                  <input
+                    value={contractForm.recipientName}
+                    onChange={(event) => setContractForm((current) => ({ ...current, recipientName: event.target.value }))}
+                    type="text"
+                    placeholder="e.g. Ian Angelo Valomores"
+                    className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Email</label>
+                  <input
+                    value={contractForm.recipientEmail}
+                    onChange={(event) => setContractForm((current) => ({ ...current, recipientEmail: event.target.value }))}
+                    type="email"
+                    placeholder="name@example.com"
+                    className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Contract File</label>
+                <label className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-[#fef9ec]/50 hover:border-[#eebf43]/50 transition-colors cursor-pointer group">
+                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
+                    <Upload size={16} className="text-[#eebf43]" />
+                  </div>
+                  <span className="text-[12px] font-black text-[#1d1d1f]">{contractForm.contractFile ? contractForm.contractFile.name : 'Click to upload or drag & drop'}</span>
+                  <span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">
+                    {contractForm.existingFileName && !contractForm.contractFile ? `Current: ${contractForm.existingFileName}` : 'PDF, DOCX (Max 10MB)'}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={(event) =>
+                      setContractForm((current) => ({
+                        ...current,
+                        contractFile: event.target.files?.[0] || null,
+                      }))
+                    }
+                  />
+                </label>
               </div>
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setCreateContractOpen(false)} className="flex-1 py-3.5 bg-gray-100 text-gray-500 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-gray-200 transition-colors">
+              <button onClick={closeContractModal} className="flex-1 py-3.5 bg-gray-100 text-gray-500 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-gray-200 transition-colors">
                 Cancel
               </button>
               <button disabled={submittingContract} onClick={handleCreateContract} className="flex-1 py-3.5 bg-[#eebf43] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors shadow-md shadow-[#eebf43]/20 disabled:opacity-70">
-                {submittingContract ? 'Saving...' : 'Create Contract'}
+                {submittingContract ? 'Saving...' : editingContractId ? 'Save Changes' : 'Create Contract'}
               </button>
             </div>
           </div>
@@ -719,7 +1269,7 @@ export default function DocumentsAdminPage() {
               </div>
               <div>
                 <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Document File</label>
-                <input type="file" onChange={(event) => setDocumentForm((current) => ({ ...current, file: event.target.files?.[0] || null }))} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
+                <input type="file" onChange={(event) => setDocumentForm((current) => ({ ...current, file: event.target.files?.[0] || null }))} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all cursor-pointer hover:bg-gray-100 hover:border-gray-300" />
               </div>
             </div>
 

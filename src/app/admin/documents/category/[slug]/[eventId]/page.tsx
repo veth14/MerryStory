@@ -1,15 +1,18 @@
 'use client';
 import React, { useState, use, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowRight, FileText, Image as ImageIcon, Eye, Download, X, Info, Folder, Grid, List, MoreVertical, ChevronLeft, CloudUpload, Loader } from 'lucide-react';
+import { ArrowRight, FileText, Image as ImageIcon, Download, X, Info, Folder, Grid, List, ChevronLeft, CloudUpload, Loader } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 const CATEGORY_NAMES: Record<string, string> = {
   'contracts': 'Contracts & Agreements',
   'invoices': 'Invoices & Receipts',
+  'expenses': 'Expense Records',
   'plans': 'Event Plans & Moodboards',
   'uploads': 'Client Uploads'
 };
+
+const PESO_SYMBOL = '\u20B1';
 
 type EventDocument = {
   id: string;
@@ -20,6 +23,24 @@ type EventDocument = {
   status: string;
   icon: string;
 };
+
+function formatContractValue(value: string) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return `${PESO_SYMBOL}0`;
+  return trimmed.startsWith(PESO_SYMBOL) ? trimmed : `${PESO_SYMBOL}${trimmed}`;
+}
+
+function openBlobPreview(objectUrl: string) {
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
 
 export default function EventCategoryDocumentsPage({ params }: { params: Promise<{ slug: string, eventId: string }> }) {
   const { user } = useAuth();
@@ -74,12 +95,7 @@ export default function EventCategoryDocumentsPage({ params }: { params: Promise
         return;
       }
 
-      const newWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
-      if (!newWindow) {
-        URL.revokeObjectURL(objectUrl);
-        throw new Error('Popup blocked while opening PDF preview.');
-      }
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      openBlobPreview(objectUrl);
     } catch (error) {
       console.error('Failed to open event PDF:', error);
       triggerModal('PDF Error', (error as Error).message || 'Failed to load PDF.');
@@ -135,7 +151,7 @@ export default function EventCategoryDocumentsPage({ params }: { params: Promise
                 id: String(contract._id),
                 name: contract.name || 'Untitled Contract',
                 type: contract.type || 'Contract',
-                size: contract.value || 'N/A',
+                size: formatContractValue(contract.value || ''),
                 date: contract.lastUpdated || '',
                 status: contract.status || 'drafting',
                 icon: 'file',
@@ -274,12 +290,13 @@ export default function EventCategoryDocumentsPage({ params }: { params: Promise
           <div className="flex flex-col gap-3">
              <div className="grid grid-cols-12 gap-4 px-6 py-2 mb-1">
               <div className="col-span-8 lg:col-span-6 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase">DOCUMENT NAME</div>
-              <div className="col-span-3 lg:col-span-3 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase hidden lg:block">DATE ADDED</div>
-              <div className="col-span-4 lg:col-span-3 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase text-right">STATUS / ACTIONS</div>
+              <div className="col-span-3 lg:col-span-2 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase hidden lg:block">DATE ADDED</div>
+              <div className="hidden lg:flex lg:col-span-3 items-center justify-center text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase">STATUS</div>
+              <div className="col-span-4 lg:col-span-1 flex items-center justify-end pr-2 lg:pr-4 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase">DOWNLOAD</div>
              </div>
 
              {normalizedDocuments.map((doc) => (
-               <div key={doc.id} className="grid grid-cols-12 gap-4 px-6 lg:px-8 py-4 items-center bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#eebf43]/40 transition-all group cursor-pointer">
+               <div key={doc.id} onClick={() => openPdf(doc.id)} className="grid grid-cols-12 gap-4 px-6 lg:px-8 py-4 items-center bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#eebf43]/40 transition-all group cursor-pointer">
                   <div className="col-span-8 lg:col-span-6 flex items-center gap-4">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors bg-[#fef9ec]">
                       {doc.icon === 'file' ? <FileText size={16} className="text-[#eebf43]" /> : <ImageIcon size={16} className="text-[#eebf43]" />}
@@ -290,18 +307,19 @@ export default function EventCategoryDocumentsPage({ params }: { params: Promise
                     </div>
                   </div>
 
-                  <div className="col-span-3 lg:col-span-3 text-[12px] font-medium text-[#71717a] hidden lg:block">{doc.date}</div>
+                  <div className="col-span-3 lg:col-span-2 text-[12px] font-medium text-[#71717a] hidden lg:block">{doc.date}</div>
                   
-                  <div className="col-span-4 lg:col-span-3 flex justify-end items-center gap-4">
+                  <div className="hidden lg:flex lg:col-span-3 items-center justify-center px-4">
                      <span className={`hidden sm:inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase ${
                         doc.status === 'Reconciled' ? 'bg-[#fef9ec] text-[#eebf43]' : 'bg-gray-50 text-gray-500'
                       }`}>
                         {doc.status}
                      </span>
-                     <div className="flex gap-2">
-                       <button onClick={(e) => { e.stopPropagation(); openPdf(doc.id); }} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors" title="View"><Eye size={16} /></button>
-                       <button onClick={(e) => { e.stopPropagation(); openPdf(doc.id, true); }} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors" title="Download"><Download size={16} /></button>
-                     </div>
+                  </div>
+                  <div className="col-span-4 lg:col-span-1 flex items-center justify-end pr-2 lg:pr-4">
+                     <button onClick={(e) => { e.stopPropagation(); openPdf(doc.id, true); }} className="w-9 h-9 rounded-xl flex items-center justify-center justify-self-end text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors" title="Download">
+                       <Download size={16} />
+                     </button>
                   </div>
                </div>
              ))}
@@ -309,15 +327,14 @@ export default function EventCategoryDocumentsPage({ params }: { params: Promise
         ) : (
            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
              {normalizedDocuments.map((doc) => (
-              <div key={doc.id} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-[#eebf43]/40 transition-all group flex flex-col cursor-pointer">
+              <div key={doc.id} onClick={() => openPdf(doc.id)} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-[#eebf43]/40 transition-all group flex flex-col cursor-pointer">
                 <div className="flex justify-between items-start mb-4">
                   <div className="w-12 h-12 rounded-xl bg-[#fef9ec] flex items-center justify-center">
                     {doc.icon === 'file' ? <FileText size={20} className="text-[#eebf43]" /> : <ImageIcon size={20} className="text-[#eebf43]" />}
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                     <button onClick={(e) => { e.stopPropagation(); openPdf(doc.id, true); }} className="text-gray-300 hover:text-[#1d1d1f] p-1"><Download size={16} /></button>
-                     <button onClick={(e) => { e.stopPropagation(); openPdf(doc.id); }} className="text-gray-300 hover:text-[#1d1d1f] p-1"><MoreVertical size={16} /></button>
-                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); openPdf(doc.id, true); }} className="text-gray-300 hover:text-[#1d1d1f] p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Download">
+                    <Download size={16} />
+                  </button>
                 </div>
                 <h5 className="text-[14px] font-bold text-[#1d1d1f] leading-tight mb-1 group-hover:text-[#eebf43] transition-colors break-words">{doc.name}</h5>
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-4">{doc.type} &bull; {doc.size}</p>
