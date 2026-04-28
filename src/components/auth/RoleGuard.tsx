@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 
 type RoleGuardProps = {
   children: React.ReactNode;
-  allowedRoles: Array<"admin" | "coordinator" | "client">;
+  allowedRoles: Array<"admin" | "coordinator" | "staff">;
 };
 
 export function RoleGuard({ children, allowedRoles }: RoleGuardProps) {

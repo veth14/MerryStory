@@ -6,14 +6,14 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { sendWelcomeActivationEmail } from "@/lib/email";
 
-type AppRole = "admin" | "coordinator" | "client";
+type AppRole = "admin" | "coordinator" | "staff";
 type AccessRole = "ADMINISTRATOR" | "LEAD COORDINATOR" | "PRODUCTION STAFF";
 type UserStatus = "Active" | "On-Site" | "Away" | "Invited";
 
 const ACCESS_ROLE_TO_APP_ROLE: Record<AccessRole, AppRole> = {
   ADMINISTRATOR: "admin",
   "LEAD COORDINATOR": "coordinator",
-  "PRODUCTION STAFF": "client",
+  "PRODUCTION STAFF": "staff",
 };
 
 const VALID_ACCESS_ROLES: AccessRole[] = ["ADMINISTRATOR", "LEAD COORDINATOR", "PRODUCTION STAFF"];

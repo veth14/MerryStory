@@ -7,7 +7,8 @@ import { getFirebaseClientAuth } from "@/lib/firebase/client";
 type AuthProfileResponse = {
   uid: string;
   email: string | null;
-  role: "admin" | "coordinator" | "client" | null;
+  role: "admin" | "coordinator" | "staff" | null;
+  accessRole?: string | null;
 };
 
 type AuthContextType = {

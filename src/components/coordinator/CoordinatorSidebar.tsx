@@ -5,6 +5,8 @@ import { getFirebaseClientAuth } from '@/lib/firebase/client';
 import { signOut } from 'firebase/auth';
 import { LayoutDashboard, Calendar, ClipboardCheck, Users, LogOut } from 'lucide-react';
 
+import { useAuth } from '@/components/auth/AuthProvider';
+
 const navItems = [
   { name: 'Dashboard', href: '/coordinator', icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
   { name: 'Events', href: '/coordinator/events', icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
@@ -15,6 +17,7 @@ const navItems = [
 export default function CoordinatorSidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { role } = useAuth();
 
   const handleSignOut = async () => {
     try {
@@ -25,6 +28,10 @@ export default function CoordinatorSidebar() {
     }
   };
 
+  const filteredNavItems = role === 'staff' 
+    ? navItems.filter(item => item.name === 'Dashboard' || item.name === 'Tasks') 
+    : navItems;
+
   return (
     <aside className="w-[280px] bg-white border-r border-gray-100 h-screen hidden md:flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 relative">
       <div className="p-8 pb-6 text-left flex items-start justify-start flex-col">
@@ -34,7 +41,7 @@ export default function CoordinatorSidebar() {
       
       <nav className="flex-1 overflow-y-auto mt-2 px-4 scrollbar-hide">
         <ul className="space-y-1.5">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const isActive = item.href === '/coordinator' 
               ? pathname === '/coordinator' 
               : pathname.startsWith(item.href);

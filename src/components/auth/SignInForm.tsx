@@ -9,7 +9,8 @@ import { getFirebaseClientAuth } from "@/lib/firebase/client";
 type AuthProfileResponse = {
   uid: string;
   email: string | null;
-  role: "admin" | "coordinator" | "client" | null;
+  role: "admin" | "coordinator" | "staff" | null;
+  accessRole?: string | null;
 };
 
 function toFriendlyAuthErrorMessage(error: unknown): string {
@@ -75,7 +76,9 @@ export function SignInForm() {
         return;
       }
 
-      if (profilePayload.role === "coordinator") {
+      if (profilePayload.role === "coordinator" || profilePayload.accessRole === "PRODUCTION STAFF" || profilePayload.role === "staff") {
+        // Depending on actual usage, clients or production staff may be routed to coordinator 
+        // to view their customized portal or dashboard.
         router.push("/coordinator");
         router.refresh();
         return;

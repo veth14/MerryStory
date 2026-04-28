@@ -2,7 +2,7 @@ import { DecodedIdToken } from "firebase-admin/auth";
 import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
 import { getMongoDb } from "@/lib/mongodb";
 
-const VALID_ROLES = ["admin", "coordinator", "client"] as const;
+const VALID_ROLES = ["admin", "coordinator", "staff"] as const;
 
 export type AppRole = (typeof VALID_ROLES)[number];
 
@@ -10,6 +10,7 @@ export type AuthenticatedUser = {
   uid: string;
   email: string | null;
   role: AppRole | null;
+  accessRole?: string | null;
   token: DecodedIdToken;
 };
 
@@ -48,10 +49,10 @@ function extractBearerToken(request: Request): string {
   return token;
 }
 
-async function getRoleFromMongo(decodedToken: DecodedIdToken): Promise<AppRole | null> {
+async function getUserFromMongo(decodedToken: DecodedIdToken) {
   try {
     const db = await getMongoDb();
-    const usersCollection = db.collection<{ role?: string; firebaseUid?: string; email?: string }>("users");
+    const usersCollection = db.collection<{ role?: string; accessRole?: string; firebaseUid?: string; email?: string }>("users");
 
     const filters: Array<{ firebaseUid?: string; email?: string }> = [{ firebaseUid: decodedToken.uid }];
 
@@ -67,7 +68,7 @@ async function getRoleFromMongo(decodedToken: DecodedIdToken): Promise<AppRole |
     console.log("User found in Mongo:", user);
     console.log("-----------------------------------");
     
-    return normalizeRole(user?.role);
+    return user;
   } catch (error) {
     console.error("DEBUG MONGO AUTH ERROR:", error);
     throw new AuthGuardError(`Database connection error: ${(error as Error).message}`, 500);
@@ -78,13 +79,15 @@ export async function requireAuthenticatedUser(request: Request): Promise<Authen
   const bearerToken = extractBearerToken(request);
   const decodedToken = await getFirebaseAdminAuth().verifyIdToken(bearerToken);
 
+  const mongoUser = await getUserFromMongo(decodedToken);
   const claimRole = normalizeRole(decodedToken.role);
-  const mongoRole = await getRoleFromMongo(decodedToken);
+  const mongoRole = normalizeRole(mongoUser?.role);
 
   return {
     uid: decodedToken.uid,
     email: decodedToken.email || null,
     role: claimRole || mongoRole,
+    accessRole: mongoUser?.accessRole || null,
     token: decodedToken,
   };
 }

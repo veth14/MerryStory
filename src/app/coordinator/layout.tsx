@@ -8,7 +8,7 @@ export default function CoordinatorLayout({
   children: React.ReactNode;
 }) {
   return (
-    <RoleGuard allowedRoles={['coordinator']}>
+    <RoleGuard allowedRoles={['coordinator', 'staff']}>
       <div className="flex h-screen bg-[#fafafa]">
         <CoordinatorSidebar />
         <div className="flex-1 flex flex-col overflow-hidden">

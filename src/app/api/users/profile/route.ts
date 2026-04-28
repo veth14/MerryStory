@@ -67,7 +67,7 @@ export async function PUT(request: NextRequest) {
         email: user.email,
         name: name || "",
         phone: phone || "",
-        role: "client" // default role if not set
+        role: "staff" // default role if not set
       });
     }
 

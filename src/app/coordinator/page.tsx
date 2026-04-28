@@ -2,8 +2,11 @@
 
 import React from 'react';
 import { Calendar, CheckCircle2, Circle, Clock, ClipboardCheck, ArrowRight } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function CoordinatorDashboard() {
+  const { role } = useAuth();
+
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 pt-2">
@@ -12,7 +15,7 @@ export default function CoordinatorDashboard() {
             Overview <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Dashboard</span>
           </p>
           <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
-            Welcome back, <span className="text-[#d4a017] italic pr-2">Coordinator</span>
+            Welcome back, <span className="text-[#d4a017] italic pr-2">{role === 'staff' ? 'Staff' : 'Coordinator'}</span>
           </h1>
           <p className="text-[#71717a] text-sm mt-4 max-w-md leading-relaxed font-medium">
             Here's a quick summary of your assigned events, active tasks, and recent client activity. Let's make today memorable.
@@ -23,6 +26,7 @@ export default function CoordinatorDashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
         {/* Metric 1 */}
+        {role !== 'staff' && (
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#fff9e6] rounded-full blur-3xl -z-10 group-hover:scale-150 transition-transform duration-500 opacity-50"></div>
           <div>
@@ -42,6 +46,7 @@ export default function CoordinatorDashboard() {
             <span className="text-[#1d1d1f]">Oct 14, 2026</span>
           </p>
         </div>
+        )}
 
         {/* Metric 2: Pending Tasks with Breakdown */}
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group flex flex-col justify-between">
@@ -72,6 +77,7 @@ export default function CoordinatorDashboard() {
         </div>
 
         {/* Metric 3: RSVP Tracker */}
+        {role !== 'staff' && (
         <div className="bg-[#1d1d1f] text-white rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-800 relative overflow-hidden group flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -z-10 group-hover:scale-150 transition-transform duration-500"></div>
           <div>
@@ -96,6 +102,7 @@ export default function CoordinatorDashboard() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Main Content Area */}
@@ -160,6 +167,7 @@ export default function CoordinatorDashboard() {
         </div>
 
         {/* Next Assigned Event */}
+        {role !== 'staff' && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden flex flex-col">
           <div className="p-6 border-b border-gray-50">
             <h2 className="text-sm font-black uppercase tracking-widest text-[#1d1d1f]">Up Next</h2>
@@ -189,6 +197,7 @@ export default function CoordinatorDashboard() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,21 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Calendar, ArrowRight, Eye, Tag, Users } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function CoordinatorEventsPage() {
+  const router = useRouter();
+  const { role } = useAuth();
+
+  useEffect(() => {
+    if (role === 'staff') {
+      router.replace('/coordinator');
+    }
+  }, [role, router]);
+
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative">
       {/* Header Section */}

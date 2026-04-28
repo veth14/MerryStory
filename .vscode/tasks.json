@@ -18,6 +18,12 @@
 			"type": "shell",
 			"command": "npm run build",
 			"isBackground": false
+		},
+		{
+			"label": "Test Build",
+			"type": "shell",
+			"command": "npm run build",
+			"isBackground": false
 		}
 	]
 }

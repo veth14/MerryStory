@@ -4,7 +4,7 @@ import { getMongoDb } from "@/lib/mongodb";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(request, ["admin", "coordinator", "client"]);
+    await requireRole(request, ["admin", "coordinator", "staff"]);
 
     const db = await getMongoDb();
     const inquiriesCollection = db.collection("inquiries");

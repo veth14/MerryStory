@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         uid: user.uid,
         email: user.email,
         role: user.role,
+        accessRole: user.accessRole,
       },
       { status: 200 }
     );
