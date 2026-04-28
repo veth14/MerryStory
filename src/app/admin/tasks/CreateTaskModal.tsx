@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Users, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { AlertTriangle, ArrowDown, ArrowUp, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, ShieldAlert, Users, X } from 'lucide-react';
 
 export type StaffOption = {
   uid: string;
@@ -9,6 +10,11 @@ export type StaffOption = {
   role: string;
   appRole: string;
   avatarUrl?: string | null;
+};
+
+export type VendorOption = {
+  name: string;
+  category?: string;
 };
 
 type CreateTaskPayload = {
@@ -27,14 +33,46 @@ type CreateTaskModalProps = {
   onClose: () => void;
   onCreate: (payload: CreateTaskPayload) => Promise<void>;
   staffOptions: StaffOption[];
-  vendorOptions: string[];
+  vendorOptions: VendorOption[];
 };
 
 const PRIORITY_OPTIONS = [
-  { value: 'CRITICAL', label: 'Critical' },
-  { value: 'HIGH', label: 'High' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'LOW', label: 'Low' },
+  {
+    value: 'CRITICAL',
+    label: 'Critical',
+    icon: ShieldAlert,
+    accent: 'text-red-700',
+    tone: 'border-red-200 bg-red-50 text-red-700',
+    iconTone: 'bg-red-100 text-red-600',
+    helper: 'Immediate escalation required',
+  },
+  {
+    value: 'HIGH',
+    label: 'High',
+    icon: AlertTriangle,
+    accent: 'text-orange-700',
+    tone: 'border-orange-200 bg-orange-50 text-orange-700',
+    iconTone: 'bg-orange-100 text-orange-600',
+    helper: 'Needs action soon',
+  },
+  {
+    value: 'MEDIUM',
+    label: 'Medium',
+    icon: ArrowUp,
+    accent: 'text-amber-700',
+    tone: 'border-amber-200 bg-amber-50 text-amber-700',
+    iconTone: 'bg-amber-100 text-amber-600',
+    helper: 'Standard production pace',
+  },
+  {
+    value: 'LOW',
+    label: 'Low',
+    icon: ArrowDown,
+    accent: 'text-emerald-700',
+    tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    iconTone: 'bg-emerald-100 text-emerald-600',
+    helper: 'Flexible scheduling',
+  },
 ];
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
@@ -47,6 +85,7 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
   return {
     value,
     label: `${displayHour}:${minutes} ${period}`,
+    militaryLabel: value,
   };
 });
 
@@ -76,21 +115,188 @@ const formatDateLabel = (value: string) => {
   });
 };
 
-function useClickOutside<T extends HTMLElement>(onClose: () => void) {
-  const ref = useRef<T>(null);
+function useDropdownLayer<T extends HTMLElement, U extends HTMLElement>(isOpen: boolean, onClose: () => void) {
+  const triggerRef = useRef<T>(null);
+  const panelRef = useRef<U>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        onClose();
-      }
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      onClose();
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [onClose]);
+  }, [isOpen, onClose]);
 
-  return ref;
+  return { triggerRef, panelRef };
+}
+
+function FloatingDropdown({
+  isOpen,
+  anchorRef,
+  panelRef,
+  children,
+  className,
+  align = 'start',
+  width,
+  matchAnchorWidth = false,
+  preferredHeight = 280,
+}: {
+  isOpen: boolean;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
+  className: string;
+  align?: 'start' | 'center' | 'end';
+  width?: number;
+  matchAnchorWidth?: boolean;
+  preferredHeight?: number;
+}) {
+  const [style, setStyle] = useState<React.CSSProperties | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const nextWidth = matchAnchorWidth ? rect.width : width ?? rect.width;
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+      const openUp = spaceBelow < Math.min(preferredHeight, 220) && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(160, Math.min(preferredHeight, openUp ? spaceAbove : spaceBelow));
+      const nextStyle: React.CSSProperties = {
+        position: 'fixed',
+        width: nextWidth,
+        zIndex: 260,
+        maxHeight,
+        overflowY: 'auto',
+      };
+
+      if (openUp) {
+        nextStyle.bottom = viewportHeight - rect.top + 8;
+      } else {
+        nextStyle.top = rect.bottom + 8;
+      }
+
+      if (align === 'center') {
+        nextStyle.left = rect.left + rect.width / 2;
+        nextStyle.transform = 'translateX(-50%)';
+      } else if (align === 'end') {
+        nextStyle.left = rect.right - nextWidth;
+      } else {
+        nextStyle.left = rect.left;
+      }
+
+      const viewportWidth = window.innerWidth;
+      if (typeof nextStyle.left === 'number') {
+        nextStyle.left = Math.min(Math.max(12, nextStyle.left), Math.max(12, viewportWidth - nextWidth - 12));
+        if (align === 'center') {
+          nextStyle.transform = undefined;
+        }
+      }
+
+      setStyle(nextStyle);
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [align, anchorRef, isOpen, matchAnchorWidth, preferredHeight, width]);
+
+  if (!isOpen || !style || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div ref={panelRef} style={style} className={className}>
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+function PriorityDropdown({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
+  const selectedPriority = PRIORITY_OPTIONS.find((option) => option.value === value) || PRIORITY_OPTIONS[2];
+  const SelectedIcon = selectedPriority.icon;
+
+  return (
+    <div className="space-y-2" ref={triggerRef}>
+      <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Priority Level</label>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-left flex items-center justify-between transition-all ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${selectedPriority.iconTone}`}>
+            <SelectedIcon className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[14px] font-medium text-gray-900">{selectedPriority.label}</div>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{selectedPriority.helper}</div>
+          </div>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-[#71717a] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        matchAnchorWidth
+        preferredHeight={320}
+        className="rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div>
+          {PRIORITY_OPTIONS.map((option) => {
+            const selected = option.value === value;
+            const Icon = option.icon;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={`w-full px-4 py-3 rounded-xl text-left transition-colors flex items-center justify-between gap-3 ${selected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${selected ? option.iconTone : 'bg-gray-100 text-gray-500'}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-[13px] font-extrabold ${selected ? option.accent : 'text-gray-900'}`}>{option.label}</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{option.helper}</div>
+                  </div>
+                </div>
+                {selected && <Check className="w-4 h-4 text-[#facc15] shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      </FloatingDropdown>
+    </div>
+  );
 }
 
 function Avatar({ staff, small = false }: { staff: StaffOption; small?: boolean }) {
@@ -116,14 +322,14 @@ function ProductionTypeDropdown({
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: VendorOption[];
   onChange: (next: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
 
   return (
-    <div className="space-y-2 relative" ref={ref}>
+    <div className="space-y-2" ref={triggerRef}>
       <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">{label}</label>
       <button
         type="button"
@@ -134,27 +340,34 @@ function ProductionTypeDropdown({
         <ChevronDown className={`w-4 h-4 text-[#71717a] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-[120] top-full left-0 right-0 mt-2 rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200">
-          {options.map((option) => (
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        matchAnchorWidth
+        preferredHeight={300}
+        className="rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div>
+          {options.map((option, index) => (
             <button
-              key={option}
+              key={`${option.name}-${option.category || 'uncategorized'}-${index}`}
               type="button"
               onClick={() => {
-                onChange(option);
+                onChange(option.name);
                 setIsOpen(false);
               }}
               className="w-full px-4 py-3 rounded-xl text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
             >
               <div>
-                <div className="text-[13px] font-extrabold text-gray-900">{option}</div>
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Available option</div>
+                <div className="text-[13px] font-extrabold text-gray-900">{option.name}</div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{option.category || ''}</div>
               </div>
-              {value === option && <Check className="w-4 h-4 text-[#facc15]" />}
+              {value === option.name && <Check className="w-4 h-4 text-[#facc15]" />}
             </button>
           ))}
         </div>
-      )}
+      </FloatingDropdown>
     </div>
   );
 }
@@ -171,11 +384,12 @@ function AppointLeadMultiSelect({
   onChange: (next: string[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
   const selectedStaff = staffOptions.filter((member) => value.includes(member.name));
+  const selectedNamesLabel = selectedStaff.map((member) => member.name).join(', ');
 
   return (
-    <div className="space-y-2 relative" ref={ref}>
+    <div className="space-y-2" ref={triggerRef}>
       <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">{label}</label>
       <button
         type="button"
@@ -196,43 +410,48 @@ function AppointLeadMultiSelect({
             )}
           </div>
           <span className={`truncate text-[14px] ${selectedStaff.length ? 'font-medium text-gray-900' : 'font-medium text-gray-400'}`}>
-            {selectedStaff.length ? `${selectedStaff.length} staff selected` : 'Select team members...'}
+            {selectedStaff.length ? selectedNamesLabel : 'Select team members...'}
           </span>
         </div>
         <ChevronDown className={`w-4 h-4 text-[#71717a] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-[120] top-full left-0 right-0 mt-2 rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="max-h-[280px] overflow-y-auto pr-1">
-            {staffOptions.map((member) => {
-              const selected = value.includes(member.name);
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        width={360}
+        preferredHeight={320}
+        className="rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div className="pr-1">
+          {staffOptions.map((member) => {
+            const selected = value.includes(member.name);
 
-              return (
-                <button
-                  key={member.uid}
-                  type="button"
-                  onClick={() => {
-                    onChange(selected ? value.filter((name) => name !== member.name) : [...value, member.name]);
-                  }}
-                  className="w-full px-4 py-3 rounded-xl text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar staff={member} />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-extrabold text-gray-900 truncate">{member.name}</div>
-                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">{member.role}</div>
-                    </div>
+            return (
+              <button
+                key={member.uid}
+                type="button"
+                onClick={() => {
+                  onChange(selected ? value.filter((name) => name !== member.name) : [...value, member.name]);
+                }}
+                className="w-full px-4 py-3 rounded-xl text-left hover:bg-gray-50 transition-colors flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <Avatar staff={member} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-extrabold text-gray-900 break-words whitespace-normal leading-tight">{member.name}</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider break-words whitespace-normal">{member.role}</div>
                   </div>
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${selected ? 'border-[#facc15] bg-[#fff8d6]' : 'border-gray-200 bg-white'}`}>
-                    {selected && <Check className="w-3.5 h-3.5 text-[#d4a017]" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                </div>
+                <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${selected ? 'border-[#facc15] bg-[#fff8d6]' : 'border-gray-200 bg-white'}`}>
+                  {selected && <Check className="w-3.5 h-3.5 text-[#d4a017]" />}
+                </div>
+              </button>
+            );
+          })}
         </div>
-      )}
+      </FloatingDropdown>
 
       {selectedStaff.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
@@ -257,7 +476,7 @@ function ProductionDatePicker({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
-  const ref = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
   const today = getTodayDate();
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const totalDays = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
@@ -265,7 +484,7 @@ function ProductionDatePicker({
   const days = [...Array(firstDay).fill(null), ...Array.from({ length: totalDays }, (_, index) => index + 1)];
 
   return (
-    <div className="space-y-2 relative" ref={ref}>
+    <div className="space-y-2" ref={triggerRef}>
       <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Due Date</label>
       <button
         type="button"
@@ -276,8 +495,15 @@ function ProductionDatePicker({
         <Calendar className="w-4 h-4 text-[#71717a]" />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-[120] top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl p-6 animate-in fade-in slide-in-from-top-2 duration-200">
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        matchAnchorWidth
+        preferredHeight={360}
+        className="bg-white border border-gray-100 rounded-2xl shadow-2xl p-6 animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div>
           <div className="flex items-center justify-between mb-4">
             <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400">
               <ChevronLeft size={16} />
@@ -322,7 +548,7 @@ function ProductionDatePicker({
             })}
           </div>
         </div>
-      )}
+      </FloatingDropdown>
     </div>
   );
 }
@@ -337,12 +563,12 @@ function TimePicker({
   onChange: (next: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
   const today = getTodayDate();
   const currentTime = getCurrentTime();
 
   return (
-    <div className="space-y-2 relative" ref={ref}>
+    <div className="space-y-2" ref={triggerRef}>
       <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Due Time</label>
       <button
         type="button"
@@ -355,34 +581,39 @@ function TimePicker({
         <Clock3 className="w-4 h-4 text-[#71717a]" />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-[120] top-full left-0 right-0 mt-2 rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="max-h-[280px] overflow-y-auto pr-1">
-            {TIME_OPTIONS.map((option) => {
-              const isDisabled = dueDate === today && option.value < currentTime;
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        matchAnchorWidth
+        preferredHeight={320}
+        className="rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div className="pr-1">
+          {TIME_OPTIONS.map((option) => {
+            const isDisabled = dueDate === today && option.value < currentTime;
 
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => {
-                    onChange(option.value);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full px-4 py-3 rounded-xl text-left transition-colors flex items-center justify-between ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-                >
-                  <div>
-                    <div className="text-[13px] font-extrabold text-gray-900">{option.label}</div>
-                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Schedule slot</div>
-                  </div>
-                  {value === option.value && <Check className="w-4 h-4 text-[#facc15]" />}
-                </button>
-              );
-            })}
-          </div>
+            return (
+              <button
+                key={option.value}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={`w-full px-4 py-3 rounded-xl text-left transition-colors flex items-center justify-between ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+              >
+                <div>
+                  <div className="text-[13px] font-extrabold text-gray-900">{option.label}</div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{option.militaryLabel}</div>
+                </div>
+                {value === option.value && <Check className="w-4 h-4 text-[#facc15]" />}
+              </button>
+            );
+          })}
         </div>
-      )}
+      </FloatingDropdown>
     </div>
   );
 }
@@ -402,7 +633,11 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
   const [error, setError] = useState('');
 
   const normalizedVendorOptions = useMemo(
-    () => Array.from(new Set(['None', ...vendorOptions.filter(Boolean)])),
+    () => {
+      const options = vendorOptions.filter((option) => option?.name?.trim());
+      const deduped = Array.from(new Map(options.map((option) => [option.name, option])).values());
+      return [{ name: 'None', category: '' }, ...deduped.filter((option) => option.name !== 'None')];
+    },
     [vendorOptions]
   );
 
@@ -462,7 +697,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-visible animate-in zoom-in-95 duration-300">
         <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
           <div>
             <h3 className="text-xl font-bold text-gray-900">Add New Task</h3>
@@ -473,7 +708,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[calc(100vh-10rem)] overflow-y-auto overflow-x-visible">
           {error && (
             <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[12px] font-bold text-red-600">
               {error}
@@ -504,27 +739,9 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
             />
           </div>
 
-          <div>
-            <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Priority Level</label>
-            <div className="grid grid-cols-4 gap-2">
-              {PRIORITY_OPTIONS.map((option) => {
-                const selected = formData.priority === option.value;
+          <PriorityDropdown value={formData.priority} onChange={(priority) => setFormData((prev) => ({ ...prev, priority }))} />
 
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, priority: option.value }))}
-                    className={`rounded-xl border px-3 py-2.5 text-[11px] font-extrabold uppercase tracking-widest transition-colors ${selected ? 'border-[#facc15] bg-[#fff8d6] text-gray-900' : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-white'}`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ProductionDatePicker value={formData.dueDate} onChange={(dueDate) => setFormData((prev) => ({ ...prev, dueDate }))} />
             <TimePicker value={formData.dueTime} dueDate={formData.dueDate} onChange={(dueTime) => setFormData((prev) => ({ ...prev, dueTime }))} />
           </div>

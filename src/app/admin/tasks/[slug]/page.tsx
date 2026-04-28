@@ -1,10 +1,11 @@
 'use client';
 
 import React, { use, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { ArrowRight, Check, ChevronDown, Filter, Plus, Users } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
-import CreateTaskModal, { StaffOption } from '@/app/admin/tasks/CreateTaskModal';
+import CreateTaskModal, { StaffOption, VendorOption } from '@/app/admin/tasks/CreateTaskModal';
 
 type TaskItem = {
   id: string;
@@ -37,13 +38,23 @@ type TaskRecord = {
 };
 
 type OptionRecord = {
+  _id?: string | { $oid?: string };
   uid?: string;
   name?: string;
+  vendorName?: string;
+  company?: string;
+  businessName?: string;
+  title?: string;
   firstName?: string;
   lastName?: string;
   role?: string;
   appRole?: string;
   avatarUrl?: string | null;
+  category?: string;
+  serviceCategory?: string;
+  vendorCategory?: string;
+  type?: string;
+  serviceType?: string;
 };
 
 const normalizeStatus = (value?: string) => {
@@ -145,34 +156,134 @@ const extractStaff = (payload: any): StaffOption[] => {
     .filter((record): record is StaffOption => Boolean(record));
 };
 
-const extractNames = (payload: any): string[] => {
-  const records = Array.isArray(payload) ? payload : Array.isArray(payload?.users) ? payload.users : [];
+const extractVendorOptions = (payload: any): VendorOption[] => {
+  const records = Array.isArray(payload) ? payload : Array.isArray(payload?.vendors) ? payload.vendors : [];
 
   return records
-    .map((record: OptionRecord) => record?.name?.trim() || `${record?.firstName || ''} ${record?.lastName || ''}`.trim())
-    .filter(Boolean) as string[];
+    .map((record: OptionRecord | string) => {
+      if (typeof record === 'string') {
+        const normalized = record.trim();
+        return normalized ? { name: normalized, category: '' } : null;
+      }
+
+      const name =
+        record?.name?.trim() ||
+        record?.vendorName?.trim() ||
+        record?.company?.trim() ||
+        record?.businessName?.trim() ||
+        record?.title?.trim() ||
+        `${record?.firstName || ''} ${record?.lastName || ''}`.trim();
+      if (!name) return null;
+
+      return {
+        name,
+        category:
+          record.category?.trim() ||
+          record.serviceCategory?.trim() ||
+          record.vendorCategory?.trim() ||
+          record.serviceType?.trim() ||
+          record.type?.trim() ||
+          '',
+      };
+    })
+    .filter((record): record is VendorOption => Boolean(record));
 };
 
-function useClickOutside<T extends HTMLElement>(onClose: () => void) {
-  const ref = useRef<T>(null);
+function useDropdownLayer<T extends HTMLElement, U extends HTMLElement>(isOpen: boolean, onClose: () => void) {
+  const triggerRef = useRef<T>(null);
+  const panelRef = useRef<U>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        onClose();
-      }
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      onClose();
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [onClose]);
+  }, [isOpen, onClose]);
 
-  return ref;
+  return { triggerRef, panelRef };
+}
+
+function FloatingDropdown({
+  isOpen,
+  anchorRef,
+  panelRef,
+  children,
+  className,
+  align = 'start',
+  width,
+  preferredHeight = 280,
+}: {
+  isOpen: boolean;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
+  className: string;
+  align?: 'start' | 'center' | 'end';
+  width: number;
+  preferredHeight?: number;
+}) {
+  const [style, setStyle] = useState<React.CSSProperties | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      let left = rect.left;
+      if (align === 'center') {
+        left = rect.left + rect.width / 2 - width / 2;
+      } else if (align === 'end') {
+        left = rect.right - width;
+      }
+
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+      const openUp = spaceBelow < Math.min(preferredHeight, 220) && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(160, Math.min(preferredHeight, openUp ? spaceAbove : spaceBelow));
+
+      setStyle({
+        position: 'fixed',
+        ...(openUp ? { bottom: viewportHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
+        left: Math.min(Math.max(12, left), Math.max(12, window.innerWidth - width - 12)),
+        width,
+        zIndex: 240,
+        maxHeight,
+        overflowY: 'auto',
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [align, anchorRef, isOpen, preferredHeight, width]);
+
+  if (!isOpen || !style || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div ref={panelRef} style={style} className={className}>
+      {children}
+    </div>,
+    document.body
+  );
 }
 
 function FilterDropdown({ value, onChange }: { value: string; onChange: (next: string) => void }) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
   const options = [
     { value: 'ALL', label: 'All Status', sublabel: 'Display every task in the registry' },
     { value: 'TO DO', label: 'To Do', sublabel: 'New or queued deliverables' },
@@ -181,7 +292,7 @@ function FilterDropdown({ value, onChange }: { value: string; onChange: (next: s
   ];
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -192,8 +303,16 @@ function FilterDropdown({ value, onChange }: { value: string; onChange: (next: s
         <ChevronDown className={`w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-[280px] rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        align="end"
+        width={280}
+        preferredHeight={240}
+        className="rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div>
           {options.map((option) => (
             <button
               key={option.value}
@@ -212,14 +331,14 @@ function FilterDropdown({ value, onChange }: { value: string; onChange: (next: s
             </button>
           ))}
         </div>
-      )}
+      </FloatingDropdown>
     </div>
   );
 }
 
 function StatusDropdown({ value, onChange }: { value: string; onChange: (next: string) => void }) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
   const options = ['TO DO', 'IN PROGRESS', 'COMPLETED'];
   const toneMap: Record<string, string> = {
     'TO DO': 'text-gray-500 bg-gray-100',
@@ -233,7 +352,7 @@ function StatusDropdown({ value, onChange }: { value: string; onChange: (next: s
   };
 
   return (
-    <div className="relative inline-flex items-center" ref={ref}>
+    <div className="relative inline-flex items-center" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -244,8 +363,16 @@ function StatusDropdown({ value, onChange }: { value: string; onChange: (next: s
         <ChevronDown className={`w-3 h-3 text-current absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute top-full left-1/2 z-30 mt-2 w-[220px] -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        align="center"
+        width={220}
+        preferredHeight={220}
+        className="rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div>
           {options.map((option) => (
             <button
               key={option}
@@ -260,14 +387,13 @@ function StatusDropdown({ value, onChange }: { value: string; onChange: (next: s
                 <span className={`w-2 h-2 rounded-full ${dotMap[option]}`} />
                 <div>
                   <div className="text-[12px] font-extrabold text-gray-900 uppercase tracking-wider">{option}</div>
-                  <div className="text-[10px] font-bold text-gray-400">Update current task stage</div>
                 </div>
               </div>
               {value === option && <Check className="w-4 h-4 text-[#facc15]" />}
             </button>
           ))}
         </div>
-      )}
+      </FloatingDropdown>
     </div>
   );
 }
@@ -278,14 +404,14 @@ function VendorDropdown({
   onChange,
 }: {
   value: string;
-  options: string[];
+  options: VendorOption[];
   onChange: (next: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
 
   return (
-    <div className="relative inline-block w-full max-w-[140px]" ref={ref}>
+    <div className="relative inline-block w-full max-w-[140px]" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -295,29 +421,35 @@ function VendorDropdown({
         <ChevronDown className={`w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-[240px] rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="max-h-[260px] overflow-y-auto pr-1">
-            {options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  onChange(option);
-                  setIsOpen(false);
-                }}
-                className="w-full rounded-xl px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
-              >
-                <div>
-                  <div className="text-[12px] font-extrabold text-gray-900 truncate">{option}</div>
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Vendor partner</div>
-                </div>
-                {value === option && <Check className="w-4 h-4 text-[#facc15]" />}
-              </button>
-            ))}
-          </div>
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        align="end"
+        width={240}
+        preferredHeight={260}
+        className="rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div className="pr-1">
+          {options.map((option, index) => (
+            <button
+              key={`${option.name}-${option.category || 'uncategorized'}-${index}`}
+              type="button"
+              onClick={() => {
+                onChange(option.name);
+                setIsOpen(false);
+              }}
+              className="w-full rounded-xl px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
+            >
+              <div>
+                <div className="text-[12px] font-extrabold text-gray-900 truncate">{option.name}</div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{option.category || ''}</div>
+              </div>
+              {value === option.name && <Check className="w-4 h-4 text-[#facc15]" />}
+            </button>
+          ))}
         </div>
-      )}
+      </FloatingDropdown>
     </div>
   );
 }
@@ -332,12 +464,12 @@ function AssigneeDropdown({
   onChange: (next: string[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
   const selectedNames = task.assignees.map((assignee) => assignee.name);
   const selectedStaff = staffOptions.filter((member) => selectedNames.includes(member.name));
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -347,44 +479,50 @@ function AssigneeDropdown({
         <ChevronDown className={`w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-[290px] rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="max-h-[280px] overflow-y-auto pr-1">
-            {staffOptions.map((member) => {
-              const selected = selectedNames.includes(member.name);
+      <FloatingDropdown
+        isOpen={isOpen}
+        anchorRef={triggerRef}
+        panelRef={panelRef}
+        align="end"
+        width={320}
+        preferredHeight={300}
+        className="rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        <div className="pr-1">
+          {staffOptions.map((member) => {
+            const selected = selectedNames.includes(member.name);
 
-              return (
-                <button
-                  key={member.uid}
-                  type="button"
-                  onClick={() => {
-                    const next = selected ? selectedNames.filter((name) => name !== member.name) : [...selectedNames, member.name];
-                    onChange(next);
-                  }}
-                  className="w-full rounded-xl px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {member.avatarUrl ? (
-                      <img src={member.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-100" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gray-100 border border-gray-100 flex items-center justify-center text-[11px] font-black text-gray-500 uppercase">
-                        {member.name.charAt(0)}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-[12px] font-extrabold text-gray-900 truncate">{member.name}</div>
-                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">{member.role}</div>
+            return (
+              <button
+                key={member.uid}
+                type="button"
+                onClick={() => {
+                  const next = selected ? selectedNames.filter((name) => name !== member.name) : [...selectedNames, member.name];
+                  onChange(next);
+                }}
+                className="w-full rounded-xl px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-100" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gray-100 border border-gray-100 flex items-center justify-center text-[11px] font-black text-gray-500 uppercase">
+                      {member.name.charAt(0)}
                     </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] font-extrabold text-gray-900 break-words whitespace-normal leading-tight">{member.name}</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider break-words whitespace-normal">{member.role}</div>
                   </div>
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${selected ? 'border-[#facc15] bg-[#fff8d6]' : 'border-gray-200 bg-white'}`}>
-                    {selected && <Check className="w-3.5 h-3.5 text-[#d4a017]" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                </div>
+                <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${selected ? 'border-[#facc15] bg-[#fff8d6]' : 'border-gray-200 bg-white'}`}>
+                  {selected && <Check className="w-3.5 h-3.5 text-[#d4a017]" />}
+                </div>
+              </button>
+            );
+          })}
         </div>
-      )}
+      </FloatingDropdown>
 
       <div className="mt-2 flex items-center justify-end gap-1.5">
         {selectedStaff.slice(0, 3).map((member) => (
@@ -415,12 +553,30 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
   const [eventTitle, setEventTitle] = useState('');
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
-  const [vendorOptions, setVendorOptions] = useState<string[]>([]);
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredTasks = filterStatus === 'ALL' ? tasks : tasks.filter((task) => task.status === filterStatus);
-  const vendorOptionValues = useMemo(() => Array.from(new Set(['None', ...vendorOptions.filter(Boolean)])), [vendorOptions]);
+  const vendorOptionValues = useMemo(() => {
+    const deduped = Array.from(new Map(vendorOptions.map((option) => [option.name, option])).values());
+    return [{ name: 'None', category: '' }, ...deduped.filter((option) => option.name !== 'None')];
+  }, [vendorOptions]);
+  const tasksPerPage = 5;
+  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / tasksPerPage));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const paginatedTasks = filteredTasks.slice((currentPageSafe - 1) * tasksPerPage, currentPageSafe * tasksPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   useEffect(() => {
     if (!user) return;
@@ -454,12 +610,15 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
 
         if (vendorResponse.ok) {
           const vendorPayload = await vendorResponse.json();
-          const vendorNames = extractNames(vendorPayload);
-          setVendorOptions(Array.from(new Set(vendorNames)));
+          setVendorOptions(extractVendorOptions(vendorPayload));
+        } else {
+          console.error('Failed to fetch vendors for task page:', vendorResponse.status, await vendorResponse.text().catch(() => ''));
+          setVendorOptions([]);
         }
       } catch (error) {
         console.error('Failed to load tasks page data:', error);
         setTasks([]);
+        setVendorOptions([]);
       }
     };
 
@@ -664,7 +823,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-visible">
         <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100">
           <h2 className="text-[15px] font-extrabold text-gray-900 uppercase tracking-widest">LIVE TASKS REGISTRY</h2>
           <div className="flex items-center gap-4">
@@ -684,13 +843,13 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredTasks.length === 0 ? (
+              {paginatedTasks.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-gray-500 font-medium text-[13px]">
                     No tasks found matching your criteria.
                   </td>
                 </tr>
-              ) : filteredTasks.map((task) => (
+              ) : paginatedTasks.map((task) => (
                 <tr key={task.id} className="hover:bg-gray-50/30 transition-colors group">
                   <td className="px-4 md:px-6 py-4">
                     <div className="font-extrabold text-[14px] text-gray-900 group-hover:text-[#eebf43] transition-colors mb-1 truncate">{task.title}</div>
@@ -728,13 +887,23 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
 
         <div className="p-4 md:p-5 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50/30">
           <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">
-            SHOWING 1-{filteredTasks.length} OF {tasks.length} TASKS
+            SHOWING {filteredTasks.length === 0 ? 0 : (currentPageSafe - 1) * tasksPerPage + 1}-{Math.min(currentPageSafe * tasksPerPage, filteredTasks.length)} OF {filteredTasks.length} TASKS
           </div>
           <div className="flex gap-2">
-            <button className="px-4 py-2 border border-gray-200 bg-white rounded-lg text-[11px] font-extrabold text-gray-500 uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-colors shadow-sm">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPageSafe === 1}
+              className="px-4 py-2 border border-gray-200 bg-white rounded-lg text-[11px] font-extrabold text-gray-500 uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               PREV
             </button>
-            <button className="px-4 py-2 bg-[#facc15] border border-[#eab308] rounded-lg text-[11px] font-extrabold text-gray-900 uppercase tracking-widest hover:bg-[#eab308] transition-colors shadow-sm">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPageSafe === totalPages || filteredTasks.length === 0}
+              className="px-4 py-2 bg-[#facc15] border border-[#eab308] rounded-lg text-[11px] font-extrabold text-gray-900 uppercase tracking-widest hover:bg-[#eab308] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               NEXT
             </button>
           </div>
