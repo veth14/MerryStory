@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { Loader2, Plus, Search, Trash2, Edit, ChevronDown, CheckCircle2, AlertCircle, X, Mail, Phone, User, Tag } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Edit, ChevronDown, CheckCircle2, AlertCircle, X, Mail, Phone, User, Users, Activity, Tag } from 'lucide-react';
 import { CustomSelect } from '@/components/ui/CustomInputs';
 
 interface Vendor {
@@ -211,28 +211,34 @@ export default function VendorsView() {
 
           <button 
             onClick={() => handleOpenModal()}
-            className="flex items-center justify-center gap-2 bg-[#facc15] hover:bg-[#eab308] text-gray-900 font-bold py-3.5 px-6 rounded-xl text-[14px] transition-all shadow-sm hover:shadow-md transform hover:-translate-y-0.5 whitespace-nowrap h-[54px]"
+            className="flex items-center justify-center gap-3 bg-[#facc15] hover:bg-[#eab308] text-white font-black py-3 px-6 rounded-[20px] text-[13px] uppercase tracking-[0.2em] transition-all shadow-xl shadow-[#facc15]/20 active:scale-95 whitespace-nowrap h-[52px]"
           >
-             <Plus className="w-4 h-4" />
+             <Plus className="w-5 h-5" strokeWidth={3} />
              Add Vendor
           </button>
         </div>
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {[
-          { label: 'Total Vendors', value: vendors.length.toString(), color: 'text-blue-500', bg: 'bg-blue-50' },
-          { label: 'Active Contracts', value: vendors.filter(v => v.status === 'Active').length.toString(), color: 'text-green-500', bg: 'bg-green-50' },
-          { label: 'Pending Reviews', value: vendors.filter(v => v.status === 'Under Review').length.toString(), color: 'text-yellow-500', bg: 'bg-yellow-50' }
+          { label: 'Total Partners', value: vendors.length.toString(), icon: Users, color: '#facc15', bg: 'bg-yellow-50/50', border: 'border-yellow-100/50' },
+          { label: 'Active Roster', value: vendors.filter(v => v.status === 'Active').length.toString(), icon: CheckCircle2, color: '#10b981', bg: 'bg-emerald-50/50', border: 'border-emerald-100/50' },
+          { label: 'Quality Reviews', value: vendors.filter(v => v.status === 'Under Review').length.toString(), icon: Activity, color: '#f59e0b', bg: 'bg-amber-50/50', border: 'border-amber-100/50' }
         ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-[0px_4px_12px_rgba(0,0,0,0.01)] flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.bg} ${stat.color} shrink-0`}>
-               <User className="w-6 h-6" />
+          <div key={i} className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-[0px_8px_30px_rgba(0,0,0,0.02)] flex flex-col gap-6 group hover:border-gray-200 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${stat.bg} ${stat.border} transition-transform group-hover:scale-110 duration-300`}>
+                 <stat.icon style={{ color: stat.color }} size={24} />
+              </div>
+              <div className="h-1.5 w-1.5 rounded-full bg-gray-200"></div>
             </div>
             <div>
-              <div className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest">{stat.label}</div>
-              <div className="text-2xl font-black text-gray-900 mt-0.5">{stat.value}</div>
+              <div className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{stat.label}</div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-black text-[#1d1d1f] tracking-tighter">{stat.value}</span>
+                <span className="text-[12px] font-black text-gray-300 uppercase tracking-widest">Units</span>
+              </div>
             </div>
           </div>
         ))}

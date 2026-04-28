@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, ChevronDown, ArrowRight, Eye, CheckCircle2, AlertCircle, X, Send, Loader2, Archive, ArchiveRestore } from 'lucide-react';
+import { Search, ChevronDown, Calendar, MapPin, Users, ArrowRight, Eye, CheckCircle2, AlertCircle, X, Send, Loader2, Archive, ArchiveRestore, Briefcase, Mail } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { CustomSelect } from '@/components/ui/CustomInputs';
 
 type Inquiry = {
   id: string;
@@ -16,11 +17,11 @@ type Inquiry = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
+  'New': 'text-purple-600 bg-purple-50 border-purple-100',
+  'Reviewing': 'text-orange-600 bg-orange-50 border-orange-100',
   'Under Review': 'text-blue-600 bg-blue-50 border-blue-100',
   'Awaiting Docs': 'text-[#dcae32] bg-[#f9f1d8] border-[#f4d98a]/50',
   'Confirmed': 'text-emerald-600 bg-emerald-50 border-emerald-100',
-  'New': 'text-purple-600 bg-purple-50 border-purple-100',
-  'Reviewing': 'text-orange-600 bg-orange-50 border-orange-100',
 };
 
 export default function InquiriesCoordinatorPage() {
@@ -29,12 +30,17 @@ export default function InquiriesCoordinatorPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, openUp: false });
   const [searchQuery, setSearchQuery] = useState('');
   const [classificationFilter, setClassificationFilter] = useState('All Classifications');
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
   const [alert, setAlert] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [modal, setModal] = useState<{ isOpen: boolean, title: string, desc: string, action: (() => void) | null, type: 'info' | 'danger' }>({ isOpen: false, title: '', desc: '', action: null, type: 'info' });
-  const [composeModal, setComposeModal] = useState<{ isOpen: boolean, to: string, client: string, subject: string, message: string, isSending: boolean }>({ isOpen: false, to: '', client: '', subject: '', message: '', isSending: false });
+  const [composeModal, setComposeModal] = useState<{ isOpen: boolean, inquiryId: string, to: string, client: string, subject: string, message: string, isSending: boolean }>({ isOpen: false, inquiryId: '', to: '', client: '', subject: '', message: '', isSending: false });
 
   const showAlert = (message: string, type: 'success' | 'error' = 'success') => {
     setAlert({ message, type });
@@ -53,12 +59,19 @@ export default function InquiriesCoordinatorPage() {
   };
 
   const handleViewDetails = (item: any) => {
-    openModal(`Details: ${item.client}`, `Email: ${item.email}\nEvent: ${item.eventType}\nSubmitted: ${item.submitted}\n\nNeeds:\n${item.needs}`);
+    setModal({ 
+      isOpen: true, 
+      title: item.client, 
+      desc: JSON.stringify(item), // Pass raw item to handle in modal
+      action: null, 
+      type: 'info' 
+    });
   };
 
   const handleReplyEmail = (item: any) => {
     setComposeModal({
       isOpen: true,
+      inquiryId: item.id,
       client: item.client,
       to: item.email,
       subject: `Re: Inquiry for ${item.eventType}`,
@@ -69,7 +82,13 @@ export default function InquiriesCoordinatorPage() {
 
   const handleSendEmail = () => {
     setComposeModal(prev => ({ ...prev, isSending: true }));
-    setTimeout(() => {
+    setTimeout(async () => {
+      // Automatically promote "New" inquiries to "Reviewing"
+      const currentInquiry = inquiries.find(i => i.id === composeModal.inquiryId);
+      if (currentInquiry && currentInquiry.status === 'New') {
+        await handleStatusUpdate(composeModal.inquiryId, 'Reviewing');
+      }
+
       setComposeModal(prev => ({ ...prev, isOpen: false, isSending: false }));
       showAlert('Email sent successfully via Merry Story dashboard!');
     }, 1500);
@@ -97,6 +116,9 @@ export default function InquiriesCoordinatorPage() {
 
   React.useEffect(() => {
     fetchInquiries();
+    const handleScroll = () => setOpenDropdownId(null);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
   }, [user]);
 
   const handleToggleArchive = async (id: string, currentlyArchived: boolean) => {
@@ -136,6 +158,25 @@ export default function InquiriesCoordinatorPage() {
     }
   };
 
+  const toggleDropdown = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (openDropdownId === id) {
+      setOpenDropdownId(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const dropdownHeight = 260; // Estimated max height
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const shouldOpenUp = spaceBelow < dropdownHeight;
+
+      setDropdownPos({ 
+        top: shouldOpenUp ? rect.top - 8 : rect.bottom + 8, 
+        left: rect.left + rect.width / 2,
+        openUp: shouldOpenUp
+      });
+      setOpenDropdownId(id);
+    }
+  };
+
   const filteredInquiries = inquiries.filter(inq => {
     const matchesArchive = activeTab === 'archived' ? inq.isArchived : !inq.isArchived;
     const matchesClassification = classificationFilter === 'All Classifications' || inq.eventType === classificationFilter;
@@ -145,6 +186,15 @@ export default function InquiriesCoordinatorPage() {
       inq.needs.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesArchive && matchesClassification && matchesSearch;
   });
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredInquiries.length / itemsPerPage);
+  const paginatedInquiries = filteredInquiries.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const formatDate = (isoString: string) => {
     try {
@@ -215,19 +265,17 @@ export default function InquiriesCoordinatorPage() {
             />
           </div>
 
-          <div className="relative w-full lg:w-72 shrink-0">
-            <select
-              value={classificationFilter}
-              onChange={e => setClassificationFilter(e.target.value)}
-              className="w-full appearance-none pl-5 pr-10 py-4 bg-white border-2 border-gray-100 shadow-sm rounded-2xl text-sm font-bold text-[#71717a] focus:outline-none focus:border-[#eebf43] transition-all cursor-pointer"
-            >
-              <option>All Classifications</option>
-              <option>Weddings</option>
-              <option>Corporate Events</option>
-              <option>Debuts / Galas</option>
-            </select>
-            <ChevronDown size={14} className="text-[#a1a1aa] absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
+          <CustomSelect 
+            value={classificationFilter}
+            onChange={setClassificationFilter}
+            options={[
+              { value: 'All Classifications', label: 'All Classifications' },
+              { value: 'Weddings', label: 'Weddings' },
+              { value: 'Corporate Events', label: 'Corporate Events' },
+              { value: 'Debuts / Galas', label: 'Debuts / Galas' },
+            ]}
+            className="w-full lg:w-72"
+          />
         </div>
 
         {/* Data Grid — matches admin exactly */}
@@ -244,7 +292,7 @@ export default function InquiriesCoordinatorPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredInquiries.map((item) => (
+                {paginatedInquiries.map((item) => (
                   <tr key={item.id} onClick={() => handleViewDetails(item)} className="group hover:bg-[#fafafa]/50 transition-colors cursor-pointer">
                     <td className="px-8 py-6 align-middle">
                       <div className="flex flex-col">
@@ -260,35 +308,22 @@ export default function InquiriesCoordinatorPage() {
                     <td className="px-8 py-6 align-middle text-center">
                       <span className="text-[12px] font-black text-[#a1a1aa] uppercase">{formatDate(item.submitted)}</span>
                     </td>
-                    <td className="px-8 py-6 align-middle relative">
+                    <td className="px-8 py-6 align-middle">
                       <div className="flex justify-center">
                         <button
-                          onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === item.id ? null : item.id); }}
+                          onClick={(e) => toggleDropdown(e, item.id)}
                           className={`min-w-[140px] px-4 py-2 rounded-xl text-[9px] font-black tracking-widest uppercase border-2 flex items-center justify-between gap-3 transition-all ${STATUS_STYLES[item.status] || 'border-gray-100 text-gray-400 bg-gray-50'}`}
                         >
                           <span className="truncate">{item.status}</span> <ChevronDown size={12} className="opacity-70 shrink-0" />
                         </button>
                       </div>
-                      {openDropdownId === item.id && (
-                        <div onClick={(e) => e.stopPropagation()} className="absolute top-16 left-1/2 -translate-x-1/2 mt-1 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in zoom-in-95 duration-200">
-                          {Object.keys(STATUS_STYLES).map(status => (
-                            <button
-                              key={status}
-                              onClick={(e) => { e.stopPropagation(); handleStatusUpdate(item.id, status); }}
-                              className={`w-full text-left px-5 py-3 text-[10px] font-black tracking-[0.1em] uppercase transition-colors hover:bg-gray-50 ${item.status === status ? 'text-[#eebf43] bg-yellow-50/30' : 'text-[#71717a]'}`}
-                            >
-                              {status}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </td>
                     <td className="px-8 py-6 align-middle">
                       <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleReplyEmail(item); }}
                           disabled={item.isArchived}
-                          className="px-4 py-2.5 bg-[#facc15] text-gray-900 hover:bg-[#eab308] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm border border-[#facc15] disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="px-4 py-2 bg-white text-gray-900 hover:bg-gray-50 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border border-gray-100 disabled:opacity-40 shadow-sm"
                         >
                           <Send size={12} /> Contact
                         </button>
@@ -331,88 +366,216 @@ export default function InquiriesCoordinatorPage() {
             </table>
           </div>
         </div>
+
+        {/* Pagination Controls */}
+        {!isLoading && totalPages > 1 && (
+          <div className="mt-8 flex items-center justify-between px-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+              Showing <span className="text-gray-900">{Math.min(filteredInquiries.length, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(filteredInquiries.length, currentPage * itemsPerPage)}</span> of {filteredInquiries.length} Entries
+            </p>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-6 py-3 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-900 disabled:opacity-40 hover:bg-gray-50 transition-all shadow-sm"
+              >
+                Previous
+              </button>
+              <div className="flex gap-1">
+                {[...Array(totalPages)].map((_, i) => (
+                  <button
+                    key={i + 1}
+                    onClick={() => handlePageChange(i + 1)}
+                    className={`w-10 h-10 rounded-xl text-[10px] font-black transition-all ${currentPage === i + 1 ? 'bg-[#facc15] text-gray-900 shadow-lg shadow-[#facc15]/20' : 'bg-white border border-gray-100 text-gray-400 hover:bg-gray-50'}`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+              <button 
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-6 py-3 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-900 disabled:opacity-40 hover:bg-gray-50 transition-all shadow-sm"
+              >
+                Next Page
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Modal — Details (matches admin) */}
+      {/* Modal - Details Inspector */}
       {modal.isOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-          <div className="bg-white rounded-[32px] shadow-2xl border border-gray-100 w-full max-w-lg p-10 animate-in zoom-in-95 duration-300">
-            <div className="flex justify-between items-start mb-8">
-              <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-[#1d1d1f]">
-                <Eye size={24} />
+        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+          <div className="bg-white rounded-[40px] shadow-2xl border border-gray-100 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Modal Header */}
+            <div className="bg-[#fafafa] px-10 py-8 border-b border-gray-100 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center text-[#eebf43]">
+                  <Eye size={22} />
+                </div>
+                <div>
+                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-1">Inquiry Inspection</p>
+                   <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">{modal.title}</h3>
+                </div>
               </div>
-              <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-2xl transition-colors">
+              <button onClick={closeModal} className="p-3 hover:bg-gray-100 rounded-2xl transition-colors">
                 <X size={20} className="text-[#a1a1aa]" />
               </button>
             </div>
-            <h3 className="text-3xl font-black text-[#1d1d1f] mb-4 tracking-tight">{modal.title}</h3>
-            <div className="bg-gray-50 p-6 rounded-2xl mb-10">
-              <p className="text-[14px] text-[#71717a] font-medium leading-relaxed whitespace-pre-line">{modal.desc}</p>
+
+            {/* Modal Body */}
+            <div className="p-10 space-y-8">
+               {(() => {
+                 const data = JSON.parse(modal.desc);
+                 return (
+                   <>
+                     <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Classification</label>
+                          <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 flex items-center gap-3">
+                             <Briefcase size={16} className="text-[#eebf43]" />
+                             <span className="text-sm font-bold text-gray-900">{data.eventType}</span>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Receipt Identity</label>
+                          <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 flex items-center gap-3">
+                             <Calendar size={16} className="text-[#eebf43]" />
+                             <span className="text-sm font-bold text-gray-900">{formatDate(data.submitted)}</span>
+                          </div>
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Electronic Contact</label>
+                          <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 flex items-center gap-3">
+                             <Mail size={16} className="text-[#eebf43]" />
+                             <span className="text-sm font-bold text-gray-900">{data.email}</span>
+                          </div>
+                        </div>
+                     </div>
+
+                     <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                           <div className="w-1.5 h-4 bg-[#eebf43] rounded-full"></div>
+                           <h4 className="text-[12px] font-black uppercase tracking-widest text-gray-900">Project Requirements</h4>
+                        </div>
+                        <div className="bg-gray-50 p-6 rounded-[30px] border border-gray-100 min-h-[120px]">
+                           <p className="text-[15px] text-gray-600 font-medium leading-relaxed whitespace-pre-line">{data.needs}</p>
+                        </div>
+                     </div>
+                   </>
+                 );
+               })()}
             </div>
-            <button onClick={closeModal} className="w-full py-4 bg-[#1d1d1f] hover:bg-black text-white text-[12px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95 shadow-xl shadow-black/10">
-              Close Inspection
-            </button>
+
+            {/* Modal Footer */}
+            <div className="px-10 py-8 bg-[#fafafa] border-t border-gray-100">
+               <button onClick={closeModal} className="w-full py-4 bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all active:scale-95 shadow-lg shadow-[#facc15]/20 flex items-center justify-center gap-3">
+                  Dismiss Inspection <ArrowRight size={14} />
+               </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Modal — Compose (matches admin) */}
+      {/* Modal - Compose Official Response */}
       {composeModal.isOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-          <div className="bg-white rounded-[32px] shadow-2xl border border-gray-100 w-full max-w-3xl p-10 animate-in zoom-in-95 duration-300">
-            <div className="flex justify-between items-center mb-8 border-b border-gray-100 pb-6">
-              <h3 className="text-2xl font-black text-[#1d1d1f] flex items-center gap-3">
-                <Send size={24} className="text-[#eebf43]" /> Compose Official Response
-              </h3>
-              <button onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))} className="p-2 hover:bg-gray-100 rounded-2xl transition-colors">
+        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+          <div className="bg-white rounded-[40px] shadow-2xl border border-gray-100 w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Modal Header */}
+            <div className="bg-[#fafafa] px-10 py-8 border-b border-gray-100 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center text-[#eebf43]">
+                  <Send size={22} />
+                </div>
+                <div>
+                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-1">Electronic Correspondence</p>
+                   <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">Compose Official Response</h3>
+                </div>
+              </div>
+              <button onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))} className="p-3 hover:bg-gray-100 rounded-2xl transition-colors">
                 <X size={20} className="text-[#a1a1aa]" />
               </button>
             </div>
 
-            <div className="space-y-6 mb-10">
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2 ml-1">Recipient</label>
-                  <div className="px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-sm font-bold text-gray-500">{composeModal.to}</div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2 ml-1">Subject Line</label>
-                  <input
-                    type="text"
-                    value={composeModal.subject}
-                    onChange={(e) => setComposeModal(prev => ({ ...prev, subject: e.target.value }))}
-                    className="w-full px-5 py-4 bg-white border-2 border-gray-100 rounded-2xl text-sm font-bold text-[#1d1d1f] focus:border-[#eebf43] outline-none transition-all"
+            {/* Modal Body */}
+            <div className="p-10 space-y-8">
+               <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Recipient Portfolio</label>
+                    <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 flex items-center gap-3">
+                       <Mail size={16} className="text-[#a1a1aa]" />
+                       <span className="text-sm font-bold text-gray-400">{composeModal.to}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Communication Subject</label>
+                    <input 
+                      type="text" 
+                      value={composeModal.subject} 
+                      onChange={(e) => setComposeModal(prev => ({ ...prev, subject: e.target.value }))}
+                      className="w-full px-5 py-4 bg-white border-2 border-gray-100 rounded-2xl text-sm font-bold text-[#1d1d1f] focus:border-[#eebf43] outline-none transition-all"
+                    />
+                  </div>
+               </div>
+
+               <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                     <div className="w-1.5 h-4 bg-[#eebf43] rounded-full"></div>
+                     <h4 className="text-[12px] font-black uppercase tracking-widest text-gray-900">Message Body</h4>
+                  </div>
+                  <textarea 
+                    rows={10}
+                    value={composeModal.message} 
+                    onChange={(e) => setComposeModal(prev => ({ ...prev, message: e.target.value }))}
+                    className="w-full px-6 py-5 bg-gray-50 border-2 border-gray-100 rounded-[30px] text-[15px] font-medium text-[#1d1d1f] focus:bg-white focus:border-[#eebf43] outline-none transition-all resize-none leading-relaxed"
+                    placeholder="Enter official correspondence details..."
                   />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2 ml-1">Message Body</label>
-                <textarea
-                  rows={10}
-                  value={composeModal.message}
-                  onChange={(e) => setComposeModal(prev => ({ ...prev, message: e.target.value }))}
-                  className="w-full px-6 py-5 bg-white border-2 border-gray-100 rounded-[24px] text-sm font-medium text-[#1d1d1f] focus:border-[#eebf43] outline-none transition-all resize-none leading-relaxed"
-                />
-              </div>
+               </div>
             </div>
 
-            <div className="flex gap-4">
-              <button
-                onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))}
-                className="px-8 py-4 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all"
-              >
-                Discard
-              </button>
-              <button
-                onClick={handleSendEmail}
-                disabled={composeModal.isSending}
-                className="flex-1 py-4 text-white bg-[#1d1d1f] hover:bg-black text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50"
-              >
-                {composeModal.isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                {composeModal.isSending ? 'Transmitting...' : 'Dispatch Email Communication'}
-              </button>
+            {/* Modal Footer */}
+            <div className="px-10 py-8 bg-[#fafafa] border-t border-gray-100 flex gap-4">
+               <button 
+                 onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))} 
+                 className="px-10 py-5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-400 text-[12px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95"
+               >
+                  Discard
+               </button>
+               <button 
+                 onClick={handleSendEmail}
+                 disabled={composeModal.isSending}
+                 className="flex-1 py-4 bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all flex items-center justify-center gap-4 active:scale-95 shadow-lg shadow-[#facc15]/20 disabled:opacity-50"
+               >
+                  {composeModal.isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                  {composeModal.isSending ? 'Transmitting Data...' : 'Dispatch Communication'}
+                  {!composeModal.isSending && <ArrowRight size={14} />}
+               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Floating Status Dropdown - Fixed Position to pop out of table */}
+      {openDropdownId && (
+        <div 
+          style={{ 
+            position: 'fixed', 
+            top: dropdownPos.top, 
+            left: dropdownPos.left, 
+            transform: dropdownPos.openUp ? 'translate(-50%, -100%)' : 'translate(-50%, 0)' 
+          }} 
+          className="w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[300] py-2 overflow-hidden animate-in zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {Object.keys(STATUS_STYLES).map(status => (
+            <button
+              key={status}
+              onClick={() => handleStatusUpdate(openDropdownId, status)}
+              className={`w-full text-left px-5 py-3 text-[10px] font-black tracking-[0.1em] uppercase transition-colors hover:bg-gray-50 ${inquiries.find(i => i.id === openDropdownId)?.status === status ? 'text-[#eebf43] bg-yellow-50/30' : 'text-[#71717a]'}`}
+            >
+              {status}
+            </button>
+          ))}
         </div>
       )}
     </>

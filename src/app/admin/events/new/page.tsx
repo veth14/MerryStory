@@ -181,6 +181,22 @@ function NewEventForm() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to create event');
 
+      // Promote inquiry to "Confirmed" upon successful workspace initialization
+      if (inquiryId) {
+        try {
+          await fetch(`/api/inquiries/${inquiryId}`, {
+            method: 'PUT',
+            headers: { 
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}` 
+            },
+            body: JSON.stringify({ status: 'Confirmed' }),
+          });
+        } catch (e) {
+          console.error("Failed to update source inquiry status:", e);
+        }
+      }
+
       setSuccess(true);
       setTimeout(() => router.push(`/admin/events/${result.eventId}`), 1500);
     } catch (err: any) {

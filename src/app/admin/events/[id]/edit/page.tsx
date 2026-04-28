@@ -414,9 +414,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         {/* Footer Actions */}
         <div className="flex items-center justify-end gap-10 pt-10 border-t border-gray-100">
           <Link href={`/admin/events/${id}`} className="text-[12px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] hover:text-gray-900 transition-colors">Discard Changes</Link>
-          <button type="submit" disabled={isSubmitting} className="px-12 py-5 bg-[#facc15] hover:bg-[#eab308] text-gray-900 text-[12px] font-black uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-[#facc15]/20 transition-all disabled:opacity-70 flex items-center gap-4 active:scale-95 group">
+          <button type="submit" disabled={isSubmitting} className="px-10 py-4 bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-[#facc15]/20 transition-all disabled:opacity-70 flex items-center gap-4 active:scale-95 group">
             {isSubmitting ? <Loader2 className="animate-spin h-5 w-5" /> : <Save size={20} className="group-hover:scale-110 transition-transform" />}
             Save Production Configuration
+            <ArrowRight size={16} />
           </button>
         </div>
       </form>

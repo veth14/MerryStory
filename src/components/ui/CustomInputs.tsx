@@ -43,13 +43,13 @@ export const CustomSelect = ({
       )}
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-4 py-3.5 bg-gray-50 border-2 rounded-xl flex items-center justify-between cursor-pointer transition-all ${isOpen ? 'border-[#facc15] bg-white ring-4 ring-[#facc15]/10' : 'border-gray-100 hover:border-gray-200'}`}
+        className={`w-full px-4 py-3.5 bg-gray-50 border-2 rounded-2xl flex items-center justify-between cursor-pointer transition-all ${isOpen ? 'border-[#facc15] bg-white ring-4 ring-[#facc15]/10' : 'border-gray-100 hover:border-gray-200'}`}
       >
         <div className="flex items-center gap-3">
           {selectedOption?.avatar ? (
             <img src={selectedOption.avatar} alt="" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
           ) : selectedOption ? (
-             <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 uppercase">
+             <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-black text-gray-400 uppercase border border-gray-200/50">
                 {selectedOption.label.charAt(0)}
              </div>
           ) : null}
