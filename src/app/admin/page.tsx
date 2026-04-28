@@ -1,5 +1,16 @@
 "use client";
 import React, { useEffect, useState } from 'react';
+// Mock function to fetch activity logs for a member (replace with real API call)
+async function fetchMemberActivity(memberId: string) {
+  // Simulate network delay
+  await new Promise(res => setTimeout(res, 300));
+  // Return mock data
+  return [
+    { time: '2026-04-28 10:15', action: 'Logged in' },
+    { time: '2026-04-28 10:20', action: 'Viewed event details' },
+    { time: '2026-04-28 10:25', action: 'Updated task status' },
+  ];
+}
 import { useAuth } from '@/components/auth/AuthProvider';
 
 interface Event {
@@ -35,6 +46,9 @@ function getStatusConfig(status?: string) {
 }
 
 export default function AdminDashboard() {
+    const [openActivityMember, setOpenActivityMember] = useState<string | null>(null);
+    const [activityLogs, setActivityLogs] = useState<Record<string, any[]>>({});
+    const [activityLoading, setActivityLoading] = useState<Record<string, boolean>>({});
   const { user } = useAuth();
 
   const [activeEventsCount, setActiveEventsCount] = useState<number>(0);
@@ -45,6 +59,25 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string>('');
   const [tasksCount, setTasksCount] = useState<number>(0);
   const [tasksPercentChange, setTasksPercentChange] = useState<number>(0);
+  const [activeEvents, setActiveEvents] = useState<any[]>([]);
+  // Helper to check if event is ongoing today
+  function isEventOngoingToday(event: any) {
+    if (!event.date) return false;
+    // Support both single date and date ranges (e.g., '2026-04-28' or '2026-04-28 to 2026-04-30')
+    const today = new Date();
+    const eventDateStr = event.date;
+    if (eventDateStr.includes('to')) {
+      const [start, end] = eventDateStr.split('to').map((d: string) => new Date(d.trim()));
+      return today >= start && today <= end;
+    } else {
+      const eventDate = new Date(eventDateStr);
+      return (
+        eventDate.getFullYear() === today.getFullYear() &&
+        eventDate.getMonth() === today.getMonth() &&
+        eventDate.getDate() === today.getDate()
+      );
+    }
+  }
 
   const [staff, setStaff] = useState<StaffUser[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -65,7 +98,7 @@ export default function AdminDashboard() {
           headers: { Authorization: `Bearer ${idToken}` },
         });
         if (!eventsRes.ok) throw new Error('Failed to fetch events');
-        const events: Event[] = await eventsRes.json();
+        const events: any[] = await eventsRes.json();
 
         const now = new Date();
         const thisMonth = now.getMonth();
@@ -73,19 +106,23 @@ export default function AdminDashboard() {
         const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
         const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
 
+        // Filter and sort active events by updatedAt or createdAt
+        const active = events
+          .filter(event => event.status && event.status.toLowerCase().includes('active'))
+          .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+        setActiveEvents(active);
+        // For count and percent change
         let currentMonthActive = 0;
         let prevMonthActive = 0;
-        events.forEach(event => {
-          if (event.status && event.status.toLowerCase().includes('active')) {
-            if (event.date) {
-              const eventDate = new Date(event.date);
-              const eventMonth = eventDate.getMonth();
-              const eventYear = eventDate.getFullYear();
-              if (eventMonth === thisMonth && eventYear === thisYear) currentMonthActive++;
-              else if (eventMonth === lastMonth && eventYear === lastMonthYear) prevMonthActive++;
-            } else {
-              currentMonthActive++;
-            }
+        active.forEach(event => {
+          if (event.date) {
+            const eventDate = new Date(event.date);
+            const eventMonth = eventDate.getMonth();
+            const eventYear = eventDate.getFullYear();
+            if (eventMonth === thisMonth && eventYear === thisYear) currentMonthActive++;
+            else if (eventMonth === lastMonth && eventYear === lastMonthYear) prevMonthActive++;
+          } else {
+            currentMonthActive++;
           }
         });
         setActiveEventsCount(currentMonthActive);
@@ -203,15 +240,17 @@ export default function AdminDashboard() {
         // Fetch both users and staff collections in parallel
         const [usersRes, staffRes] = await Promise.all([
           fetch('/api/users', { headers: { Authorization: `Bearer ${idToken}` } }),
-          fetch('/api/staff', { headers: { Authorization: `Bearer ${idToken}` } }),
+          fetch('/api/staffs', { headers: { Authorization: `Bearer ${idToken}` } }),
         ]);
 
-        if (!usersRes.ok) throw new Error('Failed to fetch users');
+        if (!usersRes.ok && !staffRes.ok) throw new Error('Failed to fetch users or staff');
 
-        const usersData = await usersRes.json();
-        const users: StaffUser[] = Array.isArray(usersData) ? usersData : usersData.users ?? [];
+        let users: StaffUser[] = [];
+        if (usersRes.ok) {
+          const usersData = await usersRes.json();
+          users = Array.isArray(usersData) ? usersData : usersData.users ?? [];
+        }
 
-        // Staff collection is optional — don't throw if it fails
         let staffMembers: StaffUser[] = [];
         if (staffRes.ok) {
           const staffData = await staffRes.json();
@@ -467,90 +506,88 @@ export default function AdminDashboard() {
         <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4">
           <div>
             <h2 className="text-2xl md:text-[28px] font-bold text-gray-900 tracking-tight">In Production</h2>
-            <p className="text-[15px] text-gray-500 mt-2 font-medium">Real-time status of high-priority projects.</p>
+            <p className="text-[15px] text-gray-500 mt-2 font-medium">Real-time status of current projects.</p>
           </div>
-          <button className="text-[13px] font-bold text-gray-700 bg-white border border-gray-200 px-6 py-2.5 rounded-lg shadow-sm hover:bg-gray-50 transition-colors">
-            Manage All Events
-          </button>
+          <a
+            href="/admin/events"
+            className="text-[13px] font-bold text-gray-700 bg-white border border-gray-200 px-6 py-2.5 rounded-lg shadow-sm hover:bg-gray-50 transition-colors flex items-center gap-2 group overflow-hidden relative"
+            style={{ position: 'relative' }}
+            onClick={e => {
+              e.currentTarget.classList.add('animate-slideOutLeft');
+              setTimeout(() => {
+                window.location.href = '/admin/events';
+              }, 350);
+              e.preventDefault();
+            }}
+          >
+            <span className="transition-transform duration-300 group-hover:translate-x-1">Manage All Events</span>
+            <style jsx>{`
+              .animate-slideOutLeft {
+                animation: slideOutLeft 0.35s cubic-bezier(0.4,0,0.2,1) forwards;
+              }
+              @keyframes slideOutLeft {
+                0% { transform: translateX(0); opacity: 1; }
+                100% { transform: translateX(-100vw); opacity: 0; }
+              }
+            `}</style>
+          </a>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-          {/* Card 1 */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group cursor-pointer">
-            <div className="h-52 bg-gray-200 relative overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&q=80&w=800" alt="Starlight Gala" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute top-5 right-5 bg-[#d4a017] text-[10px] font-bold px-3 py-1.5 rounded-md text-white tracking-widest uppercase shadow-sm">Live</div>
-            </div>
-            <div className="p-8 flex flex-col flex-grow">
-              <h3 className="text-xl font-bold text-gray-900 mb-3 tracking-tight">Starlight Gala 2024</h3>
-              <p className="text-[14px] text-gray-500 leading-relaxed mb-8 flex-grow">Annual fundraising event for Global Heritage Fund at the Crystal Palace.</p>
-              <div className="flex justify-between text-[11px] font-bold tracking-wider text-gray-400 uppercase mb-3">
-                <span>Budget Spent</span><span className="text-gray-900">72%</span>
-              </div>
-              <div className="w-full bg-gray-100 h-1.5 rounded-full mb-8 overflow-hidden">
-                <div className="bg-gray-900 h-full rounded-full" style={{ width: '72%' }}></div>
-              </div>
-              <div className="flex justify-between items-center pt-5 border-t border-gray-100">
-                <div className="flex -space-x-3">
-                  <img className="w-8 h-8 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                  <img className="w-8 h-8 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                  <div className="w-8 h-8 rounded-full border-2 border-white bg-[#facc15] text-[10px] font-bold flex items-center justify-center text-yellow-900 z-10">+4</div>
+          {(() => {
+            // Prioritize ongoing event today
+            const ongoing = activeEvents.find(isEventOngoingToday);
+            const rest = activeEvents.filter(e => !ongoing || e._id !== ongoing._id);
+            const prioritized = ongoing ? [ongoing, ...rest] : rest;
+            return prioritized.slice(0, 3).map(event => {
+              const budget = event.budget || {};
+              const progress = budget.total ? Math.round((budget.utilized || 0) / budget.total * 100) : (event.health || 0);
+              const progressLabel = budget.total ? 'Budget Spent' : 'Health';
+              const progressColor = budget.total ? 'bg-gray-900' : 'bg-emerald-500';
+              const isOngoing = isEventOngoingToday(event);
+              return (
+                <div key={event._id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group cursor-pointer">
+                  <div className="h-52 bg-gray-200 relative overflow-hidden flex items-center justify-center">
+                    {event.coverImageUrl ? (
+                      <img src={event.coverImageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <span className="text-gray-400 text-lg">No Image</span>
+                    )}
+                    <div className={`absolute top-5 right-5 px-3 py-1.5 rounded-md text-[10px] font-bold tracking-widest uppercase shadow-sm ${isOngoing ? 'bg-green-600 text-white animate-pulse' : 'bg-[#d4a017] text-white'}`}>{isOngoing ? 'Ongoing' : event.status}</div>
+                  </div>
+                  <div className="p-8 flex flex-col flex-grow">
+                    <h3 className="text-xl font-bold text-gray-900 mb-3 tracking-tight">
+                      {event.title}
+                    </h3>
+                    <p className="text-[14px] text-gray-500 leading-relaxed mb-8 flex-grow">
+                      {event.type || '—'} | {event.date ? new Date(event.date).toLocaleDateString() : 'No Date'}
+                    </p>
+                    <div className="flex justify-between text-[11px] font-bold tracking-wider text-gray-400 uppercase mb-3">
+                      <span>{progressLabel}</span><span className="text-gray-900">{progress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-100 h-1.5 rounded-full mb-8 overflow-hidden">
+                      <div className={`${progressColor} h-full rounded-full`} style={{ width: `${progress}%` }}></div>
+                    </div>
+                    <div className="flex justify-between items-center pt-5 border-t border-gray-100">
+                      <div className="flex -space-x-3">
+                        {event.team && Array.isArray(event.team) && event.team.slice(0, 3).map((member: any, i: number) => (
+                          member.avatarUrl ? (
+                            <img key={i} className="w-8 h-8 rounded-full border-2 border-white object-cover" src={member.avatarUrl} alt={member.name} />
+                          ) : (
+                            <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-200 text-[10px] font-bold flex items-center justify-center text-gray-400 z-10">{member.name?.charAt(0).toUpperCase()}</div>
+                          )
+                        ))}
+                        {event.team && event.team.length > 3 && (
+                          <div className="w-8 h-8 rounded-full border-2 border-white bg-[#facc15] text-[10px] font-bold flex items-center justify-center text-yellow-900 z-10">+{event.team.length - 3}</div>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">{event.date ? new Date(event.date).toLocaleDateString() : ''}</span>
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">Dec 12 - 14</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2 */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group cursor-pointer">
-            <div className="h-52 bg-gray-200 relative overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1540039155732-d6749b109c91?auto=format&fit=crop&q=80&w=800" alt="Neon Nights" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute top-5 right-5 bg-gray-900 text-[10px] font-bold px-3 py-1.5 rounded-md text-white tracking-widest uppercase shadow-sm">Pre-Prod</div>
-            </div>
-            <div className="p-8 flex flex-col flex-grow">
-              <h3 className="text-xl font-bold text-gray-900 mb-3 tracking-tight">Neon Nights Concert</h3>
-              <p className="text-[14px] text-gray-500 leading-relaxed mb-8 flex-grow">Electronic music showcase featuring local indie artists and immersive light shows.</p>
-              <div className="flex justify-between text-[11px] font-bold tracking-wider text-gray-400 uppercase mb-3">
-                <span>Timeline</span><span className="text-gray-900">35%</span>
-              </div>
-              <div className="w-full bg-gray-100 h-1.5 rounded-full mb-8 overflow-hidden">
-                <div className="bg-[#d4a017] h-full rounded-full" style={{ width: '35%' }}></div>
-              </div>
-              <div className="flex justify-between items-center pt-5 border-t border-gray-100">
-                <div className="flex -space-x-3">
-                  <img className="w-8 h-8 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                  <div className="w-8 h-8 rounded-full border-2 border-white bg-[#facc15] text-[10px] font-bold flex items-center justify-center text-yellow-900 z-10">+8</div>
-                </div>
-                <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">Jan 05 - 06</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3 */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group cursor-pointer">
-            <div className="h-52 bg-gray-200 relative overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1509631179647-0c5000642f53?auto=format&fit=crop&q=80&w=800" alt="Fashion Week" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute top-5 right-5 bg-[#d4a017] text-[10px] font-bold px-3 py-1.5 rounded-md text-white tracking-widest uppercase shadow-sm">Live</div>
-            </div>
-            <div className="p-8 flex flex-col flex-grow">
-              <h3 className="text-xl font-bold text-gray-900 mb-3 tracking-tight">Avenue Fashion Week</h3>
-              <p className="text-[14px] text-gray-500 leading-relaxed mb-8 flex-grow">Main stage production for 12 international designers during the global event.</p>
-              <div className="flex justify-between text-[11px] font-bold tracking-wider text-gray-400 uppercase mb-3">
-                <span>Technical Ready</span><span className="text-gray-900">92%</span>
-              </div>
-              <div className="w-full bg-gray-100 h-1.5 rounded-full mb-8 overflow-hidden">
-                <div className="bg-gray-900 h-full rounded-full" style={{ width: '92%' }}></div>
-              </div>
-              <div className="flex justify-between items-center pt-5 border-t border-gray-100">
-                <div className="flex -space-x-3">
-                  <img className="w-8 h-8 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                  <img className="w-8 h-8 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                  <div className="w-8 h-8 rounded-full border-2 border-white bg-[#facc15] text-[10px] font-bold flex items-center justify-center text-yellow-900 z-10">+11</div>
-                </div>
-                <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">Feb 18 - 25</span>
-              </div>
-            </div>
-          </div>
+              );
+            });
+          })()}
         </div>
       </div>
 
@@ -573,7 +610,15 @@ export default function AdminDashboard() {
         </div>
 
         {/* Scrollable list */}
-        <div className="flex-1 overflow-y-auto max-h-[420px] pr-1 space-y-3">
+        <div
+          style={{
+            maxHeight: 420,
+            overflowY: 'auto',
+            minHeight: 0,
+            width: '100%'
+          }}
+          className="grid grid-cols-1 md:grid-cols-2 gap-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+        >
 
           {/* Skeletons */}
           {staffLoading && [...Array(3)].map((_, i) => (
@@ -607,45 +652,82 @@ export default function AdminDashboard() {
             const { dot, label, textClass } = getStatusConfig(member.status);
             const isUnavailable = !member.status || member.status.toLowerCase() === 'unavailable';
 
+            const memberId = member._id?.toString() ?? i.toString();
+            const isOpen = openActivityMember === memberId;
             return (
               <div
-                key={member._id?.toString() ?? i}
-                className={`bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-gray-200 transition-colors ${isUnavailable ? 'opacity-70 hover:opacity-100' : ''}`}
+                key={memberId}
+                className={`bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-2 hover:border-gray-200 transition-colors ${isUnavailable ? 'opacity-70 hover:opacity-100' : ''}`}
               >
-                <div className="flex items-center gap-5">
-                  {member.avatarUrl ? (
-                    <img
-                      className={`w-12 h-12 rounded bg-gray-100 object-cover shadow-sm ${isUnavailable ? 'grayscale' : ''}`}
-                      src={member.avatarUrl}
-                      alt={member.name}
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded bg-gray-100 shadow-sm flex items-center justify-center text-gray-400 font-bold text-lg">
-                      {member.name?.charAt(0).toUpperCase()}
+                <div className="flex items-center justify-between gap-5">
+                  <div className="flex items-center gap-5">
+                    {member.avatarUrl ? (
+                      <img
+                        className={`w-12 h-12 rounded bg-gray-100 object-cover shadow-sm ${isUnavailable ? 'grayscale' : ''}`}
+                        src={member.avatarUrl}
+                        alt={member.name}
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded bg-gray-100 shadow-sm flex items-center justify-center text-gray-400 font-bold text-lg">
+                        {member.name?.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[15px] font-bold text-gray-900">{member.name}</p>
+                      <p className="text-[11px] font-bold tracking-wider text-gray-400 uppercase mt-1">
+                        {member.role || '—'}
+                      </p>
                     </div>
-                  )}
-                  <div>
-                    <p className="text-[15px] font-bold text-gray-900">{member.name}</p>
-                    <p className="text-[11px] font-bold tracking-wider text-gray-400 uppercase mt-1">
-                      {member.role || '—'}
-                    </p>
+                  </div>
+                  <div className="flex items-center gap-8">
+                    <div className="text-right hidden sm:block">
+                      <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Status</p>
+                      <p className={`text-[12px] mt-1.5 flex items-center justify-end gap-2 ${textClass}`}>
+                        <span className={`w-2 h-2 rounded-full ${dot}`} />
+                        {label}
+                      </p>
+                    </div>
+                    <button
+                      className={`text-[12px] font-bold text-[#eebf43] hover:underline px-3 py-1.5 rounded transition-colors ${isOpen ? 'underline' : ''}`}
+                      title="View Activity"
+                      onClick={async () => {
+                        if (isOpen) {
+                          setOpenActivityMember(null);
+                        } else {
+                          setOpenActivityMember(memberId);
+                          if (!activityLogs[memberId]) {
+                            setActivityLoading(prev => ({ ...prev, [memberId]: true }));
+                            const logs = await fetchMemberActivity(memberId);
+                            setActivityLogs(prev => ({ ...prev, [memberId]: logs }));
+                            setActivityLoading(prev => ({ ...prev, [memberId]: false }));
+                          }
+                        }
+                      }}
+                    >
+                      View Activity
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-8">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Status</p>
-                    <p className={`text-[12px] mt-1.5 flex items-center justify-end gap-2 ${textClass}`}>
-                      <span className={`w-2 h-2 rounded-full ${dot}`} />
-                      {label}
-                    </p>
+                {isOpen && (
+                  <div className="mt-3 bg-gray-50 border border-gray-100 rounded-xl p-4 text-[13px] text-gray-700 shadow-inner animate-in fade-in duration-300">
+                    <div className="font-bold text-[12px] text-gray-900 mb-2">Recent Activity</div>
+                    {activityLoading[memberId] ? (
+                      <div className="text-gray-400 italic">Loading...</div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {(activityLogs[memberId] || []).map((log, idx) => (
+                          <li key={idx} className="flex items-center gap-2">
+                            <span className="text-gray-400">{log.time}</span>
+                            <span className="">{log.action}</span>
+                          </li>
+                        ))}
+                        {(!activityLogs[memberId] || activityLogs[memberId].length === 0) && (
+                          <li className="text-gray-400 italic">No activity found.</li>
+                        )}
+                      </ul>
+                    )}
                   </div>
-                  <button className="text-gray-300 hover:text-gray-900 transition-colors p-2">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
-                </div>
+                )}
               </div>
             );
           })}
