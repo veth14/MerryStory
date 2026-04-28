@@ -1,8 +1,9 @@
 'use client';
 import React, { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Save, User, Briefcase, MapPin, Tag, Mail, Phone, AlertTriangle, Trash2, Plus, ArrowRight, X, Minus } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, User, Briefcase, MapPin, Tag, Mail, Phone, AlertTriangle, Trash2, Plus, ArrowRight, X, Minus, Clock } from 'lucide-react';
 import { CustomSelect, CustomDatePicker } from '@/components/ui/CustomInputs';
+import { TaskTimeField } from '@/app/admin/tasks/TaskControls';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Link from 'next/link';
 
@@ -50,6 +51,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     title: '',
     type: '',
     date: '',
+    time: '',
     location: '',
     leadAssigned: '',
     status: '',
@@ -90,10 +92,15 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       setEvent(eventData);
 
       // Set Form Data
+      const rawDate = eventData.date || '';
+      const [datePart, timePartRaw] = rawDate.split('T');
+      const timePart = timePartRaw ? timePartRaw.slice(0, 5) : '';
+
       setFormData({
         title: eventData.title,
         type: eventData.type,
-        date: eventData.date,
+        date: datePart || rawDate,
+        time: timePart,
         location: eventData.location,
         leadAssigned: eventData.leadAssigned,
         status: eventData.status || 'Active',
@@ -146,7 +153,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       const data = new FormData();
       data.append('title', formData.title);
       data.append('type', formData.type);
-      data.append('date', formData.date);
+      const combinedDate = formData.date
+        ? `${formData.date}T${formData.time || '00:00'}`
+        : '';
+      data.append('date', combinedDate);
       data.append('location', formData.location);
       data.append('leadAssigned', formData.leadAssigned);
       data.append('status', formData.status);
@@ -301,9 +311,20 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                   onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
                 />
 
-                <div className="md:col-span-2 space-y-2">
+                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Venue Location</label>
                   <input required type="text" name="location" value={formData.location} onChange={(e) => setFormData(p => ({ ...p, location: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Production Time</label>
+                  <TaskTimeField
+                    value={formData.time}
+                    onChange={(val) => setFormData((prev) => ({ ...prev, time: val }))}
+                    size="modal"
+                    className="space-y-0"
+                    triggerClassName="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none"
+                  />
                 </div>
               </div>
            </div>

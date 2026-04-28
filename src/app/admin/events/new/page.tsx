@@ -1,14 +1,15 @@
 'use client';
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { 
-  ArrowLeft, ArrowRight, MapPin, Briefcase, AlertTriangle, User, Tag, 
-  Image as ImageIcon, UploadCloud, Phone, Mail, Loader2, 
-  Check, UserCheck, Save
+import {
+  ArrowLeft, ArrowRight, MapPin, Briefcase, AlertTriangle, User, Tag,
+  Image as ImageIcon, UploadCloud, Phone, Mail, Loader2,
+  Check, UserCheck, Save, Clock
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CustomSelect, CustomDatePicker } from '@/components/ui/CustomInputs';
+import { TaskTimeField } from '@/app/admin/tasks/TaskControls';
 
 interface StaffUser {
   uid: string;
@@ -39,6 +40,7 @@ function NewEventForm() {
     title: '',
     type: 'Wedding',
     date: '',
+    time: '',
     location: '',
     budgetTotal: '',
     vendorTarget: '',
@@ -168,7 +170,17 @@ function NewEventForm() {
 
     try {
       const data = new FormData();
-      Object.entries(formData).forEach(([key, value]) => data.append(key, value));
+      const combinedDate = formData.date
+        ? `${formData.date}T${formData.time || '00:00'}`
+        : '';
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key === 'time') return;
+        if (key === 'date') {
+          data.append(key, combinedDate);
+          return;
+        }
+        data.append(key, value);
+      });
       data.append('coverImage', coverImage); // Guaranteed to be here due to validation
 
       const idToken = await user!.getIdToken();
@@ -317,13 +329,26 @@ function NewEventForm() {
                   onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
                 />
 
-                <div className="md:col-span-2 space-y-2">
+                <div className="space-y-2">
                   <label className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-500">
                     <MapPin size={12} /> Master Location / Venue
                   </label>
                   <input 
                     required type="text" name="location" value={formData.location} onChange={handleChange} placeholder="e.g. Shangri-La The Fort, Manila"
                     className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-500">
+                    <Clock size={12} /> Live Production Time
+                  </label>
+                  <TaskTimeField
+                    value={formData.time}
+                    onChange={(val) => setFormData((prev) => ({ ...prev, time: val }))}
+                    size="modal"
+                    className="space-y-0"
+                    triggerClassName="min-h-[56px] rounded-2xl border-2 border-gray-100 bg-gray-50 px-5 py-4 text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10"
                   />
                 </div>
               </div>
