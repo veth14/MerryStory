@@ -59,7 +59,7 @@ export default function CoordinatorHeader() {
   };
 
   return (
-    <header className="bg-transparent h-20 flex items-center justify-between px-10 relative">
+    <header className="bg-[#fafafa]/80 backdrop-blur-md h-20 flex items-center justify-between px-10 relative border-b border-gray-100/50">
       <div className="flex items-center w-full max-w-md relative">
         <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
         <input

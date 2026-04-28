@@ -532,95 +532,6 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
 
-        {/* Guest Modal */}
-        {isGuestModalOpen && (
-          <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-            <div className="bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95">
-              <h2 className="text-[28px] font-black text-gray-900 tracking-tight mb-2">Initialize <span className="text-[#facc15] italic">Guest</span></h2>
-              <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-10">Add attendee to production manifest</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Legal Name</label>
-                  <input 
-                    type="text" 
-                    value={newGuest.name}
-                    onChange={(e) => setNewGuest(p => ({ ...p, name: e.target.value }))}
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
-                    placeholder="Enter guest name..."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Address</label>
-                  <input 
-                    type="email" 
-                    value={newGuest.email}
-                    onChange={(e) => setNewGuest(p => ({ ...p, email: e.target.value }))}
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Table Number</label>
-                  <input 
-                    type="text" 
-                    value={newGuest.tableNo}
-                    onChange={(e) => setNewGuest(p => ({ ...p, tableNo: e.target.value }))}
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
-                    placeholder="e.g. 12 or TBD"
-                  />
-                </div>
-                
-                <CustomSelect 
-                  label="RSVP Status"
-                  value={newGuest.status}
-                  onChange={(val) => setNewGuest(p => ({ ...p, status: val as any }))}
-                  options={[
-                    { value: 'Confirmed', label: 'Confirmed' },
-                    { value: 'Pending', label: 'Pending' },
-                    { value: 'Declined', label: 'Declined' },
-                  ]}
-                />
-                
-                <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 cursor-pointer hover:bg-gray-100 transition-all" onClick={() => setNewGuest(p => ({ ...p, plusOne: !p.plusOne }))}>
-                   <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${newGuest.plusOne ? 'bg-[#facc15] border-[#facc15]' : 'border-gray-200 bg-white'}`}>
-                      {newGuest.plusOne && <Check size={14} className="text-white" strokeWidth={4} />}
-                   </div>
-                   <span className="text-[13px] font-extrabold text-gray-900">Plus One (+1)</span>
-                </div>
-              </div>
-
-              <div className="flex gap-4 mt-12">
-                <button 
-                  onClick={() => setIsGuestModalOpen(false)}
-                  className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400"
-                >
-                  Discard
-                </button>
-                <button 
-                  onClick={async () => {
-                    if (!newGuest.name) return;
-                    const idToken = await user!.getIdToken();
-                    const res = await fetch(`/api/events/${id}/guests`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-                      body: JSON.stringify(newGuest),
-                    });
-                    if (res.ok) {
-                      const data = await res.json();
-                      setGuests(prev => [data, ...prev]);
-                      setIsGuestModalOpen(false);
-                      setNewGuest({ name: '', email: '', phone: '', status: 'Confirmed', tableNo: '', plusOne: false });
-                      fetchEventDetails(); // Refresh stats
-                    }
-                  }}
-                  className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20"
-                >
-                  Initialize Guest
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -672,69 +583,160 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   );
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-20">
-      {/* Header Area */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <Link href="/admin/events" className="inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest text-gray-400 hover:text-gray-600 uppercase transition-colors mb-4">
-            <ArrowLeft size={12} strokeWidth={3} /> Return to Portfolio
-          </Link>
-          <div className="flex items-center gap-4">
-            <span className="bg-[#facc15] text-gray-900 text-[10px] font-black px-3 py-1.5 uppercase tracking-[0.15em] rounded-lg shadow-sm">{event.status}</span>
-            <div className="h-1 w-1 rounded-full bg-gray-300"></div>
-            <span className="text-gray-400 text-[11px] font-black tracking-widest uppercase">{new Date(event.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-          </div>
-          <h1 className="text-[54px] font-black text-gray-900 tracking-tight leading-none mt-4">
-            {event.title.includes(' ')
-              ? <>{event.title.split(' ').slice(0, -1).join(' ')} <span className="text-[#facc15] italic">{event.title.split(' ').pop()}</span></>
-              : event.title
-            }
-          </h1>
-          <div className="flex items-center gap-6 mt-4">
-            <div className="flex items-center gap-1.5 text-[13px] font-bold text-gray-400">
-              <MapPin size={16} className="text-gray-400" />
-              {event.location}
+    <>
+      <div className="w-full space-y-6 animate-in fade-in duration-500 pb-20">
+        {/* Header Area */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <Link href="/admin/events" className="inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest text-gray-400 hover:text-gray-600 uppercase transition-colors mb-4">
+              <ArrowLeft size={12} strokeWidth={3} /> Return to Portfolio
+            </Link>
+            <div className="flex items-center gap-4">
+              <span className="bg-[#facc15] text-gray-900 text-[10px] font-black px-3 py-1.5 uppercase tracking-[0.15em] rounded-lg shadow-sm">{event.status}</span>
+              <div className="h-1 w-1 rounded-full bg-gray-300"></div>
+              <span className="text-gray-400 text-[11px] font-black tracking-widest uppercase">{new Date(event.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
             </div>
-            <div className="w-10 h-0.5 bg-gray-200 rounded-full"></div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{event.health}% Health</span>
-              <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-[#d4a017]" style={{ width: `${event.health}%` }}></div>
+            <h1 className="text-[54px] font-black text-gray-900 tracking-tight leading-none mt-4">
+              {event.title.includes(' ')
+                ? <>{event.title.split(' ').slice(0, -1).join(' ')} <span className="text-[#facc15] italic">{event.title.split(' ').pop()}</span></>
+                : event.title
+              }
+            </h1>
+            <div className="flex items-center gap-6 mt-4">
+              <div className="flex items-center gap-1.5 text-[13px] font-bold text-gray-400">
+                <MapPin size={16} className="text-gray-400" />
+                {event.location}
+              </div>
+              <div className="w-10 h-0.5 bg-gray-200 rounded-full"></div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{event.health}% Health</span>
+                <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#d4a017]" style={{ width: `${event.health}%` }}></div>
+                </div>
               </div>
             </div>
           </div>
+
+          <div className="flex flex-col items-end gap-4">
+            <Link
+              href={`/admin/events/${id}/edit`}
+              className="bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] px-10 py-4 rounded-xl shadow-xl shadow-[#facc15]/20 transition-all active:scale-95 flex items-center gap-2 group"
+            >
+              EDIT DETAILS
+              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
         </div>
 
-        <div className="flex flex-col items-end gap-4">
-          <Link
-            href={`/admin/events/${id}/edit`}
-            className="bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] px-10 py-4 rounded-xl shadow-xl shadow-[#facc15]/20 transition-all active:scale-95 flex items-center gap-2 group"
-          >
-            EDIT DETAILS
-            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-          </Link>
+        {/* Top Level Tabs */}
+        <div className="border-b border-gray-200 mt-8 flex gap-8">
+          {['pre-event', 'event-day', 'post-event'].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-3 text-[13px] font-extrabold uppercase tracking-wider transition-colors border-b-2 relative top-[1px] ${activeTab === tab ? 'border-[#d4a017] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              {tab.replace('-', ' ')}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content Rendering */}
+        <div className="pt-4">
+          {activeTab === 'pre-event' && renderPreEvent()}
+          {activeTab === 'event-day' && renderEventDay()}
+          {activeTab === 'post-event' && renderPostEvent()}
         </div>
       </div>
 
-      {/* Top Level Tabs */}
-      <div className="border-b border-gray-200 mt-8 flex gap-8">
-        {['pre-event', 'event-day', 'post-event'].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`pb-3 text-[13px] font-extrabold uppercase tracking-wider transition-colors border-b-2 relative top-[1px] ${activeTab === tab ? 'border-[#d4a017] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-          >
-            {tab.replace('-', ' ')}
-          </button>
-        ))}
-      </div>
+      {isGuestModalOpen && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95">
+            <h2 className="text-[28px] font-black text-gray-900 tracking-tight mb-2">Initialize <span className="text-[#facc15] italic">Guest</span></h2>
+            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-10">Add attendee to production manifest</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Legal Name</label>
+                <input 
+                  type="text" 
+                  value={newGuest.name}
+                  onChange={(e) => setNewGuest(p => ({ ...p, name: e.target.value }))}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
+                  placeholder="Enter guest name..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Address</label>
+                <input 
+                  type="email" 
+                  value={newGuest.email}
+                  onChange={(e) => setNewGuest(p => ({ ...p, email: e.target.value }))}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Table Number</label>
+                <input 
+                  type="text" 
+                  value={newGuest.tableNo}
+                  onChange={(e) => setNewGuest(p => ({ ...p, tableNo: e.target.value }))}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
+                  placeholder="e.g. 12 or TBD"
+                />
+              </div>
+              
+              <CustomSelect 
+                label="RSVP Status"
+                value={newGuest.status}
+                onChange={(val) => setNewGuest(p => ({ ...p, status: val as any }))}
+                options={[
+                  { value: 'Confirmed', label: 'Confirmed' },
+                  { value: 'Pending', label: 'Pending' },
+                  { value: 'Declined', label: 'Declined' },
+                ]}
+              />
+              
+              <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 cursor-pointer hover:bg-gray-100 transition-all" onClick={() => setNewGuest(p => ({ ...p, plusOne: !p.plusOne }))}>
+                 <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${newGuest.plusOne ? 'bg-[#facc15] border-[#facc15]' : 'border-gray-200 bg-white'}`}>
+                    {newGuest.plusOne && <Check size={14} className="text-white" strokeWidth={4} />}
+                 </div>
+                 <span className="text-[13px] font-extrabold text-gray-900">Plus One (+1)</span>
+              </div>
+            </div>
 
-      {/* Tab Content Rendering */}
-      <div className="pt-4">
-        {activeTab === 'pre-event' && renderPreEvent()}
-        {activeTab === 'event-day' && renderEventDay()}
-        {activeTab === 'post-event' && renderPostEvent()}
-      </div>
+            <div className="flex gap-4 mt-12">
+              <button 
+                onClick={() => setIsGuestModalOpen(false)}
+                className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400"
+              >
+                Discard
+              </button>
+              <button 
+                onClick={async () => {
+                  if (!newGuest.name) return;
+                  const idToken = await user!.getIdToken();
+                  const res = await fetch(`/api/events/${id}/guests`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                    body: JSON.stringify(newGuest),
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setGuests(prev => [data, ...prev]);
+                    setIsGuestModalOpen(false);
+                    setNewGuest({ name: '', email: '', phone: '', status: 'Confirmed', tableNo: '', plusOne: false });
+                    fetchEventDetails(); // Refresh stats
+                  }
+                }}
+                className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20"
+              >
+                Initialize Guest
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isMilestoneModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
@@ -800,7 +802,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

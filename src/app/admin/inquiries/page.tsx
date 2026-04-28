@@ -164,186 +164,188 @@ export default function InquiriesAdminPage() {
   };
 
   return (
-    <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative animate-in fade-in duration-500">
-      
-      {/* Toast Alert */}
-      {alert && (
-        <div className={`fixed bottom-8 right-8 z-50 px-8 py-5 rounded-[20px] shadow-2xl border animate-in slide-in-from-bottom-5 fade-in ${alert.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-4`}>
-          {alert.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
-          <span className="text-[14px] font-black uppercase tracking-widest">{alert.message}</span>
+    <>
+      <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative animate-in fade-in duration-500">
+        
+        {/* Toast Alert */}
+        {alert && (
+          <div className={`fixed bottom-8 right-8 z-50 px-8 py-5 rounded-[20px] shadow-2xl border animate-in slide-in-from-bottom-5 fade-in ${alert.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'} flex items-center gap-4`}>
+            {alert.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+            <span className="text-[14px] font-black uppercase tracking-widest">{alert.message}</span>
+          </div>
+        )}
+
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4 pt-2">
+          <div>
+            <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+              Workspace <ArrowRight size={10} className="text-[#eebf43]" /> <span className="text-[#1d1d1f]">Pipeline</span>
+            </p>
+            <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight leading-none">
+              Client <span className="text-[#eebf43] italic pr-2">Inquiries</span>
+            </h1>
+            <p className="text-[#71717a] text-[15px] mt-6 max-w-xl leading-relaxed font-medium">
+              Monitor and convert incoming production leads into active workspaces. Manage client needs and status tracking via secure pipelines.
+            </p>
+          </div>
         </div>
-      )}
 
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4 pt-2">
-        <div>
-          <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
-            Workspace <ArrowRight size={10} className="text-[#eebf43]" /> <span className="text-[#1d1d1f]">Pipeline</span>
-          </p>
-          <h1 className="text-6xl font-black text-[#1d1d1f] tracking-tight leading-none">
-            Client <span className="text-[#eebf43] italic pr-2">Inquiries</span>
-          </h1>
-          <p className="text-[#71717a] text-[15px] mt-6 max-w-xl leading-relaxed font-medium">
-            Monitor and convert incoming production leads into active workspaces. Manage client needs and status tracking via secure pipelines.
-          </p>
+        {/* Tabs */}
+        <div className="flex gap-10 mb-10 border-b border-gray-200/60">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`pb-4 text-xs font-black tracking-[0.15em] uppercase transition-all relative ${activeTab === 'active' ? 'text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
+          >
+            Active Pipeline
+            {activeTab === 'active' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#eebf43] rounded-full"></div>}
+          </button>
+          <button
+            onClick={() => setActiveTab('archived')}
+            className={`pb-4 text-xs font-black tracking-[0.15em] uppercase transition-all relative ${activeTab === 'archived' ? 'text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
+          >
+            Archive Registry
+            <span className="ml-3 px-2.5 py-0.5 rounded-lg text-[10px] bg-gray-100 text-gray-500 font-black">
+              {inquiries.filter(i => i.isArchived).length}
+            </span>
+            {activeTab === 'archived' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#eebf43] rounded-full"></div>}
+          </button>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex gap-10 mb-10 border-b border-gray-200/60">
-        <button
-          onClick={() => setActiveTab('active')}
-          className={`pb-4 text-xs font-black tracking-[0.15em] uppercase transition-all relative ${activeTab === 'active' ? 'text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
-        >
-          Active Pipeline
-          {activeTab === 'active' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#eebf43] rounded-full"></div>}
-        </button>
-        <button
-          onClick={() => setActiveTab('archived')}
-          className={`pb-4 text-xs font-black tracking-[0.15em] uppercase transition-all relative ${activeTab === 'archived' ? 'text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
-        >
-          Archive Registry
-          <span className="ml-3 px-2.5 py-0.5 rounded-lg text-[10px] bg-gray-100 text-gray-500 font-black">
-            {inquiries.filter(i => i.isArchived).length}
-          </span>
-          {activeTab === 'archived' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#eebf43] rounded-full"></div>}
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col lg:flex-row gap-6 mb-10 items-end">
-        <div className="relative flex-1 w-full lg:w-auto">
-          <Search size={18} className="text-[#a1a1aa] absolute left-5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            className="w-full pl-14 pr-6 py-4 bg-white border-2 border-gray-100 shadow-sm rounded-2xl text-sm font-bold text-[#1d1d1f] placeholder-[#a1a1aa] focus:outline-none focus:border-[#eebf43] focus:ring-4 focus:ring-[#eebf43]/5 transition-all"
-            placeholder="Search clients, events, or specific needs..."
+        {/* Filters */}
+        <div className="flex flex-col lg:flex-row gap-6 mb-10 items-end">
+          <div className="relative flex-1 w-full lg:w-auto">
+            <Search size={18} className="text-[#a1a1aa] absolute left-5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              className="w-full pl-14 pr-6 py-4 bg-white border-2 border-gray-100 shadow-sm rounded-2xl text-sm font-bold text-[#1d1d1f] placeholder-[#a1a1aa] focus:outline-none focus:border-[#eebf43] focus:ring-4 focus:ring-[#eebf43]/5 transition-all"
+              placeholder="Search clients, events, or specific needs..."
+            />
+          </div>
+          
+          <CustomSelect 
+            value={classificationFilter}
+            onChange={setClassificationFilter}
+            options={[
+              { value: 'All Classifications', label: 'All Classifications' },
+              { value: 'Weddings', label: 'Weddings' },
+              { value: 'Corporate Events', label: 'Corporate Events' },
+              { value: 'Debuts / Galas', label: 'Debuts / Galas' },
+            ]}
+            className="w-full lg:w-72"
           />
         </div>
-        
-        <CustomSelect 
-          value={classificationFilter}
-          onChange={setClassificationFilter}
-          options={[
-            { value: 'All Classifications', label: 'All Classifications' },
-            { value: 'Weddings', label: 'Weddings' },
-            { value: 'Corporate Events', label: 'Corporate Events' },
-            { value: 'Debuts / Galas', label: 'Debuts / Galas' },
-          ]}
-          className="w-full lg:w-72"
-        />
-      </div>
 
-      {/* Data Grid */}
-      <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden">
-        <div className="overflow-x-auto overflow-y-visible">
-          <table className="w-full text-left border-collapse min-w-[1000px]">
-            <thead>
-              <tr className="bg-[#fafafa] border-b border-gray-100">
-                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Form Identity</th>
-                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Client Briefing</th>
-                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Receipt Date</th>
-                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Status</th>
-                <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filteredInquiries.map((item) => (
-                <tr key={item.id} onClick={() => handleViewDetails(item)} className="group hover:bg-[#fafafa]/50 transition-colors cursor-pointer">
-                  <td className="px-8 py-6 align-middle">
-                    <div className="flex flex-col">
-                      <span className="text-[15px] font-black text-[#1d1d1f] group-hover:text-[#eebf43] transition-colors">{item.client}</span>
-                      <span className="text-[11px] font-black text-[#a1a1aa] uppercase tracking-wider mt-1">{item.eventType}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6 align-middle">
-                    <p className="text-[13px] font-medium text-[#71717a] line-clamp-1 leading-relaxed max-w-sm" title={item.needs}>
-                      {item.needs}
-                    </p>
-                  </td>
-                  <td className="px-8 py-6 align-middle text-center">
-                    <span className="text-[12px] font-black text-[#a1a1aa] uppercase">{formatDate(item.submitted)}</span>
-                  </td>
-                  <td className="px-8 py-6 align-middle relative">
-                    <div className="flex justify-center">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === item.id ? null : item.id); }}
-                        className={`min-w-[140px] px-4 py-2 rounded-xl text-[9px] font-black tracking-widest uppercase border-2 flex items-center justify-between gap-3 transition-all ${STATUS_STYLES[item.status] || 'border-gray-100 text-gray-400 bg-gray-50'}`}
-                      >
-                        <span className="truncate">{item.status}</span> <ChevronDown size={12} className="opacity-70 shrink-0" />
-                      </button>
-                    </div>
-                    {openDropdownId === item.id && (
-                      <div onClick={(e) => e.stopPropagation()} className="absolute top-16 left-1/2 -translate-x-1/2 mt-1 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in zoom-in-95 duration-200">
-                        {Object.keys(STATUS_STYLES).map(status => (
-                          <button
-                            key={status}
-                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(item.id, status); }}
-                            className={`w-full text-left px-5 py-3 text-[10px] font-black tracking-[0.1em] uppercase transition-colors hover:bg-gray-50 ${item.status === status ? 'text-[#eebf43] bg-yellow-50/30' : 'text-[#71717a]'}`}
-                          >
-                            {status}
-                          </button>
-                        ))}
+        {/* Data Grid */}
+        <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden">
+          <div className="overflow-x-auto overflow-y-visible">
+            <table className="w-full text-left border-collapse min-w-[1000px]">
+              <thead>
+                <tr className="bg-[#fafafa] border-b border-gray-100">
+                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Form Identity</th>
+                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Client Briefing</th>
+                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Receipt Date</th>
+                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Status</th>
+                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredInquiries.map((item) => (
+                  <tr key={item.id} onClick={() => handleViewDetails(item)} className="group hover:bg-[#fafafa]/50 transition-colors cursor-pointer">
+                    <td className="px-8 py-6 align-middle">
+                      <div className="flex flex-col">
+                        <span className="text-[15px] font-black text-[#1d1d1f] group-hover:text-[#eebf43] transition-colors">{item.client}</span>
+                        <span className="text-[11px] font-black text-[#a1a1aa] uppercase tracking-wider mt-1">{item.eventType}</span>
                       </div>
-                    )}
-                  </td>
-                  <td className="px-8 py-6 align-middle">
-                    <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
-                      <button onClick={(e) => { e.stopPropagation(); handleReplyEmail(item); }} className="px-4 py-2.5 bg-[#facc15] text-gray-900 hover:bg-[#eab308] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm border border-[#facc15]" disabled={item.isArchived}>
-                        <Send size={12} /> Contact
-                      </button>
-                      
-                      <Link 
-                        href={`/admin/events/new?inquiryId=${item.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="px-4 py-2.5 bg-[#201A03] text-[#facc15] hover:bg-black rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-black/10"
-                      >
-                        <CheckCircle2 size={12} /> Convert
-                      </Link>
+                    </td>
+                    <td className="px-8 py-6 align-middle">
+                      <p className="text-[13px] font-medium text-[#71717a] line-clamp-1 leading-relaxed max-w-sm" title={item.needs}>
+                        {item.needs}
+                      </p>
+                    </td>
+                    <td className="px-8 py-6 align-middle text-center">
+                      <span className="text-[12px] font-black text-[#a1a1aa] uppercase">{formatDate(item.submitted)}</span>
+                    </td>
+                    <td className="px-8 py-6 align-middle relative">
+                      <div className="flex justify-center">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === item.id ? null : item.id); }}
+                          className={`min-w-[140px] px-4 py-2 rounded-xl text-[9px] font-black tracking-widest uppercase border-2 flex items-center justify-between gap-3 transition-all ${STATUS_STYLES[item.status] || 'border-gray-100 text-gray-400 bg-gray-50'}`}
+                        >
+                          <span className="truncate">{item.status}</span> <ChevronDown size={12} className="opacity-70 shrink-0" />
+                        </button>
+                      </div>
+                      {openDropdownId === item.id && (
+                        <div onClick={(e) => e.stopPropagation()} className="absolute top-16 left-1/2 -translate-x-1/2 mt-1 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in zoom-in-95 duration-200">
+                          {Object.keys(STATUS_STYLES).map(status => (
+                            <button
+                              key={status}
+                              onClick={(e) => { e.stopPropagation(); handleStatusUpdate(item.id, status); }}
+                              className={`w-full text-left px-5 py-3 text-[10px] font-black tracking-[0.1em] uppercase transition-colors hover:bg-gray-50 ${item.status === status ? 'text-[#eebf43] bg-yellow-50/30' : 'text-[#71717a]'}`}
+                            >
+                              {status}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-8 py-6 align-middle">
+                      <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
+                        <button onClick={(e) => { e.stopPropagation(); handleReplyEmail(item); }} className="px-4 py-2.5 bg-[#facc15] text-gray-900 hover:bg-[#eab308] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm border border-[#facc15]" disabled={item.isArchived}>
+                          <Send size={12} /> Contact
+                        </button>
+                        
+                        <Link 
+                          href={`/admin/events/new?inquiryId=${item.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-4 py-2.5 bg-[#201A03] text-[#facc15] hover:bg-black rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-black/10"
+                        >
+                          <CheckCircle2 size={12} /> Convert
+                        </Link>
 
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleToggleArchive(item.id, item.isArchived); }}
-                        className={`p-2.5 border-2 rounded-xl transition-all ${item.isArchived ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' : 'bg-white text-gray-300 border-gray-100 hover:text-red-500 hover:border-red-100'}`}
-                      >
-                        {item.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              
-              {isLoading && (
-                <tr>
-                  <td colSpan={5} className="px-8 py-24 text-center">
-                    <div className="flex flex-col items-center justify-center gap-4">
-                      <Loader2 size={40} className="text-[#eebf43] animate-spin" />
-                      <p className="text-[#a1a1aa] text-xs font-black uppercase tracking-widest">Accessing Pipeline...</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              
-              {!isLoading && filteredInquiries.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-8 py-24 text-center">
-                    <div className="flex flex-col items-center justify-center gap-4">
-                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
-                        <Search size={24} className="text-gray-300" />
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleToggleArchive(item.id, item.isArchived); }}
+                          className={`p-2.5 border-2 rounded-xl transition-all ${item.isArchived ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' : 'bg-white text-gray-300 border-gray-100 hover:text-red-500 hover:border-red-100'}`}
+                        >
+                          {item.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                        </button>
                       </div>
-                      <p className="text-[#a1a1aa] text-xs font-black uppercase tracking-widest">No matching inquiries found</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                ))}
+                
+                {isLoading && (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-24 text-center">
+                      <div className="flex flex-col items-center justify-center gap-4">
+                        <Loader2 size={40} className="text-[#eebf43] animate-spin" />
+                        <p className="text-[#a1a1aa] text-xs font-black uppercase tracking-widest">Accessing Pipeline...</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                
+                {!isLoading && filteredInquiries.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-24 text-center">
+                      <div className="flex flex-col items-center justify-center gap-4">
+                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
+                          <Search size={24} className="text-gray-300" />
+                        </div>
+                        <p className="text-[#a1a1aa] text-xs font-black uppercase tracking-widest">No matching inquiries found</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       {/* Modal - Details */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-          <div className="bg-white rounded-[32px] shadow-2xl border border-gray-100 w-full max-w-lg p-10 animate-in zoom-in-95 duration-300">
+          <div className="bg-white rounded-[32px] shadow-2xl border border-gray-100 w-full max-lg p-10 animate-in zoom-in-95 duration-300">
             <div className="flex justify-between items-start mb-8">
               <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-[#1d1d1f]">
                 <Eye size={24} />
@@ -422,6 +424,6 @@ export default function InquiriesAdminPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

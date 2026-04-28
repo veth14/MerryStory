@@ -11,9 +11,11 @@ export default function AdminLayout({
     <RoleGuard allowedRoles={['admin']}>
       <div className="flex h-screen bg-[#fafafa]">
         <AdminSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <AdminHeader />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto w-full px-8 md:px-12 pb-16">
+        <div className="flex-1 flex flex-col overflow-hidden relative z-20">
+          <main className="flex-1 overflow-x-hidden overflow-y-auto w-full relative px-8 md:px-12 pb-16">
+            <div className="sticky top-0 z-40 -mx-8 md:-mx-12">
+              <AdminHeader />
+            </div>
             {children}
           </main>
         </div>
