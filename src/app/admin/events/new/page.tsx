@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft, ArrowRight, MapPin, Briefcase, AlertTriangle, User, Tag, 
-  Image as ImageIcon, UploadCloud, Phone, Mail, Loader2, 
+  Image as ImageIcon, UploadCloud, Phone, Mail, Loader2, Clock3, ChevronDown,
   Check, UserCheck, Save
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -16,6 +16,136 @@ interface StaffUser {
   role: string;
   appRole: string;
   avatarUrl?: string;
+}
+
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
+  const hours = Math.floor(index / 2);
+  const minutes = index % 2 === 0 ? '00' : '30';
+  const value = `${String(hours).padStart(2, '0')}:${minutes}`;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 || 12;
+
+  return {
+    value,
+    label: `${displayHour}:${minutes} ${period}`,
+    militaryLabel: value,
+  };
+});
+
+const getTodayDate = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+const getCurrentTime = () => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+};
+
+const formatTimeLabel = (value: string) => {
+  if (!value) return 'Select time...';
+
+  const matchedTime = TIME_OPTIONS.find((option) => option.value === value);
+  if (matchedTime) return matchedTime.label;
+
+  const [hourString, minuteString = '00'] = value.split(':');
+  const hours = Number(hourString);
+  const minutes = Number(minuteString);
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 || 12;
+  return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+};
+
+const combineEventDateTime = (date: string, time: string) => {
+  if (!date) return '';
+  if (!time) return date;
+  return `${date}T${time}:00`;
+};
+
+function EventTimePicker({
+  label,
+  value,
+  selectedDate,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  selectedDate: string;
+  onChange: (next: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const today = getTodayDate();
+  const currentTime = getCurrentTime();
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current?.contains(event.target as Node)) return;
+      setIsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  return (
+    <div className="space-y-2 relative" ref={containerRef}>
+      <label className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-500">
+        <Clock3 size={12} /> {label}
+      </label>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className={`w-full px-4 py-3.5 bg-gray-50 border-2 rounded-xl flex items-center justify-between transition-all outline-none ${
+          isOpen
+            ? 'border-[#facc15] bg-white ring-4 ring-[#facc15]/10'
+            : 'border-gray-100 hover:bg-white hover:border-[#facc15]'
+        }`}
+      >
+        <span className={`text-[14px] ${value ? 'font-extrabold text-gray-900' : 'font-medium text-gray-400'}`}>
+          {formatTimeLabel(value)}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-[#71717a] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="pr-1">
+            {TIME_OPTIONS.map((option) => {
+              const isDisabled = selectedDate === today && option.value < currentTime;
+              const isSelected = value === option.value;
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => {
+                    onChange(option.value);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-4 py-3 rounded-xl text-left transition-colors flex items-center justify-between ${
+                    isDisabled ? 'opacity-40 cursor-not-allowed' : isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <div>
+                    <div className="text-[13px] font-extrabold text-gray-900">{option.label}</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{option.militaryLabel}</div>
+                  </div>
+                  {isSelected && <Check className="w-4 h-4 text-[#facc15]" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NewEventForm() {
@@ -39,6 +169,7 @@ function NewEventForm() {
     title: '',
     type: 'Wedding',
     date: '',
+    time: '',
     location: '',
     budgetTotal: '',
     vendorTarget: '',
@@ -143,6 +274,11 @@ function NewEventForm() {
       return;
     }
 
+    if (!formData.time) {
+      setError('Live Production Time is required.');
+      return;
+    }
+
     if (!formData.location.trim()) {
       setError('Master Location / Venue is required.');
       return;
@@ -168,7 +304,10 @@ function NewEventForm() {
 
     try {
       const data = new FormData();
-      Object.entries(formData).forEach(([key, value]) => data.append(key, value));
+      const restFormData = { ...formData };
+      delete restFormData.time;
+      const submissionDate = combineEventDateTime(formData.date, formData.time);
+      Object.entries({ ...restFormData, date: submissionDate }).forEach(([key, value]) => data.append(key, value));
       data.append('coverImage', coverImage); // Guaranteed to be here due to validation
 
       const idToken = await user!.getIdToken();
@@ -317,7 +456,7 @@ function NewEventForm() {
                   onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
                 />
 
-                <div className="md:col-span-2 space-y-2">
+                <div className="space-y-2">
                   <label className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-500">
                     <MapPin size={12} /> Master Location / Venue
                   </label>
@@ -326,6 +465,13 @@ function NewEventForm() {
                     className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none"
                   />
                 </div>
+
+                <EventTimePicker
+                  label="Live Production Time"
+                  value={formData.time}
+                  selectedDate={formData.date}
+                  onChange={(val) => setFormData(prev => ({ ...prev, time: val }))}
+                />
               </div>
            </div>
         </div>

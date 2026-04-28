@@ -567,6 +567,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / tasksPerPage));
   const currentPageSafe = Math.min(currentPage, totalPages);
   const paginatedTasks = filteredTasks.slice((currentPageSafe - 1) * tasksPerPage, currentPageSafe * tasksPerPage);
+  const emptyRows = Math.max(0, tasksPerPage - paginatedTasks.length);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -801,7 +802,7 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
   };
 
   return (
-    <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2">
+    <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2" style={{ scrollbarGutter: 'stable' }}>
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2">
         <div className="max-w-3xl">
           <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
@@ -849,38 +850,49 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
                     No tasks found matching your criteria.
                   </td>
                 </tr>
-              ) : paginatedTasks.map((task) => (
-                <tr key={task.id} className="hover:bg-gray-50/30 transition-colors group">
-                  <td className="px-4 md:px-6 py-4">
-                    <div className="font-extrabold text-[14px] text-gray-900 group-hover:text-[#eebf43] transition-colors mb-1 truncate">{task.title}</div>
-                    <div className="text-[12px] font-medium text-[#71717a] line-clamp-2 break-words">{task.description}</div>
-                    <div className="mt-2">
-                      <span className={`px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest rounded-sm ${getPriorityColor(task.priority)}`}>
-                        {task.priority} PRIORITY
-                      </span>
-                    </div>
-                  </td>
+              ) : (
+                <>
+                  {paginatedTasks.map((task) => (
+                    <tr key={task.id} className="hover:bg-gray-50/30 transition-colors group">
+                      <td className="px-4 md:px-6 py-4">
+                        <div className="font-extrabold text-[14px] text-gray-900 group-hover:text-[#eebf43] transition-colors mb-1 truncate">{task.title}</div>
+                        <div className="text-[12px] font-medium text-[#71717a] line-clamp-2 break-words">{task.description}</div>
+                        <div className="mt-2">
+                          <span className={`px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest rounded-sm ${getPriorityColor(task.priority)}`}>
+                            {task.priority} PRIORITY
+                          </span>
+                        </div>
+                      </td>
 
-                  <td className="px-4 md:px-6 py-4 text-center align-middle">
-                    <StatusDropdown value={task.status} onChange={(value) => updateTaskStatus(task, value)} />
-                  </td>
+                      <td className="px-4 md:px-6 py-4 text-center align-middle">
+                        <StatusDropdown value={task.status} onChange={(value) => updateTaskStatus(task, value)} />
+                      </td>
 
-                  <td className="px-4 md:px-6 py-4 text-center align-middle">
-                    <div className="text-[11px] font-bold text-gray-600 truncate">{task.dueDate}</div>
-                    <div className="text-[10px] font-bold text-gray-400 mt-0.5 truncate">{task.dueTime || 'EOD'}</div>
-                  </td>
+                      <td className="px-4 md:px-6 py-4 text-center align-middle">
+                        <div className="text-[11px] font-bold text-gray-600 truncate">{task.dueDate}</div>
+                        <div className="text-[10px] font-bold text-gray-400 mt-0.5 truncate">{task.dueTime || 'EOD'}</div>
+                      </td>
 
-                  <td className="px-4 md:px-6 py-4 text-center align-middle">
-                    <VendorDropdown value={task.vendor || 'None'} options={vendorOptionValues} onChange={(value) => updateTaskVendor(task, value)} />
-                  </td>
+                      <td className="px-4 md:px-6 py-4 text-center align-middle">
+                        <VendorDropdown value={task.vendor || 'None'} options={vendorOptionValues} onChange={(value) => updateTaskVendor(task, value)} />
+                      </td>
 
-                  <td className="px-4 md:px-6 py-4 text-right align-middle">
-                    <div className="flex flex-col items-end">
-                      <AssigneeDropdown task={task} staffOptions={staffOptions} onChange={(value) => updateTaskAssignees(task, value)} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      <td className="px-4 md:px-6 py-4 text-right align-middle">
+                        <div className="flex flex-col items-end">
+                          <AssigneeDropdown task={task} staffOptions={staffOptions} onChange={(value) => updateTaskAssignees(task, value)} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {Array.from({ length: emptyRows }).map((_, index) => (
+                    <tr key={`empty-row-${currentPageSafe}-${index}`} className="pointer-events-none">
+                      <td className="px-4 md:px-6 py-4 h-[92px]" colSpan={5}>
+                        <div className="w-full h-full rounded-lg border border-dashed border-transparent" />
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
             </tbody>
           </table>
         </div>

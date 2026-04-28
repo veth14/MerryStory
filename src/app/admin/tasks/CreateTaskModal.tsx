@@ -36,6 +36,9 @@ type CreateTaskModalProps = {
   vendorOptions: VendorOption[];
 };
 
+const FORM_TRIGGER_CLASS =
+  'w-full min-h-[52px] px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl transition-all';
+
 const PRIORITY_OPTIONS = [
   {
     value: 'CRITICAL',
@@ -334,7 +337,7 @@ function ProductionTypeDropdown({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-left flex items-center justify-between transition-all ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
+        className={`${FORM_TRIGGER_CLASS} text-left flex items-center justify-between ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
       >
         <span className="text-[14px] font-medium text-gray-900 truncate">{value || 'Select option...'}</span>
         <ChevronDown className={`w-4 h-4 text-[#71717a] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -394,7 +397,7 @@ function AppointLeadMultiSelect({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between transition-all ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
+        className={`${FORM_TRIGGER_CLASS} flex items-center justify-between ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
       >
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex -space-x-2">
@@ -489,7 +492,7 @@ function ProductionDatePicker({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between transition-all ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
+        className={`${FORM_TRIGGER_CLASS} flex items-center justify-between ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
       >
         <span className={`text-[14px] ${value ? 'font-medium text-gray-900' : 'font-medium text-gray-400'}`}>{formatDateLabel(value)}</span>
         <Calendar className="w-4 h-4 text-[#71717a]" />
@@ -573,7 +576,7 @@ function TimePicker({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between transition-all ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
+        className={`${FORM_TRIGGER_CLASS} flex items-center justify-between ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
       >
         <span className={`text-[14px] ${value ? 'font-medium text-gray-900' : 'font-medium text-gray-400'}`}>
           {TIME_OPTIONS.find((option) => option.value === value)?.label || 'Select time...'}
