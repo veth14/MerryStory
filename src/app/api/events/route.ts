@@ -26,6 +26,11 @@ export async function POST(request: NextRequest) {
     const clientRole = formData.get("clientRole") as string;
     
     const file = formData.get("coverImage") as File | null;
+
+    // Backend Validation
+    if (!title || !leadAssigned || !file) {
+      return NextResponse.json({ error: "Title, Lead, and Cover Image are required." }, { status: 400 });
+    }
     
     let coverImageUrl = null;
     

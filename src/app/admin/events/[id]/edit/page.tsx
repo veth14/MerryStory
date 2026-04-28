@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Save, User, Briefcase, MapPin, Tag, Mail, Phone, AlertTriangle, Trash2, Plus, ArrowRight, X, Minus } from 'lucide-react';
 import { CustomSelect, CustomDatePicker } from '@/components/ui/CustomInputs';
@@ -55,12 +55,18 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     status: '',
     health: 100,
     budgetTotal: '',
+    vendorTarget: '',
+    guestCapacity: '',
     clientName: '',
     clientEmail: '',
     clientPhone: '',
     clientRole: '',
     initialAlert: ''
   });
+
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedTeam, setSelectedTeam] = useState<{ name: string, role: string, avatarUrl?: string }[]>([]);
 
@@ -74,7 +80,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     try {
       setLoading(true);
       const idToken = await user!.getIdToken();
-      
+
       // Fetch Event
       const eventRes = await fetch(`/api/events/${id}`, {
         headers: { Authorization: `Bearer ${idToken}` },
@@ -82,7 +88,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       if (!eventRes.ok) throw new Error('Failed to fetch event');
       const eventData = await eventRes.json();
       setEvent(eventData);
-      
+
       // Set Form Data
       setFormData({
         title: eventData.title,
@@ -93,12 +99,15 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         status: eventData.status || 'Active',
         health: eventData.health || 100,
         budgetTotal: eventData.budget.total.toString(),
+        vendorTarget: (eventData.vendors?.total || 0).toString(),
+        guestCapacity: (eventData.guests?.invited || 0).toString(),
         clientName: eventData.client.name,
         clientEmail: eventData.client.email,
         clientPhone: eventData.client.phone,
         clientRole: eventData.client.role,
         initialAlert: eventData.initialAlert || ''
       });
+      setImagePreview(eventData.coverImageUrl || null);
       setSelectedTeam(eventData.team || []);
 
       // Fetch Staff
@@ -116,8 +125,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoverImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -127,39 +142,41 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
     try {
       const idToken = await user!.getIdToken();
-      
-      const payload = {
-        title: formData.title,
-        type: formData.type,
-        date: formData.date,
-        location: formData.location,
-        leadAssigned: formData.leadAssigned,
-        status: formData.status,
-        health: parseInt(formData.health.toString()),
-        budget: {
-          ...event!.budget,
-          total: parseFloat(formData.budgetTotal)
-        },
-        client: {
-          name: formData.clientName,
-          email: formData.clientEmail,
-          phone: formData.clientPhone,
-          role: formData.clientRole
-        },
-        team: selectedTeam,
-        initialAlert: formData.initialAlert
-      };
+
+      const data = new FormData();
+      data.append('title', formData.title);
+      data.append('type', formData.type);
+      data.append('date', formData.date);
+      data.append('location', formData.location);
+      data.append('leadAssigned', formData.leadAssigned);
+      data.append('status', formData.status);
+      data.append('health', formData.health.toString());
+      data.append('budgetTotal', formData.budgetTotal);
+      data.append('vendorTarget', formData.vendorTarget);
+      data.append('guestCapacity', formData.guestCapacity);
+      data.append('clientName', formData.clientName);
+      data.append('clientEmail', formData.clientEmail);
+      data.append('clientPhone', formData.clientPhone);
+      data.append('clientRole', formData.clientRole);
+      data.append('initialAlert', formData.initialAlert);
+      data.append('team', JSON.stringify(selectedTeam));
+
+      if (coverImage) {
+        data.append('coverImage', coverImage);
+      }
 
       const response = await fetch(`/api/events/${id}`, {
         method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}` 
+        headers: {
+          Authorization: `Bearer ${idToken}`
         },
-        body: JSON.stringify(payload),
+        body: data,
       });
 
-      if (!response.ok) throw new Error('Failed to update production');
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Failed to update production');
+      }
 
       router.push(`/admin/events/${id}`);
     } catch (err: any) {
@@ -186,10 +203,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
             Workspace <ArrowRight size={10} className="text-[#eebf43]" /> <span className="text-[#1d1d1f]">Configuration</span>
           </p>
           <div className="flex items-center gap-4 mb-4">
-             <Link href={`/admin/events/${id}`} className="text-gray-400 hover:text-gray-900 transition-colors">
-               <ArrowLeft size={20} strokeWidth={3} />
-             </Link>
-             <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-3 py-1.5 uppercase tracking-[0.15em] rounded-lg">Production ID: {id.slice(-6).toUpperCase()}</span>
+            <Link href={`/admin/events/${id}`} className="text-gray-400 hover:text-gray-900 transition-colors">
+              <ArrowLeft size={20} strokeWidth={3} />
+            </Link>
+            <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-3 py-1.5 uppercase tracking-[0.15em] rounded-lg">Production ID: {id.slice(-6).toUpperCase()}</span>
           </div>
           <h1 className="text-[54px] font-black text-gray-900 tracking-tight leading-none">
             Update <span className="text-[#facc15] italic">Production</span>
@@ -208,123 +225,142 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           </div>
         )}
 
+        {/* Row 1: Master Visual & Configuration */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* Main Config */}
-          <div className="lg:col-span-2 space-y-8 bg-white p-10 rounded-[40px] border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center gap-3 mb-4">
-                <div className="w-1.5 h-6 bg-[#facc15] rounded-full"></div>
-                <h3 className="text-[18px] font-black text-gray-900 tracking-tight">Master Configuration</h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Production Title</label>
-                <input required type="text" name="title" value={formData.title} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
-              </div>
-
-              <CustomSelect 
-                label="Production Type"
-                value={formData.type}
-                onChange={(val) => setFormData(prev => ({ ...prev, type: val }))}
-                icon={Briefcase}
-                options={[
-                  { value: 'Wedding', label: 'Wedding' },
-                  { value: 'Corporate', label: 'Corporate' },
-                  { value: 'Gala', label: 'Gala / Fundraiser' },
-                  { value: 'Exhibition', label: 'Exhibition / Expo' },
-                  { value: 'Private', label: 'Private Event' },
-                ]}
-              />
-
-              <CustomDatePicker 
-                label="Production Date"
-                value={formData.date}
-                onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
-              />
-
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Venue Location</label>
-                <input required type="text" name="location" value={formData.location} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
-              </div>
-            </div>
-          </div>
-
-          {/* Right Sidebar - Status & Health */}
-          <div className="space-y-6">
-             <div className="bg-[#111827] p-8 rounded-[40px] text-white shadow-2xl">
-                <h3 className="text-[#facc15] text-[16px] font-black mb-6 uppercase tracking-widest">Workspace Vitals</h3>
-                <div className="space-y-6">
-                   <CustomSelect 
-                    label="Current Status"
-                    value={formData.status}
-                    onChange={(val) => setFormData(prev => ({ ...prev, status: val }))}
-                    options={[
-                      { value: 'Active', label: 'Active Production' },
-                      { value: 'At Risk', label: 'At Risk' },
-                      { value: 'On Hold', label: 'On Hold' },
-                      { value: 'Completed', label: 'Completed' },
-                    ]}
-                    className="dark-select"
-                  />
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Production Health (%)</label>
-                    <div className="relative group">
-                      <input 
-                        type="number" 
-                        name="health" 
-                        value={formData.health} 
-                        onChange={handleChange} 
-                        min="0" 
-                        max="100" 
-                        className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-2xl text-[24px] font-black text-[#facc15] focus:bg-white/10 focus:border-[#facc15]/50 transition-all outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                      />
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button type="button" onClick={() => setFormData(p => ({ ...p, health: Math.min(100, p.health + 1) }))} className="p-1 hover:text-[#facc15] transition-colors"><Plus size={14} /></button>
-                        <button type="button" onClick={() => setFormData(p => ({ ...p, health: Math.max(0, p.health - 1) }))} className="p-1 hover:text-[#facc15] transition-colors"><Minus size={14} /></button>
-                      </div>
+           <div className="lg:col-span-1">
+              <label className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-500 mb-4">
+                <Tag size={12} /> Master Visual (Cover)
+              </label>
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:bg-white hover:border-[#facc15] hover:shadow-xl hover:shadow-[#facc15]/5 transition-all relative overflow-hidden group"
+              >
+                {imagePreview ? (
+                  <>
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                      <span className="text-white text-[11px] font-black tracking-widest uppercase">Replace Master Image</span>
                     </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center text-gray-400 group-hover:text-[#d4a017]">
+                    <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                      <Plus size={24} />
+                    </div>
+                    <span className="text-[11px] font-extrabold uppercase tracking-[0.2em]">Upload Cover</span>
                   </div>
-                </div>
-             </div>
+                )}
+                <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageChange} />
+              </div>
+           </div>
 
-             <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
-                <h3 className="text-gray-900 text-[16px] font-black mb-6 uppercase tracking-widest">Global Budget</h3>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[18px] font-black text-[#d4a017]">₱</span>
-                  <input required type="number" name="budgetTotal" value={formData.budgetTotal} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[24px] font-black text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none tabular-nums" />
+           <div className="lg:col-span-2 bg-white p-10 rounded-[40px] border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+              <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1.5 h-6 bg-[#facc15] rounded-full"></div>
+                    <h3 className="text-[18px] font-black text-gray-900 tracking-tight">Master Configuration</h3>
+                  </div>
+                  <div className="w-48">
+                    <CustomSelect 
+                      label="Production Status"
+                      value={formData.status}
+                      onChange={(val) => setFormData(prev => ({ ...prev, status: val }))}
+                      options={[
+                        { value: 'Active', label: 'Active Production' },
+                        { value: 'At Risk', label: 'At Risk' },
+                        { value: 'On Hold', label: 'On Hold' },
+                        { value: 'Completed', label: 'Completed' },
+                      ]}
+                    />
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Production Title</label>
+                  <input required type="text" name="title" value={formData.title} onChange={(e) => setFormData(p => ({ ...p, title: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
                 </div>
-             </div>
+
+                <CustomSelect 
+                  label="Production Type"
+                  value={formData.type}
+                  onChange={(val) => setFormData(prev => ({ ...prev, type: val }))}
+                  icon={Briefcase}
+                  options={[
+                    { value: 'Wedding', label: 'Wedding' },
+                    { value: 'Corporate', label: 'Corporate' },
+                    { value: 'Gala', label: 'Gala / Fundraiser' },
+                    { value: 'Exhibition', label: 'Exhibition / Expo' },
+                    { value: 'Private', label: 'Private Event' },
+                  ]}
+                />
+
+                <CustomDatePicker 
+                  label="Production Date"
+                  value={formData.date}
+                  onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
+                />
+
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Venue Location</label>
+                  <input required type="text" name="location" value={formData.location} onChange={(e) => setFormData(p => ({ ...p, location: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+                </div>
+              </div>
+           </div>
+        </div>
+
+        {/* Row 2: Limits */}
+        <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-1.5 h-5 bg-[#facc15] rounded-full"></div>
+            <h3 className="text-gray-900 text-[16px] font-black tracking-tight uppercase tracking-widest">Workspace Limits</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Global Budget Ceiling (PHP)</label>
+              <div className="relative">
+                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-[18px] font-black text-[#d4a017]">₱</span>
+                <input required type="number" value={formData.budgetTotal} onChange={(e) => setFormData(p => ({ ...p, budgetTotal: e.target.value }))} className="w-full pl-10 pr-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[22px] font-black text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Vendor Target</label>
+              <input required type="number" value={formData.vendorTarget} onChange={(e) => setFormData(p => ({ ...p, vendorTarget: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-xl text-[18px] font-black text-gray-900 focus:bg-white outline-none" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Guest Capacity</label>
+              <input required type="number" value={formData.guestCapacity} onChange={(e) => setFormData(p => ({ ...p, guestCapacity: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-xl text-[18px] font-black text-gray-900 focus:bg-white outline-none" />
+            </div>
           </div>
         </div>
 
+        {/* Row 3: Client & Team */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Client Portfolio */}
           <div className="bg-white p-10 rounded-[40px] border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-1.5 h-6 bg-[#facc15] rounded-full"></div>
               <h3 className="text-[18px] font-black text-gray-900 tracking-tight">Client Portfolio</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+              <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Legal Name</label>
-                <input required type="text" name="clientName" value={formData.clientName} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+                <input required type="text" name="clientName" value={formData.clientName} onChange={(e) => setFormData(p => ({ ...p, clientName: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Role</label>
-                <input required type="text" name="clientRole" value={formData.clientRole} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+                <input required type="text" name="clientRole" value={formData.clientRole} onChange={(e) => setFormData(p => ({ ...p, clientRole: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email</label>
-                <input required type="email" name="clientEmail" value={formData.clientEmail} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+                <input required type="email" name="clientEmail" value={formData.clientEmail} onChange={(e) => setFormData(p => ({ ...p, clientEmail: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
               </div>
-              <div className="space-y-2">
+              <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Phone</label>
-                <input required type="tel" name="clientPhone" value={formData.clientPhone} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+                <input required type="tel" name="clientPhone" value={formData.clientPhone} onChange={(e) => setFormData(p => ({ ...p, clientPhone: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
               </div>
             </div>
           </div>
 
-          {/* Team Coordination */}
           <div className="bg-white p-10 rounded-[40px] border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-1.5 h-6 bg-[#facc15] rounded-full"></div>
@@ -366,12 +402,13 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           </div>
         </div>
 
+        {/* Row 4: Priority Notice */}
         <div className="bg-white p-10 rounded-[40px] border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
            <div className="flex items-center gap-3 mb-6">
               <div className="w-1.5 h-6 bg-[#facc15] rounded-full"></div>
               <h3 className="text-[18px] font-black text-gray-900 tracking-tight">Priority Broadcast Notice</h3>
            </div>
-           <textarea name="initialAlert" value={formData.initialAlert} onChange={handleChange} rows={3} className="w-full px-6 py-5 bg-gray-50 border border-gray-100 rounded-[30px] text-[15px] font-bold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none resize-none leading-relaxed"></textarea>
+           <textarea name="initialAlert" value={formData.initialAlert} onChange={(e) => setFormData(p => ({ ...p, initialAlert: e.target.value }))} rows={4} className="w-full px-8 py-6 bg-gray-50 border border-gray-100 rounded-[30px] text-[16px] font-bold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none resize-none leading-relaxed"></textarea>
         </div>
 
         {/* Footer Actions */}

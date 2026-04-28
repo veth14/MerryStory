@@ -123,13 +123,53 @@ function NewEventForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
     setError('');
+
+    // Extensive Validation
+    if (!coverImage) {
+      setError('A Master Visual (Cover) is required to initialize the workspace.');
+      // Scroll to top to see error
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    if (!formData.title.trim()) {
+      setError('Production Title is required.');
+      return;
+    }
+
+    if (!formData.date) {
+      setError('Live Production Date is required.');
+      return;
+    }
+
+    if (!formData.location.trim()) {
+      setError('Master Location / Venue is required.');
+      return;
+    }
+
+    if (!formData.leadAssigned) {
+      setError('A Production Director must be appointed.');
+      return;
+    }
+
+    if (!formData.clientName.trim() || !formData.clientEmail.trim() || !formData.clientPhone.trim()) {
+      setError('All Client Portfolio fields are required.');
+      return;
+    }
+
+    const budget = parseFloat(formData.budgetTotal);
+    if (isNaN(budget) || budget <= 0) {
+      setError('Please enter a valid Budget Ceiling.');
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
       const data = new FormData();
       Object.entries(formData).forEach(([key, value]) => data.append(key, value));
-      if (coverImage) data.append('coverImage', coverImage);
+      data.append('coverImage', coverImage); // Guaranteed to be here due to validation
 
       const idToken = await user!.getIdToken();
       const response = await fetch('/api/events', {
@@ -203,13 +243,13 @@ function NewEventForm() {
 
       <form onSubmit={handleSubmit} className="space-y-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-           <div className="lg:col-span-1 space-y-4">
+            <div className="lg:col-span-1 space-y-4">
               <label className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-500 mb-2">
-                <ImageIcon size={12} /> Master Visual (Cover)
+                <ImageIcon size={12} /> Master Visual (Cover) <span className="text-red-500 ml-1">*</span>
               </label>
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:bg-white hover:border-[#facc15] hover:shadow-xl hover:shadow-[#facc15]/5 transition-all relative overflow-hidden group"
+                className={`w-full aspect-[4/3] bg-gray-50 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-all relative overflow-hidden group ${!coverImage && error && error.includes('Cover') ? 'border-red-400 bg-red-50/30' : 'border-gray-200 hover:border-[#facc15] hover:shadow-xl hover:shadow-[#facc15]/5'}`}
               >
                 {imagePreview ? (
                   <>

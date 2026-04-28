@@ -67,21 +67,96 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Invalid event ID." }, { status: 400 });
     }
 
-    const body = await request.json();
+    const formData = await request.formData();
     const db = await getMongoDb();
     const eventsCollection = db.collection("events");
 
-    // Remove _id from update body if present
-    const { _id, ...updateData } = body;
+    // Fetch existing event to keep some fields if needed
+    const existingEvent = await eventsCollection.findOne({ _id: new ObjectId(id) });
+    if (!existingEvent) {
+      return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    }
+
+    const title = formData.get("title") as string;
+    const type = formData.get("type") as string;
+    const date = formData.get("date") as string;
+    const location = formData.get("location") as string;
+    const leadAssigned = formData.get("leadAssigned") as string;
+    const status = formData.get("status") as string;
+    const health = parseInt(formData.get("health") as string) || 0;
+    const budgetTotal = parseFloat(formData.get("budgetTotal") as string) || 0;
+    const vendorTarget = parseInt(formData.get("vendorTarget") as string) || 0;
+    const guestCapacity = parseInt(formData.get("guestCapacity") as string) || 0;
+    const clientName = formData.get("clientName") as string;
+    const clientEmail = formData.get("clientEmail") as string;
+    const clientPhone = formData.get("clientPhone") as string;
+    const clientRole = formData.get("clientRole") as string;
+    const initialAlert = formData.get("initialAlert") as string;
+    const team = JSON.parse(formData.get("team") as string || "[]");
+    
+    const file = formData.get("coverImage") as File | null;
+    let coverImageUrl = existingEvent.coverImageUrl;
+
+    if (file && file.size > 0) {
+      const { getSupabaseServerClient } = await import("@/lib/supabase/server");
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const timeStamp = Date.now();
+      const fileName = `cover_${timeStamp}.${fileExt}`;
+      const storagePath = `events/${fileName}`;
+      
+      const supabase = getSupabaseServerClient();
+      const buffer = Buffer.from(await file.arrayBuffer());
+      
+      const { data: uploadData, error: uploadError } = await supabase
+        .storage
+        .from("user")
+        .upload(storagePath, buffer, {
+          contentType: file.type || "image/jpeg",
+          upsert: true
+        });
+        
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from("user").getPublicUrl(storagePath);
+        coverImageUrl = publicUrlData.publicUrl;
+      }
+    }
+
+    const updateData = {
+      title,
+      type,
+      date,
+      location,
+      leadAssigned,
+      status,
+      health,
+      budget: { 
+        ...existingEvent.budget, 
+        total: budgetTotal 
+      },
+      vendors: { 
+        ...existingEvent.vendors, 
+        total: vendorTarget 
+      },
+      guests: { 
+        ...existingEvent.guests, 
+        invited: guestCapacity 
+      },
+      client: {
+        name: clientName,
+        email: clientEmail,
+        phone: clientPhone,
+        role: clientRole
+      },
+      team,
+      initialAlert,
+      coverImageUrl,
+      updatedAt: new Date()
+    };
 
     const result = await eventsCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { ...updateData, updatedAt: new Date() } }
+      { $set: updateData }
     );
-
-    if (result.matchedCount === 0) {
-      return NextResponse.json({ error: "Event not found." }, { status: 404 });
-    }
 
     return NextResponse.json({ message: "Event updated successfully" }, { status: 200 });
   } catch (error) {
