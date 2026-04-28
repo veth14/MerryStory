@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -115,6 +116,27 @@ export async function POST(request: NextRequest) {
 
     const result = await tasksCollection.insertOne(newTask);
 
+    await writeAuditLog({
+      request,
+      category: "TASK_MANAGEMENT",
+      action: "TASK_ASSIGNED",
+      message: `Task "${newTask.title}" assigned to ${newTask.assignee.name}`,
+      actor: {
+        uid: user.uid,
+        email: user.email,
+        role: (user as any).role,
+      },
+      target: {
+        type: "resource",
+        uid: result.insertedId.toString(),
+      },
+      details: {
+        taskTitle: newTask.title,
+        assignee: newTask.assignee.name,
+        eventId: newTask.eventId.toString(),
+      },
+    });
+
     return NextResponse.json({ ...newTask, _id: result.insertedId }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthGuardError) {
@@ -127,7 +149,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    const user = await requireAuthenticatedUser(request); // ← FIXED: capture user
     const body = await request.json();
 
     const taskObjectId = typeof body?.taskObjectId === "string" ? body.taskObjectId.trim() : "";
@@ -163,7 +185,7 @@ export async function PATCH(request: NextRequest) {
     const db = await getMongoDb();
     const tasksCollection = db.collection("event_tasks");
 
-  let result: any = null;
+    let result: any = null;
 
     if (taskObjectId && ObjectId.isValid(taskObjectId)) {
       result = await tasksCollection.findOneAndUpdate(
@@ -193,6 +215,29 @@ export async function PATCH(request: NextRequest) {
 
     if (!updatedTask) {
       return NextResponse.json({ error: "Task not found." }, { status: 404 });
+    }
+
+    if (status) {
+      await writeAuditLog({
+        request,
+        category: "TASK_MANAGEMENT",
+        action: "TASK_STATUS_UPDATED",
+        message: `Task "${updatedTask.title}" marked as ${status}`,
+        actor: {
+          uid: user.uid,
+          email: user.email,
+          role: (user as any).role,
+        },
+        target: {
+          type: "resource",
+          uid: updatedTask._id.toString(),
+        },
+        details: {
+          taskTitle: updatedTask.title,
+          newStatus: status,
+          eventId: updatedTask.eventId.toString(),
+        },
+      });
     }
 
     return NextResponse.json(

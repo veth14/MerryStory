@@ -1,6 +1,6 @@
 import { getMongoDb } from "@/lib/mongodb";
 
-export type AuditCategory = "USER_MANAGEMENT" | "PROFILE" | "SECURITY" | "AUTH" | "SYSTEM";
+export type AuditCategory = "USER_MANAGEMENT" | "PROFILE" | "SECURITY" | "AUTH" | "SYSTEM" | "TASK_MANAGEMENT";
 export type AuditSeverity = "info" | "warning" | "critical";
 
 export type AuditAction =
@@ -11,7 +11,9 @@ export type AuditAction =
   | "PROFILE_UPDATED"
   | "PROFILE_AVATAR_UPDATED"
   | "PROFILE_AVATAR_REMOVED"
-  | "EVENT_CREATED";
+  | "EVENT_CREATED"
+  | "TASK_ASSIGNED"
+  | "TASK_STATUS_UPDATED";
 
 export type AuditLogDocument = {
   category: AuditCategory;

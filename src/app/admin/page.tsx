@@ -1,15 +1,24 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-// Mock function to fetch activity logs for a member (replace with real API call)
-async function fetchMemberActivity(memberId: string) {
-  // Simulate network delay
-  await new Promise(res => setTimeout(res, 300));
-  // Return mock data
-  return [
-    { time: '2026-04-28 10:15', action: 'Logged in' },
-    { time: '2026-04-28 10:20', action: 'Viewed event details' },
-    { time: '2026-04-28 10:25', action: 'Updated task status' },
-  ];
+// Real function to fetch activity logs for a member
+async function fetchMemberActivity(memberId: string, idToken: string) {
+  try {
+    const res = await fetch(`/api/activities?uid=${memberId}`, {
+      headers: { Authorization: `Bearer ${idToken}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.map((log: any) => ({
+        time: new Date(log.time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        action: log.message,
+        actor: log.actor
+      }));
+    }
+    return [];
+  } catch (err) {
+    console.error(err);
+    return [];
+  }
 }
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -697,8 +706,11 @@ export default function AdminDashboard() {
                           setOpenActivityMember(memberId);
                           if (!activityLogs[memberId]) {
                             setActivityLoading(prev => ({ ...prev, [memberId]: true }));
-                            const logs = await fetchMemberActivity(memberId);
-                            setActivityLogs(prev => ({ ...prev, [memberId]: logs }));
+                            const idToken = await user?.getIdToken();
+                            if (idToken) {
+                              const logs = await fetchMemberActivity(memberId, idToken);
+                              setActivityLogs(prev => ({ ...prev, [memberId]: logs }));
+                            }
                             setActivityLoading(prev => ({ ...prev, [memberId]: false }));
                           }
                         }
@@ -715,10 +727,10 @@ export default function AdminDashboard() {
                       <div className="text-gray-400 italic">Loading...</div>
                     ) : (
                       <ul className="space-y-1">
-                        {(activityLogs[memberId] || []).map((log, idx) => (
-                          <li key={idx} className="flex items-center gap-2">
-                            <span className="text-gray-400">{log.time}</span>
-                            <span className="">{log.action}</span>
+                        {(activityLogs[memberId] || []).map((log: any, idx: number) => (
+                          <li key={idx} className="flex flex-col gap-0.5 border-l-2 border-gray-100 pl-3 py-1">
+                            <span className="text-[10px] font-bold text-gray-400">{log.time}</span>
+                            <span className="text-[11px] font-medium text-gray-700 leading-snug">{log.action}</span>
                           </li>
                         ))}
                         {(!activityLogs[memberId] || activityLogs[memberId].length === 0) && (

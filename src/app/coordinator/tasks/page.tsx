@@ -10,6 +10,7 @@ export default function CoordinatorTasksPage() {
   const { user } = useAuth();
   const [completeCount, setCompleteCount] = useState(0);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,6 +19,8 @@ export default function CoordinatorTasksPage() {
       try {
         const idToken = await user.getIdToken();
         const userName = user.displayName;
+        
+        // Fetch Tasks
         const res = await fetch(`/api/tasks${userName ? `?assignee=${encodeURIComponent(userName)}` : ''}`, {
           headers: { Authorization: `Bearer ${idToken}` }
         });
@@ -25,6 +28,15 @@ export default function CoordinatorTasksPage() {
           const data = await res.json();
           setTasks(data);
           setCompleteCount(data.filter((t: any) => t.status === "DONE").length);
+        }
+
+        // Fetch Activities
+        const actRes = await fetch('/api/activities', {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        if (actRes.ok) {
+          const actData = await actRes.json();
+          setActivities(actData);
         }
       } catch (err) {
         console.error(err);
@@ -51,10 +63,32 @@ export default function CoordinatorTasksPage() {
       if (res.ok) {
         setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
         setCompleteCount(prev => currentStatus === "DONE" ? prev - 1 : prev + 1);
+        
+        // Refresh activities
+        const actRes = await fetch('/api/activities', {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        if (actRes.ok) {
+          const actData = await actRes.json();
+          setActivities(actData);
+        }
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const getTimeAgo = (date: string) => {
+    const now = new Date();
+    const past = new Date(date);
+    const diffMs = now.getTime() - past.getTime();
+    const diffMins = Math.round(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.round(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return past.toLocaleDateString();
   };
 
   const overdueTasks = tasks.filter(t => t.status !== "DONE" && t.priority === "HIGH");
@@ -218,24 +252,25 @@ export default function CoordinatorTasksPage() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6">
              <h3 className="text-sm font-black text-[#1d1d1f] mb-6 border-b border-gray-50 pb-4">Recent Activity</h3>
              <div className="space-y-4">
-                <div className="flex gap-4">
-                   <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                      <UserRound size={14} />
-                   </div>
-                   <div>
-                      <p className="text-xs font-bold text-[#1d1d1f]"><span className="text-[#d4a017]">Admin</span> assigned a new task to you</p>
-                      <p className="text-[10px] font-medium text-[#a1a1aa] mt-1">10 minutes ago</p>
-                   </div>
-                </div>
-                <div className="flex gap-4 opacity-75">
-                   <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                      <CheckCircle2 size={14} />
-                   </div>
-                   <div>
-                      <p className="text-xs font-bold text-[#1d1d1f]"><span className="text-[#71717a]">You</span> completed a task</p>
-                      <p className="text-[10px] font-medium text-[#a1a1aa] mt-1">2 hours ago</p>
-                   </div>
-                </div>
+                {activities.length === 0 ? (
+                  <p className="text-[10px] font-medium text-gray-400 italic py-2">No recent activity recorded.</p>
+                ) : (
+                  activities.map(activity => (
+                    <div key={activity.id} className="flex gap-4">
+                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${activity.action === 'TASK_ASSIGNED' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                          {activity.action === 'TASK_ASSIGNED' ? <UserRound size={14} /> : <CheckCircle2 size={14} />}
+                       </div>
+                       <div>
+                          <p className="text-xs font-bold text-[#1d1d1f]">
+                            {activity.actor === 'You' ? <span className="text-[#71717a]">You</span> : <span className="text-[#d4a017]">Admin</span>}
+                            {' '}{activity.action === 'TASK_ASSIGNED' ? 'assigned a new task' : `marked a task as ${activity.details?.newStatus || 'completed'}`}
+                          </p>
+                          <p className="text-[10px] font-medium text-[#1d1d1f]/60 truncate max-w-[180px] mt-0.5">{activity.details?.taskTitle}</p>
+                          <p className="text-[10px] font-medium text-[#a1a1aa] mt-1">{getTimeAgo(activity.time)}</p>
+                       </div>
+                    </div>
+                  ))
+                )}
              </div>
           </div>
 
