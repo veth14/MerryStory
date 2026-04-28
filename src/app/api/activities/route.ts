@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       query.actorUid = targetUid;
     } else {
       // Regular user or admin requesting their own activity
-      const userName = user.displayName || "";
+      const userName = (user as any).displayName || "";
       query.$or = [
         { actorUid: user.uid },
         { message: { $regex: userName, $options: "i" } },
