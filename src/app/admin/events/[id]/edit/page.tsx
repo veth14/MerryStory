@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Save, User, Briefcase, MapPin, Tag, Mail, Phone, AlertTriangle, Trash2, Plus, ArrowRight, X, Minus, Clock3, ChevronDown, Check } from 'lucide-react';
-import { CustomSelect, CustomDatePicker } from '@/components/ui/CustomInputs';
+import { ArrowLeft, Loader2, Save, User, Briefcase, MapPin, Tag, Mail, Phone, AlertTriangle, Trash2, Plus, ArrowRight, X, Minus } from 'lucide-react';
+import { CustomSelect, CustomDatePicker, CustomTimePicker } from '@/components/ui/CustomInputs';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Link from 'next/link';
 
@@ -36,30 +36,6 @@ interface EventData {
   };
 }
 
-const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
-  const hours = Math.floor(index / 2);
-  const minutes = index % 2 === 0 ? '00' : '30';
-  const value = `${String(hours).padStart(2, '0')}:${minutes}`;
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const displayHour = hours % 12 || 12;
-
-  return {
-    value,
-    label: `${displayHour}:${minutes} ${period}`,
-    militaryLabel: value,
-  };
-});
-
-const getTodayDate = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
-
-const getCurrentTime = () => {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-};
-
 const extractDatePart = (value: string) => {
   if (!value) return '';
 
@@ -85,106 +61,11 @@ const extractTimePart = (value: string) => {
   return `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
 };
 
-const formatTimeLabel = (value: string) => {
-  if (!value) return 'Select time...';
-
-  const matchedTime = TIME_OPTIONS.find((option) => option.value === value);
-  if (matchedTime) return matchedTime.label;
-
-  const [hourString, minuteString = '00'] = value.split(':');
-  const hours = Number(hourString);
-  const minutes = Number(minuteString);
-
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
-
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const displayHour = hours % 12 || 12;
-  return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
-};
-
 const combineEventDateTime = (date: string, time: string) => {
   if (!date) return '';
   if (!time) return date;
   return `${date}T${time}:00`;
 };
-
-function EventTimePicker({
-  label,
-  value,
-  selectedDate,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  selectedDate: string;
-  onChange: (next: string) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const today = getTodayDate();
-  const currentTime = getCurrentTime();
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current?.contains(event.target as Node)) return;
-      setIsOpen(false);
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
-
-  return (
-    <div className="space-y-2 relative" ref={containerRef}>
-      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">{label}</label>
-      <button
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        className={`w-full px-5 py-4 bg-gray-50 border-2 rounded-2xl flex items-center justify-between transition-all outline-none ${
-          isOpen
-            ? 'border-[#facc15] bg-white'
-            : 'border-gray-100 hover:bg-white hover:border-[#facc15]'
-        }`}
-      >
-        <span className={`text-[15px] ${value ? 'font-extrabold text-gray-900' : 'font-extrabold text-gray-400'}`}>
-          {formatTimeLabel(value)}
-        </span>
-        <ChevronDown className={`w-4 h-4 text-[#71717a] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="pr-1">
-            {TIME_OPTIONS.map((option) => {
-              const isDisabled = selectedDate === today && option.value < currentTime;
-              const isSelected = value === option.value;
-
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => {
-                    onChange(option.value);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full px-4 py-3 rounded-xl text-left transition-colors flex items-center justify-between ${
-                    isDisabled ? 'opacity-40 cursor-not-allowed' : isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="text-[13px] font-extrabold text-gray-900">{option.label}</div>
-                  {isSelected && <Check className="w-4 h-4 text-[#facc15]" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -470,10 +351,19 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                   <input required type="text" name="location" value={formData.location} onChange={(e) => setFormData(p => ({ ...p, location: e.target.value }))} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
                 </div>
 
-                <EventTimePicker
+                <CustomTimePicker
                   label="Production Time"
                   value={formData.time}
                   selectedDate={formData.date}
+                  trailingIcon="chevron"
+                  disablePastForToday
+                  labelClassName="text-gray-400"
+                  triggerClassName="w-full px-5 py-4 bg-gray-50 border-2 rounded-2xl outline-none"
+                  openTriggerClassName="border-[#facc15] bg-white"
+                  closedTriggerClassName="border-gray-100 hover:bg-white hover:border-[#facc15]"
+                  textClassName="text-[15px]"
+                  selectedTextClassName="font-extrabold text-gray-900"
+                  placeholderTextClassName="font-extrabold text-gray-400"
                   onChange={(val) => setFormData(prev => ({ ...prev, time: val }))}
                 />
               </div>

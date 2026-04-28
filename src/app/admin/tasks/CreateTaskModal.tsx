@@ -2,7 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowDown, ArrowUp, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, ShieldAlert, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, ShieldAlert, Users, X } from 'lucide-react';
+import { CustomTimePicker } from '@/components/ui/CustomInputs';
 
 export type StaffOption = {
   uid: string;
@@ -78,28 +79,9 @@ const PRIORITY_OPTIONS = [
   },
 ];
 
-const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
-  const hours = Math.floor(index / 2);
-  const minutes = index % 2 === 0 ? '00' : '30';
-  const value = `${String(hours).padStart(2, '0')}:${minutes}`;
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const displayHour = hours % 12 || 12;
-
-  return {
-    value,
-    label: `${displayHour}:${minutes} ${period}`,
-    militaryLabel: value,
-  };
-});
-
 const getTodayDate = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
-
-const getCurrentTime = () => {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 };
 
 const isPastDueSelection = (dueDate: string, dueTime: string) => {
@@ -556,71 +538,6 @@ function ProductionDatePicker({
   );
 }
 
-function TimePicker({
-  value,
-  dueDate,
-  onChange,
-}: {
-  value: string;
-  dueDate: string;
-  onChange: (next: string) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
-  const today = getTodayDate();
-  const currentTime = getCurrentTime();
-
-  return (
-    <div className="space-y-2" ref={triggerRef}>
-      <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Due Time</label>
-      <button
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        className={`${FORM_TRIGGER_CLASS} flex items-center justify-between ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
-      >
-        <span className={`text-[14px] ${value ? 'font-medium text-gray-900' : 'font-medium text-gray-400'}`}>
-          {TIME_OPTIONS.find((option) => option.value === value)?.label || 'Select time...'}
-        </span>
-        <Clock3 className="w-4 h-4 text-[#71717a]" />
-      </button>
-
-      <FloatingDropdown
-        isOpen={isOpen}
-        anchorRef={triggerRef}
-        panelRef={panelRef}
-        matchAnchorWidth
-        preferredHeight={320}
-        className="rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200"
-      >
-        <div className="pr-1">
-          {TIME_OPTIONS.map((option) => {
-            const isDisabled = dueDate === today && option.value < currentTime;
-
-            return (
-              <button
-                key={option.value}
-                type="button"
-                disabled={isDisabled}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className={`w-full px-4 py-3 rounded-xl text-left transition-colors flex items-center justify-between ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-              >
-                <div>
-                  <div className="text-[13px] font-extrabold text-gray-900">{option.label}</div>
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{option.militaryLabel}</div>
-                </div>
-                {value === option.value && <Check className="w-4 h-4 text-[#facc15]" />}
-              </button>
-            );
-          })}
-        </div>
-      </FloatingDropdown>
-    </div>
-  );
-}
-
 export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOptions, vendorOptions }: CreateTaskModalProps) {
   const [formData, setFormData] = useState<CreateTaskPayload>({
     title: '',
@@ -746,7 +663,20 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ProductionDatePicker value={formData.dueDate} onChange={(dueDate) => setFormData((prev) => ({ ...prev, dueDate }))} />
-            <TimePicker value={formData.dueTime} dueDate={formData.dueDate} onChange={(dueTime) => setFormData((prev) => ({ ...prev, dueTime }))} />
+            <CustomTimePicker
+              label="Due Time"
+              value={formData.dueTime}
+              selectedDate={formData.dueDate}
+              trailingIcon="clock"
+              disablePastForToday
+              labelClassName="text-[#71717a] ml-0"
+              triggerClassName={FORM_TRIGGER_CLASS}
+              openTriggerClassName="border-[#eebf43] bg-white"
+              closedTriggerClassName="hover:bg-white"
+              selectedTextClassName="font-medium text-gray-900"
+              placeholderTextClassName="font-medium text-gray-400"
+              onChange={(dueTime) => setFormData((prev) => ({ ...prev, dueTime }))}
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
