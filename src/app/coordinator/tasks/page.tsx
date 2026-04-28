@@ -1,12 +1,64 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Circle, CheckCircle2, Clock, CalendarDays, Filter, UserRound, ArrowDown, Lock } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function CoordinatorTasksPage() {
   const router = useRouter();
-  const [completeCount, setCompleteCount] = useState(3);
+  const { user } = useAuth();
+  const [completeCount, setCompleteCount] = useState(0);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      if (!user) return;
+      try {
+        const idToken = await user.getIdToken();
+        const userName = user.displayName;
+        const res = await fetch(`/api/tasks${userName ? `?assignee=${encodeURIComponent(userName)}` : ''}`, {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setTasks(data);
+          setCompleteCount(data.filter((t: any) => t.status === "DONE").length);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTasks();
+  }, [user]);
+
+  const toggleTask = async (taskId: string, currentStatus: string) => {
+    if (!user) return;
+    try {
+      const newStatus = currentStatus === "DONE" ? "TO DO" : "DONE";
+      const idToken = await user.getIdToken();
+      const res = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ taskObjectId: taskId, status: newStatus })
+      });
+      if (res.ok) {
+        setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
+        setCompleteCount(prev => currentStatus === "DONE" ? prev - 1 : prev + 1);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const overdueTasks = tasks.filter(t => t.status !== "DONE" && t.priority === "HIGH");
+  const todayTasks = tasks.filter(t => t.status !== "DONE" && t.priority !== "HIGH");
   
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative">
@@ -36,44 +88,46 @@ export default function CoordinatorTasksPage() {
                <h2 className="text-sm font-black uppercase tracking-widest text-red-600 flex items-center gap-2">
                   <ArrowDown size={16} /> Needs Attention
                </h2>
-               <span className="text-[10px] font-extrabold uppercase tracking-widest bg-red-50 text-red-500 px-2 py-1 rounded-md">Overdue</span>
+               <span className="text-[10px] font-extrabold uppercase tracking-widest bg-red-50 text-red-500 px-2 py-1 rounded-md">{loading ? "..." : overdueTasks.length} Overdue</span>
             </div>
             
             <div className="divide-y divide-gray-50">
-               {/* Mock Task */}
-              <div 
-                className="p-5 px-6 flex items-start justify-between gap-4 hover:bg-[#fafafa] transition-colors group cursor-pointer"
-                onClick={() => router.push('/coordinator/events/1?tab=tasks')}
-              >
-                <div className="flex items-start gap-4">
-                  <button 
-                    className="text-gray-300 hover:text-emerald-500 transition-colors shrink-0 mt-0.5 p-2 -m-2 group/btn" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCompleteCount(x => x + 1);
-                    }}
+               {loading ? <div className="p-6 text-sm text-gray-500">Loading...</div> : 
+                 overdueTasks.length === 0 ? <div className="p-6 text-sm text-gray-500">No tasks need attention right now.</div> :
+                 overdueTasks.map(task => (
+                  <div 
+                    key={task._id}
+                    className="p-5 px-6 flex items-start justify-between gap-4 hover:bg-[#fafafa] transition-colors group cursor-pointer"
+                    onClick={() => router.push(`/coordinator/events/${task.eventId}?tab=tasks`)}
                   >
-                    <Circle size={22} strokeWidth={2} className="group-hover/btn:hidden" />
-                    <CheckCircle2 size={22} strokeWidth={2} className="hidden group-hover/btn:block text-emerald-500" />
-                  </button>
-                  <div className="flex-1">
-                    <p className="text-[15px] font-bold text-[#1d1d1f]">Finalize seating arrangement with caterer</p>
-                    <p className="text-xs font-medium text-[#71717a] mt-1 max-w-lg leading-relaxed">Admin note: Need to ensure Table 4 has the dietary restrictions applied correctly for the VIP guests.</p>
-                    
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-[#1d1d1f] bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">
-                        <CalendarDays size={12} /> Garcia-Reyes Wedding
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 border border-red-100 px-2 py-1 rounded-md">
-                        <Clock size={12} /> Due: Oct 10, 2026
-                      </span>
+                    <div className="flex items-start gap-4">
+                      <button 
+                        className="text-gray-300 hover:text-emerald-500 transition-colors shrink-0 mt-0.5 p-2 -m-2 group/btn" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTask(task._id, task.status);
+                        }}
+                      >
+                        <Circle size={22} strokeWidth={2} className="group-hover/btn:hidden" />
+                        <CheckCircle2 size={22} strokeWidth={2} className="hidden group-hover/btn:block text-emerald-500" />
+                      </button>
+                      <div className="flex-1">
+                        <p className="text-[15px] font-bold text-[#1d1d1f]">{task.title}</p>
+                        <p className="text-xs font-medium text-[#71717a] mt-1 max-w-lg leading-relaxed">{task.description}</p>
+                        
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 border border-red-100 px-2 py-1 rounded-md">
+                            <Clock size={12} /> Priority: {task.priority}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center shrink-0 self-center md:opacity-0 md:-translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0 transition-all duration-300">
+                       <ArrowRight size={18} className="text-[#a1a1aa]" />
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center justify-center shrink-0 self-center md:opacity-0 md:-translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0 transition-all duration-300">
-                   <ArrowRight size={18} className="text-[#a1a1aa]" />
-                </div>
-              </div>
+                 ))
+               }
             </div>
           </div>
 
@@ -83,76 +137,46 @@ export default function CoordinatorTasksPage() {
                <h2 className="text-sm font-black uppercase tracking-widest text-[#1d1d1f] flex items-center gap-2">
                   <Clock size={16} className="text-[#d4a017]" /> Due Today
                </h2>
-               <span className="text-[10px] font-extrabold uppercase tracking-widest bg-[#fff9e6] text-[#d4a017] px-2 py-1 rounded-md">2 Pending</span>
+               <span className="text-[10px] font-extrabold uppercase tracking-widest bg-[#fff9e6] text-[#d4a017] px-2 py-1 rounded-md">{loading ? "..." : todayTasks.length} Pending</span>
             </div>
             
             <div className="divide-y divide-gray-50">
-               {/* Mock Task */}
-              <div 
-                className="p-5 px-6 flex items-start justify-between gap-4 hover:bg-[#fafafa] transition-colors group cursor-pointer"
-                onClick={() => router.push('/coordinator/events/2?tab=tasks')}
-              >
-                <div className="flex items-start gap-4">
-                  <button 
-                    className="text-gray-300 hover:text-emerald-500 transition-colors shrink-0 mt-0.5 p-2 -m-2 group/btn" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCompleteCount(x => x + 1);
-                    }}
+               {loading ? <div className="p-6 text-sm text-gray-500">Loading...</div> : 
+                 todayTasks.length === 0 ? <div className="p-6 text-sm text-gray-500">No active tasks today.</div> :
+                 todayTasks.map(task => (
+                  <div 
+                    key={task._id}
+                    className="p-5 px-6 flex items-start justify-between gap-4 hover:bg-[#fafafa] transition-colors group cursor-pointer"
+                    onClick={() => router.push(`/coordinator/events/${task.eventId}?tab=tasks`)}
                   >
-                    <Circle size={22} strokeWidth={2} className="group-hover/btn:hidden" />
-                    <CheckCircle2 size={22} strokeWidth={2} className="hidden group-hover/btn:block text-emerald-500" />
-                  </button>
-                  <div className="flex-1">
-                    <p className="text-[15px] font-bold text-[#1d1d1f]">Follow up on pending VIP RSVPs</p>
-                    <p className="text-xs font-medium text-[#71717a] mt-1 max-w-lg leading-relaxed">Call the remaining 12 VIP guests who haven't confirmed yet for the product launch.</p>
-                    
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-[#1d1d1f] bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">
-                        <CalendarDays size={12} /> Lim Tech Launch
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-500 bg-orange-50 border border-orange-100 px-2 py-1 rounded-md">
-                        <Clock size={12} /> Today, 5:00 PM
-                      </span>
+                    <div className="flex items-start gap-4">
+                      <button 
+                        className="text-gray-300 hover:text-emerald-500 transition-colors shrink-0 mt-0.5 p-2 -m-2 group/btn" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTask(task._id, task.status);
+                        }}
+                      >
+                        <Circle size={22} strokeWidth={2} className="group-hover/btn:hidden" />
+                        <CheckCircle2 size={22} strokeWidth={2} className="hidden group-hover/btn:block text-emerald-500" />
+                      </button>
+                      <div className="flex-1">
+                        <p className="text-[15px] font-bold text-[#1d1d1f]">{task.title}</p>
+                        <p className="text-xs font-medium text-[#71717a] mt-1 max-w-lg leading-relaxed">{task.description}</p>
+                        
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-500 bg-orange-50 border border-orange-100 px-2 py-1 rounded-md">
+                            <Clock size={12} /> Status: {task.status}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center shrink-0 self-center md:opacity-0 md:-translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0 transition-all duration-300">
+                       <ArrowRight size={18} className="text-[#a1a1aa]" />
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center justify-center shrink-0 self-center md:opacity-0 md:-translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0 transition-all duration-300">
-                   <ArrowRight size={18} className="text-[#a1a1aa]" />
-                </div>
-              </div>
-
-               {/* Mock Task */}
-               <div 
-                className="p-5 px-6 flex items-start justify-between gap-4 hover:bg-[#fafafa] transition-colors group cursor-pointer"
-                onClick={() => router.push('/coordinator/events/2?tab=tasks')}
-              >
-                <div className="flex items-start gap-4">
-                  <button 
-                    className="text-gray-300 hover:text-emerald-500 transition-colors shrink-0 mt-0.5 p-2 -m-2 group/btn" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCompleteCount(x => x + 1);
-                    }}
-                  >
-                    <Circle size={22} strokeWidth={2} className="group-hover/btn:hidden" />
-                    <CheckCircle2 size={22} strokeWidth={2} className="hidden group-hover/btn:block text-emerald-500" />
-                  </button>
-                  <div className="flex-1">
-                    <p className="text-[15px] font-bold text-[#1d1d1f]">Review final lighting setup timeline from Tech Corp</p>
-                    <p className="text-xs font-medium text-[#71717a] mt-1 max-w-lg leading-relaxed">Ensure the vendor contract aligns with our load-in schedule.</p>
-                    
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-[#1d1d1f] bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">
-                        <CalendarDays size={12} /> Lim Tech Launch
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-center shrink-0 self-center md:opacity-0 md:-translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0 transition-all duration-300">
-                   <ArrowRight size={18} className="text-[#a1a1aa]" />
-                </div>
-              </div>
+                 ))
+               }
             </div>
           </div>
         </div>
@@ -166,14 +190,14 @@ export default function CoordinatorTasksPage() {
 
              <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-[#a1a1aa] uppercase tracking-widest">Completed</span>
-                <span className="text-xs font-black text-emerald-600">{completeCount} / {completeCount + 3} Tasks</span>
+                <span className="text-xs font-black text-emerald-600">{completeCount} / {tasks.length} Tasks</span>
              </div>
              
              {/* Progress Bar */}
              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-6">
                 <div 
                   className="h-full bg-emerald-500 rounded-full transition-all duration-1000 ease-out" 
-                  style={{ width: `${(completeCount / (completeCount + 3)) * 100}%` }}
+                  style={{ width: `${tasks.length > 0 ? (completeCount / tasks.length) * 100 : 0}%` }}
                 ></div>
              </div>
 

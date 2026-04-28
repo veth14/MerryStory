@@ -25,13 +25,40 @@ export async function GET(request: NextRequest) {
       filter.status = taskStatus;
     }
 
+    const assignee = searchParams.get("assignee");
+    if (assignee) {
+      filter["assignee.name"] = assignee;
+    }
+
     console.info("[Tasks API] Query params", { eventId: eventIdValue, taskStatus });
     console.info("[Tasks API] Filter", filter);
 
     const db = await getMongoDb();
     const tasksCollection = db.collection("event_tasks");
 
-    const tasks = await tasksCollection.find(filter).sort({ createdAt: -1 }).toArray();
+    const pipeline: any[] = [
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: "events",
+          localField: "eventId",
+          foreignField: "_id",
+          as: "eventDetails",
+        },
+      },
+      {
+        $addFields: {
+          eventTitle: { $arrayElemAt: ["$eventDetails.title", 0] },
+          eventType: { $arrayElemAt: ["$eventDetails.type", 0] },
+          eventDate: { $arrayElemAt: ["$eventDetails.date", 0] },
+          eventLocation: { $arrayElemAt: ["$eventDetails.location", 0] },
+        },
+      },
+      { $project: { eventDetails: 0 } },
+    ];
+
+    const tasks = await tasksCollection.aggregate(pipeline).toArray();
 
     const serializedTasks = tasks.map((task) => ({
       ...task,

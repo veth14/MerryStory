@@ -36,7 +36,9 @@ export default function CoordinatorSidebar() {
     <aside className="w-[280px] bg-white border-r border-gray-100 h-screen hidden md:flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 relative">
       <div className="p-8 pb-6 text-left flex items-start justify-start flex-col">
         <h2 className="text-[20px] tracking-tight font-extrabold text-gray-900 leading-tight">PRODUCTION</h2>
-        <p className="text-[10px] uppercase tracking-wider text-[#d4a017] mt-1 font-bold">Coordinator Portal</p>
+        <p className="text-[10px] uppercase tracking-wider text-[#d4a017] mt-1 font-bold">
+          {role === 'staff' ? 'Staff Portal' : 'Coordinator Portal'}
+        </p>
       </div>
       
       <nav className="flex-1 overflow-y-auto mt-2 px-4 scrollbar-hide">
