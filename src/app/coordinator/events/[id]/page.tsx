@@ -81,6 +81,22 @@ const formatDueDate = (dateValue?: string) => {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+const normalizeTaskStatus = (value?: string) => {
+  const normalized = (value || '').toUpperCase().replace(/[_-]/g, ' ').trim();
+  if (normalized === 'DONE' || normalized === 'COMPLETE' || normalized === 'COMPLETED') return 'COMPLETED';
+  if (normalized === 'TODO') return 'TO DO';
+  if (normalized === 'INPROGRESS') return 'IN PROGRESS';
+  return normalized;
+};
+
+const getDisplayStatusLabel = (value?: string) => {
+  const normalized = normalizeTaskStatus(value);
+  if (normalized === 'COMPLETED') return 'Completed';
+  if (normalized === 'IN PROGRESS') return 'In Progress';
+  if (normalized === 'TO DO') return 'To Do';
+  return value?.trim() || 'Active';
+};
+
 const normalizeAssigneeNames = (task: TaskRecord) => {
   const names = (task.assignees || [])
     .map((assignee) => assignee?.name?.trim() || '')
@@ -96,11 +112,11 @@ const normalizeAssigneeNames = (task: TaskRecord) => {
 
 const getTaskBadge = (task: TaskRecord) => {
   const priority = (task.priority || '').toUpperCase();
-  const status = (task.status || '').toUpperCase();
+  const status = normalizeTaskStatus(task.status);
 
-  if (status === 'DONE') {
+  if (status === 'COMPLETED') {
     return {
-      label: 'Done',
+      label: 'Completed',
       classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg mb-2',
     };
   }
@@ -248,12 +264,12 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   }, [tasks, userLookup]);
 
   const pendingTasks = useMemo(
-    () => enrichedTasks.filter((task) => (task.status || '').toUpperCase() !== 'DONE'),
+    () => enrichedTasks.filter((task) => normalizeTaskStatus(task.status) !== 'COMPLETED'),
     [enrichedTasks]
   );
 
   const finishedTasks = useMemo(
-    () => enrichedTasks.filter((task) => (task.status || '').toUpperCase() === 'DONE'),
+    () => enrichedTasks.filter((task) => normalizeTaskStatus(task.status) === 'COMPLETED'),
     [enrichedTasks]
   );
 
@@ -306,7 +322,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const handleConfirmTaskDone = async () => {
     if (!confirmTask) return;
     const taskId = confirmTask._id;
-    const success = await persistTaskPatch(taskId, { status: 'DONE' });
+    const success = await persistTaskPatch(taskId, { status: 'COMPLETED' });
     if (success) {
       setConfirmTask(null);
     }
@@ -367,7 +383,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
         )}
 
         {sectionTasks.map((task) => {
-          const isDone = (task.status || '').toUpperCase() === 'DONE';
+          const isDone = normalizeTaskStatus(task.status) === 'COMPLETED';
           const badge = getTaskBadge(task);
           const availableStaff = directory.filter(
             (entry) =>
@@ -434,12 +450,9 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                         )}
                         <div className="pr-1">
                           <p className="text-[13px] font-bold text-[#1d1d1f] leading-tight">{assignee.name}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[11px] font-medium text-[#a1a1aa]">{roleLabelMap[assignee.appRole]}</span>
-                            <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full ${roleBadgeMap[assignee.appRole]}`}>
-                              {assignee.appRole}
-                            </span>
-                          </div>
+                          <span className={`inline-flex mt-0.5 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full ${roleBadgeMap[assignee.appRole]}`}>
+                            {assignee.appRole}
+                          </span>
                         </div>
                         {removable && (
                           <button
@@ -528,7 +541,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
         </div>
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 uppercase tracking-widest shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> {event?.status || 'Active'}
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> {getDisplayStatusLabel(event?.status)}
           </span>
         </div>
       </div>
@@ -692,7 +705,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px] flex items-center justify-center px-4">
           <div className="w-full max-w-md rounded-3xl bg-white border border-gray-100 shadow-2xl p-8">
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mb-3">Confirm Completion</p>
-            <h3 className="text-2xl font-black text-[#1d1d1f] tracking-tight mb-3">Mark this task as finished?</h3>
+            <h3 className="text-2xl font-black text-[#1d1d1f] tracking-tight mb-3">Mark this task as completed?</h3>
             <p className="text-sm font-medium text-[#71717a] leading-relaxed">
               <span className="font-bold text-[#1d1d1f]">{confirmTask.title || 'Untitled Task'}</span> will be moved to finished directives and your progress KPI will update immediately.
             </p>
@@ -710,7 +723,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                 onClick={handleConfirmTaskDone}
                 className="px-5 py-3 rounded-xl bg-[#1d1d1f] hover:bg-[#d4a017] text-white text-sm font-extrabold transition-colors disabled:opacity-60"
               >
-                Confirm Finish
+                Confirm
               </button>
             </div>
           </div>

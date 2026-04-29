@@ -60,8 +60,16 @@ const formatEventDate = (dateValue?: string) => {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+const normalizeTaskStatus = (value?: string) => {
+  const normalized = (value || '').toUpperCase().replace(/[_-]/g, ' ').trim();
+  if (normalized === 'COMPLETE' || normalized === 'COMPLETED') return 'DONE';
+  if (normalized === 'TODO') return 'TO DO';
+  if (normalized === 'INPROGRESS') return 'IN PROGRESS';
+  return normalized;
+};
+
 const normalizeStatus = (event: EventRecord, completionPct: number) => {
-  const status = (event.status || '').trim();
+  const status = normalizeTaskStatus(event.status);
   const health = typeof event.health === 'number' ? event.health : null;
   const lower = status.toLowerCase();
 
@@ -154,7 +162,7 @@ export default function CoordinatorEventsPage() {
       .filter((event) => event?._id && tasksByEvent[event._id]?.length)
       .map((event, index) => {
         const eventTasks = tasksByEvent[event._id] || [];
-        const completedTasks = eventTasks.filter((task) => (task.status || '').toUpperCase() === 'DONE').length;
+        const completedTasks = eventTasks.filter((task) => normalizeTaskStatus(task.status) === 'DONE').length;
         const completionPct = eventTasks.length > 0 ? Math.round((completedTasks / eventTasks.length) * 100) : 0;
         const status = normalizeStatus(event, completionPct);
 
