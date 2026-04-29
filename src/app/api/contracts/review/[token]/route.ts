@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMongoDb } from '@/lib/mongodb';
+import { isValidContractAdminAccessToken } from '@/lib/contract-review-access';
 
 type RouteContext = {
   params: Promise<{ token: string }>;
@@ -12,8 +13,11 @@ function getAccessCookieName(token: string) {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { token } = await context.params;
+    const adminAccess = request.nextUrl.searchParams.get('adminAccess');
     const accessCookie = request.cookies.get(getAccessCookieName(token))?.value;
-    if (accessCookie !== 'verified') {
+    const hasAdminAccess = isValidContractAdminAccessToken(token, adminAccess);
+
+    if (accessCookie !== 'verified' && !hasAdminAccess) {
       return NextResponse.json({ error: 'Contract access code required.' }, { status: 403 });
     }
     const db = await getMongoDb();
@@ -41,6 +45,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       signatureDataUrl: contract.signatureDataUrl || '',
       signedAt: contract.signedAt || '',
       reviewSubmittedAt: contract.reviewSubmittedAt || '',
+      adminView: hasAdminAccess,
     });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

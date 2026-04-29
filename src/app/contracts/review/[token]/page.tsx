@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Download, FileText, Loader, PenLine, RefreshCcw, Send, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 type ContractReview = {
@@ -22,6 +22,7 @@ type ContractReview = {
   signatureDataUrl?: string;
   signedAt?: string;
   reviewSubmittedAt?: string;
+  adminView?: boolean;
 };
 
 type PdfPageMetric = {
@@ -108,7 +109,9 @@ async function drawSnapshotOnCanvas(
 export default function ContractReviewPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const token = String(params?.token || '');
+  const adminAccess = searchParams.get('adminAccess') || '';
   const drawingRef = useRef(false);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const pageCanvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
@@ -161,7 +164,10 @@ export default function ContractReviewPage() {
     const fetchContract = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/contracts/review/${token}`);
+        const reviewUrl = adminAccess
+          ? `/api/contracts/review/${token}?adminAccess=${encodeURIComponent(adminAccess)}`
+          : `/api/contracts/review/${token}`;
+        const response = await fetch(reviewUrl);
         const payload = await response.json().catch(() => ({}));
 
         if (response.status === 403) {
@@ -188,7 +194,7 @@ export default function ContractReviewPage() {
     };
 
     void fetchContract();
-  }, [token]);
+  }, [token, adminAccess]);
 
   const handleVerifyCode = async () => {
     if (!accessCode.trim()) return;
@@ -212,7 +218,10 @@ export default function ContractReviewPage() {
       setAccessRequired(false);
       setAccessCode('');
       setLoading(true);
-      const contractResponse = await fetch(`/api/contracts/review/${token}`);
+      const reviewUrl = adminAccess
+        ? `/api/contracts/review/${token}?adminAccess=${encodeURIComponent(adminAccess)}`
+        : `/api/contracts/review/${token}`;
+      const contractResponse = await fetch(reviewUrl);
       const contractPayload = await contractResponse.json();
       if (!contractResponse.ok) {
         throw new Error(contractPayload.error || 'Failed to load contract review page.');
@@ -509,14 +518,22 @@ export default function ContractReviewPage() {
         }),
       });
 
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || 'Failed to submit contract response.');
-      }
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || 'Failed to submit contract response.');
+        }
 
-      setSubmitted(true);
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Failed to submit contract response.');
+        const reviewUrl = adminAccess
+          ? `/api/contracts/review/${token}?adminAccess=${encodeURIComponent(adminAccess)}`
+          : `/api/contracts/review/${token}`;
+        const refreshedResponse = await fetch(reviewUrl);
+        const refreshedPayload = await refreshedResponse.json().catch(() => ({}));
+        if (refreshedResponse.ok) {
+          setContract(refreshedPayload);
+        }
+        setSubmitted(true);
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : 'Failed to submit contract response.');
     } finally {
       setSaving(false);
     }
@@ -591,34 +608,52 @@ export default function ContractReviewPage() {
 
   return (
     <div className="min-h-screen bg-white text-[#1d1d1f] px-4 py-8">
+      <style jsx global>{`
+        .contract-theme-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #111111 #fcfbf7;
+        }
+
+        .contract-theme-scrollbar::-webkit-scrollbar {
+          width: 12px;
+          height: 12px;
+        }
+
+        .contract-theme-scrollbar::-webkit-scrollbar-track {
+          background: #fcfbf7;
+          border-left: 1px solid #eee8d8;
+        }
+
+        .contract-theme-scrollbar::-webkit-scrollbar-thumb {
+          background: #111111;
+          border: 2px solid #fcfbf7;
+          border-radius: 999px;
+        }
+
+        .contract-theme-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #000000;
+        }
+
+        .contract-theme-scrollbar::-webkit-scrollbar-corner {
+          background: #fcfbf7;
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8 px-4 pt-2">
-          <p className="text-[#D4AF37] font-bold tracking-[0.2em] uppercase text-xs mb-4">Curating Excellence</p>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 leading-[1.05] tracking-tight">
-            Contract Review, <span className="text-[#D4AF37] font-light italic font-serif">Beautifully</span> Presented.
+        <div className="mb-6 px-4 pt-2">
+          <p className="text-[#D4AF37] font-bold tracking-[0.2em] uppercase text-xs mb-3">Contract Review</p>
+          <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight tracking-tight">
+            Review Your Agreement
           </h1>
         </div>
         <div className="bg-[#fcfbf7] rounded-[28px] border border-[#eee8d8] shadow-[0_30px_80px_rgba(17,17,17,0.06)] overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2">Merry Story Productions</p>
-              <h1 className="text-3xl font-black tracking-tight">{contract.name}</h1>
-              <p className="text-sm text-gray-500 mt-2">{contract.type} for {contract.eventName}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button onClick={handleDownload} className="px-4 py-3 rounded-xl bg-[#eebf43] text-white text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors flex items-center gap-2">
-                <Download size={14} /> Download File
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] lg:h-[calc(100vh-180px)] max-h-[860px] overflow-hidden">
-            <div className="bg-gray-100 p-6 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-0">
+            <div className="contract-theme-scrollbar bg-white p-6 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
               {preview.previewMode === 'pdf' && preview.previewUrl ? (
-                <div ref={pdfContainerRef} className="relative w-full h-full min-h-[640px] overflow-y-auto overflow-x-hidden pr-2">
-                  {canDrawOnPdf ? (
-                    <div className="sticky top-0 z-10 flex justify-end pr-2 pt-2 pointer-events-none">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[#eebf43]/30 bg-white/95 px-3 py-2 shadow-sm">
+                <div className="w-full">
+                  <div ref={pdfContainerRef} className="contract-theme-scrollbar relative w-full overflow-y-auto overflow-x-hidden bg-white p-4 pr-2" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+                    {canDrawOnPdf ? (
+                      <div className="sticky top-0 z-10 flex justify-end pr-2 pt-2 pointer-events-none">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-[#eebf43]/30 bg-white/95 px-3 py-2 shadow-sm">
                         <PenLine size={14} className="text-[#eebf43]" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-[#1d1d1f]">Pen Active</span>
                       </div>
@@ -629,24 +664,27 @@ export default function ContractReviewPage() {
                       <Loader className="animate-spin mr-3 text-[#eebf43]" />
                       <span className="text-sm text-gray-500">Rendering contract PDF...</span>
                     </div>
-                  ) : (
-                    <div className="space-y-6 py-2">
-                      {pdfPages.map((page) => (
-                        <div key={`${page.pageNumber}-${canvasVersion}`} className="flex justify-center">
-                          <canvas
-                            ref={(node) => {
-                              pageCanvasRefs.current[page.pageNumber - 1] = node;
-                            }}
-                            className={`rounded-2xl bg-white shadow-md ${canDrawOnPdf ? 'cursor-[url(\"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%231d1d1f%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M12 20h9%27/%3E%3Cpath d=%27M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z%27/%3E%3C/svg%3E\")_2_20,auto]' : 'cursor-default'}`}
-                            onMouseDown={startDrawing}
-                            onMouseMove={draw}
-                            onMouseUp={stopDrawing}
-                            onMouseLeave={stopDrawing}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                    ) : (
+                      <div className="space-y-6 py-2">
+                        {pdfPages.map((page) => (
+                          <div key={`${page.pageNumber}-${canvasVersion}`} className="flex justify-center">
+                            <div className="relative inline-block overflow-hidden border-4 border-[#eebf43] bg-white">
+                              <canvas
+                                ref={(node) => {
+                                  pageCanvasRefs.current[page.pageNumber - 1] = node;
+                                }}
+                                className={`relative z-[1] block bg-white ${canDrawOnPdf ? 'cursor-[url(\"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%231d1d1f%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M12 20h9%27/%3E%3Cpath d=%27M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z%27/%3E%3C/svg%3E\")_2_20,auto]' : 'cursor-default'}`}
+                                onMouseDown={startDrawing}
+                                onMouseMove={draw}
+                                onMouseUp={stopDrawing}
+                                onMouseLeave={stopDrawing}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="max-w-md text-center bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
@@ -664,7 +702,7 @@ export default function ContractReviewPage() {
               )}
             </div>
 
-            <div className="bg-white p-8 border-l border-gray-100 overflow-y-auto">
+            <div className="contract-theme-scrollbar bg-white p-8 border-l border-gray-100 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
               {submitted ? (
                 <div className="h-full flex flex-col items-center justify-center text-center">
                   <CheckCircle2 size={48} className="text-[#22c55e] mb-4" />
@@ -672,10 +710,24 @@ export default function ContractReviewPage() {
                   <p className="text-sm text-gray-500 max-w-sm">
                     Your contract response has been recorded and sent back to the Merry Story admin team.
                   </p>
+                  <button
+                    onClick={handleDownload}
+                    className="mt-8 px-5 py-4 bg-[#eebf43] text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Download size={14} /> Download {contract.status === 'signed' ? 'Signed PDF' : 'File'}
+                  </button>
                 </div>
               ) : isSignedView ? (
-                <div className="space-y-8">
-                  <div>
+                <div className="space-y-4">
+                  <div className="p-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#111111] mb-2">Merry Story Productions</p>
+                    <h2 className="text-3xl font-black tracking-tight text-[#1d1d1f]">{contract.name}</h2>
+                    <p className="text-sm text-[#111111] mt-2">{contract.type} for {contract.eventName}</p>
+                    <p className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-[#111111]">Client : {contract.recipientName || 'Not provided'}</p>
+                    <p className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-[#111111]">Email : {contract.recipientEmail || 'Not provided'}</p>
+                  </div>
+
+                  <div className="pt-1">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2">Contract Value</p>
                     <p className="text-3xl font-black">{formatContractValue(contract.value)}</p>
                   </div>
@@ -698,10 +750,24 @@ export default function ContractReviewPage() {
                   <p className="text-sm text-gray-500 leading-relaxed">
                     The signed PDF now has the client signature stamped directly into the document file.
                   </p>
+                  <button
+                    onClick={handleDownload}
+                    className="w-full px-5 py-4 bg-[#eebf43] text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Download size={14} /> Download Signed PDF
+                  </button>
                 </div>
               ) : (
-                <div className="space-y-8">
-                  <div>
+                <div className="space-y-5">
+                  <div className="p-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#111111] mb-2">Merry Story Productions</p>
+                    <h2 className="text-3xl font-black tracking-tight text-[#1d1d1f]">{contract.name}</h2>
+                    <p className="text-sm text-[#111111] mt-2">{contract.type} for {contract.eventName}</p>
+                    <p className="mt-2 text-[11px] font-black uppercase tracking-[0.2em] text-[#111111]">Client : {contract.recipientName || 'Not provided'}</p>
+                    <p className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-[#111111]">Email : {contract.recipientEmail || 'Not provided'}</p>
+                  </div>
+
+                  <div className="pt-1">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2">Contract Value</p>
                     <p className="text-3xl font-black">{formatContractValue(contract.value)}</p>
                   </div>
@@ -755,6 +821,12 @@ export default function ContractReviewPage() {
                   >
                     {saving ? <Loader size={16} className="animate-spin" /> : <Send size={14} />}
                     {mode === 'signature' ? 'Send Back As Signed & Confirmed' : 'Send Revision Request'}
+                  </button>
+                  <button
+                    onClick={handleDownload}
+                    className="w-full px-5 py-4 bg-[#eebf43] text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Download size={14} /> Download File
                   </button>
                 </div>
               )}

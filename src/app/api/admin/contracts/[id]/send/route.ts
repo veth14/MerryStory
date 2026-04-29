@@ -9,6 +9,35 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+function getEmailFailureMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : 'Failed to send contract email.';
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('missing email_user') || normalized.includes('missing email_pass')) {
+    return 'Email sending is not configured yet. Add EMAIL_USER and EMAIL_PASS in .env.local, then restart the server.';
+  }
+
+  if (
+    normalized.includes('invalid login') ||
+    normalized.includes('username and password not accepted') ||
+    normalized.includes('badcredentials') ||
+    normalized.includes('auth')
+  ) {
+    return 'The email account rejected the login. Check EMAIL_USER and use a valid Gmail app password in EMAIL_PASS.';
+  }
+
+  if (
+    normalized.includes('econnrefused') ||
+    normalized.includes('enotfound') ||
+    normalized.includes('timeout') ||
+    normalized.includes('network')
+  ) {
+    return 'The app could not reach the email server. Please try again in a moment.';
+  }
+
+  return message;
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     await requireAuthenticatedUser(request);
@@ -64,6 +93,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (error instanceof AuthGuardError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
     }
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    return NextResponse.json({ error: getEmailFailureMessage(error) }, { status: 500 });
   }
 }

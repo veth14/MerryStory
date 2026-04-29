@@ -311,7 +311,6 @@ export default function PipelinePage() {
       triggerModal('Contract Sent', 'The review link has been sent to the recipient email.');
       await fetchPipeline(token);
     } catch (error) {
-      console.error('Failed to send contract email:', error);
       triggerModal('Send Error', (error as Error).message || 'Failed to send contract email.');
     }
   };

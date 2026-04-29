@@ -704,7 +704,6 @@ export default function DocumentsAdminPage() {
       await loadData();
       triggerModal('Contract Sent', 'The contract review link has been emailed to the selected recipient.');
     } catch (error) {
-      console.error('Failed to send contract email:', error);
       triggerModal('Send Error', (error as Error).message || 'Failed to send contract email.');
     }
   };

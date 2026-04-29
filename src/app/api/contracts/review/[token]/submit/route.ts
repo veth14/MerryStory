@@ -3,6 +3,7 @@ import { getMongoDb } from '@/lib/mongodb';
 import { sendContractStatusEmail } from '@/lib/email';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { createContractAdminAccessToken } from '@/lib/contract-review-access';
 
 function decodeDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
@@ -249,12 +250,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const adminEmail = process.env.EMAIL_USER;
     if (adminEmail) {
+      const origin = new URL(request.url).origin;
+      const reviewLink = `${origin}/contracts/review/${token}?adminAccess=${createContractAdminAccessToken(token)}`;
       await sendContractStatusEmail({
         to: adminEmail,
         contractName: String(contract.name || 'Contract Agreement'),
         signerName: signerName || String(contract.recipientName || contract.recipientEmail || 'Contract Recipient'),
+        recipientName: String(contract.recipientName || contract.recipientEmail || 'Client'),
+        eventName: String(contract.eventName || 'Unassigned Event'),
         action: action as 'revision' | 'signature',
-        note,
+        reviewLink,
       });
     }
 
