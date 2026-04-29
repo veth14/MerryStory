@@ -69,6 +69,7 @@ export default function AdminDashboard() {
   const [tasksCount, setTasksCount] = useState<number>(0);
   const [tasksPercentChange, setTasksPercentChange] = useState<number>(0);
   const [activeEvents, setActiveEvents] = useState<any[]>([]);
+  const [productionQuality, setProductionQuality] = useState<number>(0);
   // Helper to check if event is ongoing today
   function isEventOngoingToday(event: any) {
     if (!event.date) return false;
@@ -120,25 +121,35 @@ export default function AdminDashboard() {
           .filter(event => event.status && event.status.toLowerCase().includes('active'))
           .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
         setActiveEvents(active);
-        // For count and percent change
-        let currentMonthActive = 0;
-        let prevMonthActive = 0;
-        active.forEach(event => {
+        // For count and percent change - include both active and pre-production, count from current month onwards (exclude previous months)
+        const allActiveAndPreProduction = events
+          .filter(event => event.status && (event.status.toLowerCase().includes('active') || event.status.toLowerCase().includes('pre-production')))
+          .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+        
+        let currentAndFutureMonthsActive = 0;
+        let previousMonthsActive = 0;
+        allActiveAndPreProduction.forEach(event => {
           if (event.date) {
             const eventDate = new Date(event.date);
             const eventMonth = eventDate.getMonth();
             const eventYear = eventDate.getFullYear();
-            if (eventMonth === thisMonth && eventYear === thisYear) currentMonthActive++;
-            else if (eventMonth === lastMonth && eventYear === lastMonthYear) prevMonthActive++;
+            // Count events from current month onwards
+            if ((eventYear > thisYear) || (eventYear === thisYear && eventMonth >= thisMonth)) {
+              currentAndFutureMonthsActive++;
+            }
+            // Count previous months for comparison
+            if ((eventYear < thisYear) || (eventYear === thisYear && eventMonth < thisMonth)) {
+              previousMonthsActive++;
+            }
           } else {
-            currentMonthActive++;
+            currentAndFutureMonthsActive++;
           }
         });
-        setActiveEventsCount(currentMonthActive);
+        setActiveEventsCount(currentAndFutureMonthsActive);
         setActiveEventsPercentChange(
-          prevMonthActive === 0
-            ? currentMonthActive > 0 ? 100 : 0
-            : ((currentMonthActive - prevMonthActive) / prevMonthActive) * 100
+          previousMonthsActive === 0 && currentAndFutureMonthsActive === 0 ? 0
+            : previousMonthsActive === 0 ? 100
+            : ((currentAndFutureMonthsActive - previousMonthsActive) / previousMonthsActive) * 100
         );
 
         const inquiriesRes = await fetch('/api/inquiries', {
@@ -230,6 +241,22 @@ export default function AdminDashboard() {
             : prevWeekTasks === 0 ? 100
             : ((currentWeekTasks - prevWeekTasks) / prevWeekTasks) * 100
         );
+
+        // Calculate Production Quality based on active events' health scores
+        if (active.length > 0) {
+          const healthScores = active
+            .map((event: any) => event.health || 0)
+            .filter((score: number) => score > 0);
+          
+          if (healthScores.length > 0) {
+            const averageQuality = healthScores.reduce((a: number, b: number) => a + b, 0) / healthScores.length;
+            setProductionQuality(Math.round(averageQuality));
+          } else {
+            setProductionQuality(0);
+          }
+        } else {
+          setProductionQuality(0);
+        }
       } catch (err: any) {
         setError(err.message || 'Could not load dashboard stats.');
       } finally {
@@ -300,7 +327,7 @@ export default function AdminDashboard() {
 
         <div className="flex flex-wrap lg:flex-nowrap gap-5 shrink-0 mt-6 xl:mt-0 xl:w-auto w-full">
           {/* Active Events */}
-          <div className="bg-white p-7 rounded-xl shadow-sm border border-gray-100 xl:w-56 w-[calc(50%-10px)] flex flex-col justify-between min-h-[180px]">
+          <div className="bg-white p-7 rounded-xl shadow-sm border border-gray-100 xl:w-56 w-[calc(50%-10px)] flex flex-col justify-between min-h-[180px] transform transition-transform hover:-translate-y-1">
             <div className="flex gap-2 items-center text-[11px] font-bold tracking-wider text-gray-400 mb-8 uppercase">
               <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               Active Events
@@ -310,14 +337,14 @@ export default function AdminDashboard() {
                 : error ? <p className="text-xs text-red-500 font-bold">Error</p>
                 : <p className="text-6xl font-bold text-gray-900 tracking-tight">{activeEventsCount}</p>}
               <p className="text-[12px] text-gray-500 font-medium mt-4 flex items-center gap-1">
-                <span className="text-gray-900 font-bold border-b border-gray-900 leading-none pb-0.5">
+                <span className="text-gray-900 font-bold leading-none pb-0.5">
                   {activeEventsPercentChange !== null && !loading && !error && (
                     activeEventsPercentChange > 0 ? '↗' : activeEventsPercentChange < 0 ? '↘' : '→'
                   )}
                 </span>
                 {activeEventsPercentChange !== null && !loading && !error && (
                   <span className={activeEventsPercentChange > 0 ? 'text-green-600' : activeEventsPercentChange < 0 ? 'text-red-600' : 'text-gray-500'}>
-                    {activeEventsPercentChange > 0 ? '+' : ''}{activeEventsPercentChange.toFixed(0)}% vs last month
+                    {activeEventsPercentChange > 0 ? '+' : ''}{activeEventsPercentChange.toFixed(0)}% vs previous months
                   </span>
                 )}
               </p>
@@ -350,7 +377,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Tasks */}
-          <div className="bg-[#facc15] p-7 rounded-xl shadow-lg shadow-[#facc15]/20 xl:w-48 w-full flex flex-col justify-between min-h-[180px]">
+          <div className="bg-[#facc15] p-7 rounded-xl shadow-lg shadow-[#facc15]/20 xl:w-48 w-full flex flex-col justify-between min-h-[180px] transform transition-transform hover:-translate-y-1">
             <div className="flex gap-2 items-center text-[11px] font-bold tracking-wider text-yellow-900 mb-8 uppercase">
               <svg className="w-5 h-5 text-yellow-900" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               Tasks
@@ -499,14 +526,14 @@ export default function AdminDashboard() {
             <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             Production Quality
           </h3>
-          <p className="text-5xl md:text-[56px] font-extrabold text-gray-900 leading-none tracking-tight">98.2%</p>
+          <p className="text-5xl md:text-[56px] font-extrabold text-gray-900 leading-none tracking-tight">{loading ? '...' : productionQuality}%</p>
           <p className="text-[14px] text-gray-600 mt-4 leading-relaxed font-medium">
             Aggregate feedback across all active production sets.
           </p>
-          <button className="text-[11px] font-bold tracking-widest uppercase text-gray-900 mt-10 flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all">
+          <a href="/admin/production-quality" className="text-[11px] font-bold tracking-widest uppercase text-gray-900 mt-10 flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all cursor-pointer">
             View full report
             <span className="transform group-hover:translate-x-1 transition-transform">→</span>
-          </button>
+          </a>
         </div>
       </div>
 
@@ -548,14 +575,20 @@ export default function AdminDashboard() {
             const ongoing = activeEvents.find(isEventOngoingToday);
             const rest = activeEvents.filter(e => !ongoing || e._id !== ongoing._id);
             const prioritized = ongoing ? [ongoing, ...rest] : rest;
-            return prioritized.slice(0, 3).map(event => {
+            const cards = prioritized.slice(0, 3).map(event => {
               const budget = event.budget || {};
               const progress = budget.total ? Math.round((budget.utilized || 0) / budget.total * 100) : (event.health || 0);
               const progressLabel = budget.total ? 'Budget Spent' : 'Health';
               const progressColor = budget.total ? 'bg-gray-900' : 'bg-emerald-500';
               const isOngoing = isEventOngoingToday(event);
               return (
-                <div key={event._id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group cursor-pointer">
+                <div
+                  key={event._id}
+                  className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group cursor-pointer"
+                  onClick={() => {
+                    window.location.href = `/admin/events/${event._id}`;
+                  }}
+                >
                   <div className="h-52 bg-gray-200 relative overflow-hidden flex items-center justify-center">
                     {event.coverImageUrl ? (
                       <img src={event.coverImageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -596,6 +629,41 @@ export default function AdminDashboard() {
                 </div>
               );
             });
+
+            // Add placeholder card
+            const addEventCard = (
+              <div
+                key="add-event"
+                className="bg-gradient-to-br from-[#d4a017]/5 to-yellow-50 rounded-xl border border-[#d4a017]/20 shadow-sm hover:shadow-xl hover:border-[#d4a017] transition-all duration-300 overflow-hidden flex flex-col items-center justify-center group cursor-pointer relative min-h-[400px]"
+                onClick={(e) => {
+                  e.currentTarget.classList.add('animate-slideOutLeft');
+                  setTimeout(() => {
+                    window.location.href = '/admin/events/new';
+                  }, 350);
+                }}
+                style={{ position: 'relative' }}
+              >
+                <div className="flex flex-col items-center justify-center w-full h-full gap-6">
+                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full border-2 border-[#d4a017] bg-white group-hover:bg-[#d4a017] transition-all duration-300">
+                    <svg className="w-10 h-10 text-[#d4a017] group-hover:text-white transition-colors duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-bold text-gray-900 group-hover:text-[#d4a017] transition-colors duration-300">Click to add an Event</p>
+                </div>
+                <style jsx>{`
+                  .animate-slideOutLeft {
+                    animation: slideOutLeft 0.35s cubic-bezier(0.4,0,0.2,1) forwards;
+                  }
+                  @keyframes slideOutLeft {
+                    0% { transform: translateX(0); opacity: 1; }
+                    100% { transform: translateX(-100vw); opacity: 0; }
+                  }
+                `}</style>
+              </div>
+            );
+
+            return [...cards, addEventCard];
           })()}
         </div>
       </div>
@@ -607,12 +675,12 @@ export default function AdminDashboard() {
           <p className="text-[14px] text-gray-500 leading-relaxed mb-8">
             Our specialized leads and their current deployment status across regional territories.
           </p>
-          <button className="text-[11px] font-bold tracking-widest uppercase text-[#d4a017] flex items-center gap-2 group hover:text-yellow-600 transition-colors">
+          <a href="/admin/users" className="text-[11px] font-bold tracking-widest uppercase text-[#d4a017] flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all cursor-pointer">
             Staff Directory
             <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
-          </button>
+          </a>
           {!staffLoading && !staffError && (
             <p className="text-[11px] text-gray-400 mt-4">{staff.length} member{staff.length !== 1 ? 's' : ''}</p>
           )}
