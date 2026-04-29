@@ -394,7 +394,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
           const isUpdating = updatingTaskId === task._id;
 
           return (
-            <div key={task._id} className={`bg-white rounded-2xl border border-gray-100 overflow-hidden ${isDone ? 'opacity-70' : 'shadow-sm'}`}>
+            <div key={task._id} className={`bg-white rounded-2xl border border-gray-100 overflow-visible ${isDone ? 'opacity-70' : 'shadow-sm'}`}>
               <div className="py-6 px-6 flex items-start gap-5">
                 <button
                   type="button"
@@ -482,7 +482,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                     </button>
 
                     {isAssigning && (
-                      <div className="mt-3 w-full md:w-[340px] rounded-2xl border border-gray-100 bg-white shadow-lg p-3 space-y-2">
+                      <div className="absolute left-0 top-full z-20 mt-3 w-full md:w-[340px] rounded-2xl border border-gray-100 bg-white shadow-lg p-3 space-y-2">
                         {availableStaff.length === 0 && (
                           <p className="text-sm font-medium text-[#71717a] px-2 py-2">All available staff are already assigned.</p>
                         )}

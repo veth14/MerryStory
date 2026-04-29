@@ -348,7 +348,7 @@ export default function CoordinatorTasksPage() {
                    onClick={() => setShowAllActivities((current) => !current)}
                    className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] hover:text-[#1d1d1f] transition-colors"
                  >
-                   {showAllActivities ? 'Collapse' : `View ${hiddenActivityCount} More`}
+                   {showAllActivities ? 'Close' : 'Expand'}
                    {showAllActivities ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                  </button>
                )}
