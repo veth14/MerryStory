@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
   Bell,
+  CheckCircle,
   CloudUpload,
   Edit,
   Eye,
@@ -17,6 +18,7 @@ import {
   Loader,
   MoreVertical,
   Plus,
+  RefreshCw,
   Search,
   Send,
   Upload,
@@ -38,6 +40,9 @@ interface DocumentRecord {
   status: string;
   icon: string;
   category?: string;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileType?: string | null;
 }
 
 interface ContractRecord {
@@ -159,6 +164,7 @@ export default function DocumentsAdminPage() {
   const [uploadDocumentOpen, setUploadDocumentOpen] = useState(false);
   const [submittingContract, setSubmittingContract] = useState(false);
   const [submittingDocument, setSubmittingDocument] = useState(false);
+  const [sendingContractId, setSendingContractId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -345,10 +351,15 @@ export default function DocumentsAdminPage() {
       item.status === 'signed'
         ? item.signedFileType || item.fileType || item.type
         : item.fileType || item.type;
-    const directFileUrl = kind === 'contracts' ? contractPreviewUrl : null;
+    const documentPreviewUrl = item.fileUrl || null;
+    const documentPreviewName = item.fileName || item.name;
+    const documentPreviewType = item.fileType || item.type;
+    const directFileUrl = kind === 'contracts' ? contractPreviewUrl : documentPreviewUrl;
+    const directFileName = kind === 'contracts' ? contractPreviewName : documentPreviewName;
+    const directFileType = kind === 'contracts' ? contractPreviewType : documentPreviewType;
 
     if (directFileUrl) {
-      const previewConfig = resolvePreviewConfig(directFileUrl, contractPreviewType, contractPreviewName);
+      const previewConfig = resolvePreviewConfig(directFileUrl, directFileType, directFileName);
       setPdfError(null);
       setIsLoadingPdf(false);
       setPreviewModal({
@@ -362,9 +373,30 @@ export default function DocumentsAdminPage() {
         value: item.value,
         date: item.date || item.lastUpdated,
         fileUrl: directFileUrl,
-        fileName: contractPreviewName,
+        fileName: directFileName,
         previewUrl: previewConfig.previewUrl,
         previewMode: previewConfig.previewMode,
+      });
+      return;
+    }
+
+    if (kind === 'documents') {
+      setPdfError(null);
+      setIsLoadingPdf(false);
+      setPreviewModal({
+        isOpen: true,
+        kind,
+        id,
+        name: item.name,
+        type: item.type,
+        event: item.event || 'N/A',
+        status: item.status,
+        value: item.value,
+        date: item.date,
+        fileUrl: null,
+        fileName: item.fileName || item.name,
+        previewUrl: null,
+        previewMode: 'iframe',
       });
       return;
     }
@@ -422,6 +454,12 @@ export default function DocumentsAdminPage() {
     setPdfError(null);
   };
 
+  const isCompactPreviewModal =
+    previewModal.isOpen &&
+    !previewModal.fileUrl &&
+    !previewModal.previewUrl &&
+    previewModal.kind === 'documents';
+
   const openPreviewInNewTab = () => {
     if (!previewModal.fileUrl) return;
     const anchor = document.createElement('a');
@@ -434,6 +472,11 @@ export default function DocumentsAdminPage() {
   };
 
   const downloadCurrentPdf = async () => {
+    if (!previewModal.fileUrl && previewModal.kind === 'documents') {
+      triggerModal('No File Attached', 'This document record does not have an uploaded file attached yet.');
+      return;
+    }
+
     if (previewModal.kind === 'contracts' && previewModal.fileUrl && !previewModal.fileUrl.startsWith('blob:')) {
       const anchor = document.createElement('a');
       anchor.href = previewModal.fileUrl;
@@ -606,24 +649,23 @@ export default function DocumentsAdminPage() {
       setSubmittingDocument(true);
       const token = await user.getIdToken();
       const file = documentForm.file;
+      const payload = new FormData();
+      payload.append('name', file.name);
+      payload.append('type', inferFileType(file.name));
+      payload.append('eventId', documentForm.eventId);
+      payload.append('event', selectedEventTitle(documentForm.eventId));
+      payload.append('date', new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+      payload.append('status', documentForm.status);
+      payload.append('category', documentForm.category);
+      payload.append('icon', inferFileIcon(file.name));
+      payload.append('file', file);
 
       const response = await fetch('/api/admin/documents', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          name: file.name,
-          type: inferFileType(file.name),
-          size: formatBytes(file.size),
-          eventId: documentForm.eventId,
-          event: selectedEventTitle(documentForm.eventId),
-          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          status: documentForm.status,
-          category: documentForm.category,
-          icon: inferFileIcon(file.name),
-        }),
+        body: payload,
       });
 
       if (!response.ok) {
@@ -688,6 +730,7 @@ export default function DocumentsAdminPage() {
     }
 
     try {
+      setSendingContractId(contractId);
       const token = await user.getIdToken();
       const response = await fetch(`/api/admin/contracts/${contractId}/send`, {
         method: 'POST',
@@ -705,6 +748,8 @@ export default function DocumentsAdminPage() {
       triggerModal('Contract Sent', 'The contract review link has been emailed to the selected recipient.');
     } catch (error) {
       triggerModal('Send Error', (error as Error).message || 'Failed to send contract email.');
+    } finally {
+      setSendingContractId(null);
     }
   };
 
@@ -798,8 +843,20 @@ export default function DocumentsAdminPage() {
                   <button onClick={() => openPreviewModal('contracts', primaryContracts[0]._id, primaryContracts[0])} className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white border border-gray-200 rounded-xl text-[11px] font-black text-[#1d1d1f] hover:bg-gray-50 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-sm uppercase tracking-widest">
                     <Eye size={14} strokeWidth={2.5} /> View Draft
                   </button>
-                  <button onClick={() => handleSendContractEmail(primaryContracts[0]._id)} className="flex items-center justify-center gap-2 px-6 py-3.5 bg-[#eebf43] rounded-xl text-[11px] font-black text-white hover:bg-[#dcae32] transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md shadow-[#eebf43]/20 uppercase tracking-widest">
-                    <Send size={14} strokeWidth={2.5} /> Send To Email
+                  <button 
+                    disabled={sendingContractId === primaryContracts[0]._id}
+                    onClick={() => handleSendContractEmail(primaryContracts[0]._id)} 
+                    className="flex items-center justify-center gap-2 px-6 py-3.5 bg-[#eebf43] rounded-xl text-[11px] font-black text-white hover:bg-[#dcae32] disabled:opacity-75 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md shadow-[#eebf43]/20 uppercase tracking-widest disabled:hover:bg-[#eebf43] disabled:hover:-translate-y-0"
+                  >
+                    {sendingContractId === primaryContracts[0]._id ? (
+                      <>
+                        <Loader size={14} strokeWidth={2.5} className="animate-spin" /> Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={14} strokeWidth={2.5} /> Send To Email
+                      </>
+                    )}
                   </button>
                 </div>
               </>
@@ -849,7 +906,18 @@ export default function DocumentsAdminPage() {
                 <div className="flex gap-4 text-gray-400">
                   <button className="hover:text-[#1d1d1f] transition-colors" onClick={() => handleEditContract(contract._id)} title="Edit Draft"><Edit size={18} strokeWidth={2.5} /></button>
                   <button className="hover:text-[#1d1d1f] transition-colors" onClick={() => openPreviewModal('contracts', contract._id, contract)} title="View Draft"><Eye size={18} strokeWidth={2.5} /></button>
-                  <button className="hover:text-[#1d1d1f] transition-colors" onClick={() => handleSendContractEmail(contract._id)} title="Send To Email"><Send size={18} strokeWidth={2.5} /></button>
+                  <button 
+                    disabled={sendingContractId === contract._id}
+                    onClick={() => handleSendContractEmail(contract._id)} 
+                    title={sendingContractId === contract._id ? 'Sending...' : 'Send To Email'}
+                    className={`transition-colors ${sendingContractId === contract._id ? 'text-[#eebf43] opacity-75 cursor-not-allowed' : 'text-gray-400 hover:text-[#1d1d1f]'}`}
+                  >
+                    {sendingContractId === contract._id ? (
+                      <Loader size={18} strokeWidth={2.5} className="animate-spin" />
+                    ) : (
+                      <Send size={18} strokeWidth={2.5} />
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -911,8 +979,8 @@ export default function DocumentsAdminPage() {
                 <div className="col-span-2 text-[10px] font-black text-[#a1a1aa] tracking-[0.2em] uppercase text-right">STATUS</div>
               </div>
 
-              {filteredDocuments.map((doc) => (
-                <div key={doc._id} className="grid grid-cols-12 gap-4 px-6 lg:px-8 py-4 items-center bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#eebf43]/40 transition-all group cursor-pointer">
+                {filteredDocuments.map((doc) => (
+                  <div key={doc._id} onClick={() => openPreviewModal('documents', doc._id, doc)} className="grid grid-cols-12 gap-4 px-6 lg:px-8 py-4 items-center bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#eebf43]/40 transition-all group cursor-pointer">
                   <div className="col-span-12 lg:col-span-5 flex items-center gap-4">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors bg-[#fef9ec]">
                       {doc.icon === 'file' ? <FileText size={16} className="text-[#eebf43]" /> : <ImageIcon size={16} className="text-gray-400" />}
@@ -925,24 +993,24 @@ export default function DocumentsAdminPage() {
                   <div className="col-span-12 lg:col-span-3 text-[12px] font-semibold text-[#3f3f46] hidden lg:block">{doc.event}</div>
                   <div className="col-span-12 lg:col-span-2 text-[12px] font-medium text-[#71717a] hidden lg:block">{doc.date}</div>
                   <div className="col-span-12 lg:col-span-2 flex justify-start lg:justify-end">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase ${doc.status === 'Reconciled' ? 'bg-[#fef9ec] text-[#eebf43]' : 'bg-gray-50 text-gray-500'}`}>
-                      {doc.status}
-                    </span>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase ${doc.status === 'Reconciled' ? 'bg-[#fef9ec] text-[#eebf43]' : 'bg-gray-50 text-gray-500'}`}>
+                        {doc.status}
+                      </span>
+                    </div>
                   </div>
-                </div>
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {filteredDocuments.map((doc) => (
-                <div key={doc._id} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-[#eebf43]/40 transition-all group flex flex-col cursor-pointer">
+                {filteredDocuments.map((doc) => (
+                  <div key={doc._id} onClick={() => openPreviewModal('documents', doc._id, doc)} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-[#eebf43]/40 transition-all group flex flex-col cursor-pointer">
                   <div className="flex justify-between items-start mb-4">
                     <div className="w-12 h-12 rounded-xl bg-[#fef9ec] flex items-center justify-center">
                       {doc.icon === 'file' ? <FileText size={20} className="text-[#eebf43]" /> : <ImageIcon size={20} className="text-[#eebf43]" />}
                     </div>
-                    <button className="text-gray-300 hover:text-[#1d1d1f] transition-colors p-1" onClick={() => openPreviewModal('documents', doc._id, doc)} title="View PDF">
-                      <Eye size={16} />
-                    </button>
+                      <button className="text-gray-300 hover:text-[#1d1d1f] transition-colors p-1" onClick={(event) => { event.stopPropagation(); openPreviewModal('documents', doc._id, doc); }} title="View PDF">
+                        <Eye size={16} />
+                      </button>
                   </div>
                   <h5 className="text-[14px] font-bold text-[#1d1d1f] leading-tight mb-1 group-hover:text-[#eebf43] transition-colors line-clamp-2">{doc.name}</h5>
                   <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{doc.type} &bull; {doc.size}</p>
@@ -964,7 +1032,7 @@ export default function DocumentsAdminPage() {
       {/* Preview Modal */}
       {previewModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
+          <div className={`bg-white rounded-3xl w-full max-h-[90vh] shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden ${isCompactPreviewModal ? 'max-w-3xl' : 'max-w-6xl'}`}>
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
               <div className="flex items-center gap-3">
@@ -977,11 +1045,12 @@ export default function DocumentsAdminPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={downloadCurrentPdf}
-                  className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
-                  title={previewModal.kind === 'contracts' ? 'Download Draft File' : 'Download PDF'}
-                >
+                  <button 
+                    onClick={downloadCurrentPdf}
+                    disabled={!previewModal.fileUrl && previewModal.kind === 'documents'}
+                    className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
+                    title={previewModal.kind === 'contracts' ? 'Download Draft File' : 'Download PDF'}
+                  >
                   <Download size={18} />
                 </button>
                 {previewModal.previewMode === 'external' && (
@@ -1003,9 +1072,9 @@ export default function DocumentsAdminPage() {
             </div>
 
             {/* Modal Content - Split View */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className={`flex flex-1 overflow-hidden ${isCompactPreviewModal ? 'flex-col md:flex-row' : ''}`}>
               {/* Left Panel - Document Info */}
-              <div className="w-80 bg-gray-50 border-r border-gray-100 p-6 overflow-y-auto">
+              <div className={`${isCompactPreviewModal ? 'w-full md:w-72' : 'w-80'} bg-gray-50 ${isCompactPreviewModal ? 'md:border-r' : 'border-r'} border-gray-100 p-6 overflow-y-auto`}>
                 <div className="space-y-6">
                   {/* Status Badge */}
                   <div>
@@ -1059,7 +1128,7 @@ export default function DocumentsAdminPage() {
               </div>
 
               {/* Right Panel - Draft / File Preview */}
-              <div className="flex-1 bg-gray-100 p-6 overflow-auto flex items-center justify-center">
+              <div className={`flex-1 ${isCompactPreviewModal ? 'bg-white' : 'bg-gray-100'} p-6 overflow-auto flex items-center justify-center`}>
                 {isLoadingPdf ? (
                   <div className="text-center">
                     <Loader className="animate-spin text-[#eebf43] mx-auto mb-4" size={48} />
@@ -1106,11 +1175,16 @@ export default function DocumentsAdminPage() {
                     frameBorder="0"
                   />
                 ) : (
-                  <div className="text-center">
-                    <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                  <div className="text-center max-w-sm">
+                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
                       <FileText size={32} className="text-gray-400" />
                     </div>
                     <p className="text-gray-500 font-medium">No preview available</p>
+                    {previewModal.kind === 'documents' ? (
+                      <p className="text-sm text-gray-400 mt-2 leading-relaxed">
+                        This document record does not have an uploaded file attached yet.
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1121,19 +1195,46 @@ export default function DocumentsAdminPage() {
 
       {modal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200">
-            <button onClick={() => setModal({ ...modal, isOpen: false })} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
-              <X size={16} strokeWidth={2.5} />
-            </button>
-            <div className="w-12 h-12 rounded-2xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center mb-6">
-              <Info size={24} className="text-[#eebf43]" />
+          {['Contract Updated', 'Contract Sent'].includes(modal.title) ? (
+            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 overflow-hidden">
+              <button onClick={() => setModal({ ...modal, isOpen: false })} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+                <X size={16} strokeWidth={2.5} />
+              </button>
+              <div className="flex flex-col items-center text-center pt-4">
+                {modal.title === 'Contract Updated' ? (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#eebf43] to-[#dcae32] flex items-center justify-center mb-6 animate-in scale-in-95 duration-300 shadow-lg">
+                    <RefreshCw size={32} className="text-white animate-in rotate-in duration-500" strokeWidth={1.5} />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#eebf43] to-[#dcae32] flex items-center justify-center mb-6 animate-in scale-in-95 duration-300 shadow-lg">
+                    <CheckCircle size={32} className="text-white animate-in scale-in-50 duration-500" strokeWidth={1.5} />
+                  </div>
+                )}
+                <h3 className="text-2xl font-black text-[#1d1d1f] mb-3 tracking-tight">{modal.title}</h3>
+                <p className="text-sm font-medium text-gray-600 leading-relaxed mb-8">{modal.message}</p>
+                <button 
+                  onClick={() => setModal({ ...modal, isOpen: false })} 
+                  className="w-full py-3.5 bg-gradient-to-r from-[#eebf43] to-[#dcae32] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:shadow-lg transition-all duration-200 shadow-md shadow-[#eebf43]/20 hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  Great!
+                </button>
+              </div>
             </div>
-            <h3 className="text-xl font-black text-[#1d1d1f] mb-2 tracking-tight">{modal.title}</h3>
-            <p className="text-sm font-medium text-gray-500 leading-relaxed mb-8">{modal.message}</p>
-            <button onClick={() => setModal({ ...modal, isOpen: false })} className="w-full py-3.5 bg-[#1d1d1f] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-black transition-colors shadow-md">
-              Understood
-            </button>
-          </div>
+          ) : (
+            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200">
+              <button onClick={() => setModal({ ...modal, isOpen: false })} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+                <X size={16} strokeWidth={2.5} />
+              </button>
+              <div className="w-12 h-12 rounded-2xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center mb-6">
+                <Info size={24} className="text-[#eebf43]" />
+              </div>
+              <h3 className="text-xl font-black text-[#1d1d1f] mb-2 tracking-tight">{modal.title}</h3>
+              <p className="text-sm font-medium text-gray-500 leading-relaxed mb-8">{modal.message}</p>
+              <button onClick={() => setModal({ ...modal, isOpen: false })} className="w-full py-3.5 bg-[#1d1d1f] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-black transition-colors shadow-md">
+                Understood
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1249,26 +1350,36 @@ export default function DocumentsAdminPage() {
             </div>
 
             <div className="space-y-5 mb-8">
-              <div>
-                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Destination Folder</label>
-                <select value={documentForm.category} onChange={(event) => setDocumentForm((current) => ({ ...current, category: event.target.value }))} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all">
-                  {CATEGORY_DEFINITIONS.filter((folder) => folder.slug !== 'contracts').map((folder) => (
-                    <option key={folder.slug} value={folder.slug}>{folder.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Associated Event</label>
-                <select value={documentForm.eventId} onChange={(event) => setDocumentForm((current) => ({ ...current, eventId: event.target.value }))} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all">
-                  <option value="">Select an event...</option>
-                  {events.map((event) => (
-                    <option key={event._id} value={event._id}>{event.title}</option>
-                  ))}
-                </select>
-              </div>
+              <CustomSelect
+                label="Destination Folder"
+                value={documentForm.category}
+                onChange={(value) => setDocumentForm((current) => ({ ...current, category: value }))}
+                options={CATEGORY_DEFINITIONS.filter((folder) => folder.slug !== 'contracts').map((folder) => ({
+                  value: folder.slug,
+                  label: folder.name,
+                  sublabel: 'Document category',
+                }))}
+                icon={FileText}
+                placeholder="Select a folder..."
+              />
+              <CustomSelect
+                label="Associated Event"
+                value={documentForm.eventId}
+                onChange={(value) => setDocumentForm((current) => ({ ...current, eventId: value }))}
+                options={contractEventOptions}
+                icon={FileText}
+                placeholder="Select an event..."
+              />
               <div>
                 <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Document File</label>
-                <input type="file" onChange={(event) => setDocumentForm((current) => ({ ...current, file: event.target.files?.[0] || null }))} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all cursor-pointer hover:bg-gray-100 hover:border-gray-300" />
+                <label className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-[#fef9ec]/50 hover:border-[#eebf43]/50 transition-colors cursor-pointer group">
+                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
+                    <Upload size={16} className="text-[#eebf43]" />
+                  </div>
+                  <span className="text-[12px] font-black text-[#1d1d1f]">{documentForm.file ? documentForm.file.name : 'Click to upload or drag & drop'}</span>
+                  <span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">PDF, DOCX, PNG, JPG</span>
+                  <input type="file" className="hidden" onChange={(event) => setDocumentForm((current) => ({ ...current, file: event.target.files?.[0] || null }))} />
+                </label>
               </div>
             </div>
 
