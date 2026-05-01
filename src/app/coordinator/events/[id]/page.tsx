@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, use, useEffect, Suspense, useMemo } from 'react';
+import React, { useState, use, useEffect, Suspense, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import {
@@ -14,7 +14,13 @@ import {
   Circle,
   MessageSquare,
   Plus,
+  Search,
+  QrCode,
+  Link2,
+  Check,
+  Loader2,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -58,6 +64,30 @@ type TaskRecord = {
   };
   assignee?: TaskAssignee;
   assignees?: TaskAssignee[];
+};
+
+type GuestStatus = 'Confirmed' | 'Pending' | 'Declined';
+
+type GuestRecord = {
+  _id: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  gender?: string;
+  age?: number | null;
+  tier?: string;
+  status?: GuestStatus;
+  tableNo?: string;
+  plusOne?: boolean;
+  checkedIn?: boolean;
+  rsvpCode?: string;
+};
+
+type GuestFormState = {
+  name: string;
+  email: string;
+  tier: string;
+  status: GuestStatus;
 };
 
 const formatFullDate = (dateValue?: string) => {
@@ -157,6 +187,126 @@ const roleBadgeMap: Record<UserRecord['appRole'], string> = {
   staff: 'bg-[#f5f5f5] text-[#71717a]',
 };
 
+const guestStatusOptions: GuestStatus[] = ['Confirmed', 'Pending', 'Declined'];
+const guestTierOptions = ['Standard', 'VIP'];
+const guestTierSelectOptions = guestTierOptions.map((option) => ({
+  value: option,
+  label: option,
+}));
+const guestStatusSelectOptions = guestStatusOptions.map((option) => ({
+  value: option,
+  label: option,
+}));
+const guestDropdownTriggerClass =
+  'w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-left flex items-center justify-between transition-all';
+
+const createGuestFormState = (): GuestFormState => ({
+  name: '',
+  email: '',
+  tier: 'Standard',
+  status: 'Pending',
+});
+
+const getGuestStatusTone = (status?: string) => {
+  if (status === 'Confirmed') {
+    return {
+      text: 'text-emerald-700',
+      dot: 'bg-emerald-500',
+    };
+  }
+
+  if (status === 'Declined') {
+    return {
+      text: 'text-rose-700',
+      dot: 'bg-rose-500',
+    };
+  }
+
+  return {
+    text: 'text-amber-700',
+    dot: 'bg-amber-500',
+  };
+};
+
+const buildGuestCode = (guest: GuestRecord) => {
+  if (guest.rsvpCode?.trim()) return guest.rsvpCode.trim();
+  const idToken = guest._id?.slice(-4).toUpperCase() || '0000';
+  return `SG-${new Date().getFullYear()}-${idToken}`;
+};
+
+function GuestModalSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string; helper?: string }>;
+  onChange: (next: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const selectedOption = options.find((option) => option.value === value) || options[0];
+
+  return (
+    <div className="space-y-2 relative" ref={containerRef}>
+      <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">{label}</label>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className={`${guestDropdownTriggerClass} ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
+      >
+        <div className="min-w-0">
+          <div className="text-[14px] font-medium text-gray-900 truncate">{selectedOption?.label || value}</div>
+          {selectedOption?.helper ? (
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{selectedOption.helper}</div>
+          ) : null}
+        </div>
+        <ChevronDown className={`w-4 h-4 text-[#71717a] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 top-full z-[80] mt-2 w-full rounded-2xl border border-gray-100 bg-white shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-3 rounded-xl text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
+            >
+              <div>
+                <div className="text-[13px] font-extrabold text-gray-900">{option.label}</div>
+                {option.helper ? (
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{option.helper}</div>
+                ) : null}
+              </div>
+              {value === option.value ? <Check className="w-4 h-4 text-[#facc15]" /> : null}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CoordinatorEventDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense fallback={<div className="p-8">Loading event details...</div>}>
@@ -175,10 +325,19 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const [event, setEvent] = useState<EventRecord | null>(null);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [directory, setDirectory] = useState<UserRecord[]>([]);
+  const [guests, setGuests] = useState<GuestRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingGuests, setLoadingGuests] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
   const [assigningTaskId, setAssigningTaskId] = useState<string | null>(null);
   const [confirmTask, setConfirmTask] = useState<TaskRecord | null>(null);
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+  const [guestSearch, setGuestSearch] = useState('');
+  const [guestStatusFilter, setGuestStatusFilter] = useState<'All' | GuestStatus>('All');
+  const [guestForm, setGuestForm] = useState<GuestFormState>(createGuestFormState());
+  const [submittingGuest, setSubmittingGuest] = useState(false);
+  const [actingGuestId, setActingGuestId] = useState<string | null>(null);
+  const [copiedGuestId, setCopiedGuestId] = useState<string | null>(null);
   const { id } = use(params);
 
   useEffect(() => {
@@ -230,6 +389,34 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
     fetchEventDetails();
   }, [id, user]);
 
+  useEffect(() => {
+    const fetchGuests = async () => {
+      if (!user || !id) return;
+
+      setLoadingGuests(true);
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch(`/api/coordinator/guest-registry?eventId=${encodeURIComponent(id)}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch guest registry.');
+        }
+
+        const guestData = await response.json();
+        setGuests(Array.isArray(guestData) ? guestData : []);
+      } catch (error) {
+        console.error('Failed to fetch coordinator guest registry:', error);
+        setGuests([]);
+      } finally {
+        setLoadingGuests(false);
+      }
+    };
+
+    fetchGuests();
+  }, [id, user]);
+
   const handleTabChange = (tab: 'overview' | 'tasks' | 'rsvp') => {
     setActiveTab(tab);
     router.replace(`${pathname}?tab=${tab}`, { scroll: false });
@@ -275,9 +462,21 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
 
   const completedTasks = finishedTasks.length;
   const taskCompletionPct = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
-  const guestConfirmed = event?.guests?.rsvp || 0;
-  const guestInvited = event?.guests?.invited || 0;
+  const guestInvited = guests.length;
+  const guestConfirmed = guests.filter((guest) => guest.status === 'Confirmed').length;
+  const guestCheckedIn = guests.filter((guest) => guest.checkedIn).length;
   const guestPct = guestInvited > 0 ? (guestConfirmed / guestInvited) * 100 : 0;
+  const guestCheckInPct = guestInvited > 0 ? Math.round((guestCheckedIn / guestInvited) * 100) : 0;
+  const filteredGuests = guests.filter((guest) => {
+    const query = guestSearch.trim().toLowerCase();
+    const matchesSearch =
+      !query ||
+      (guest.name || '').toLowerCase().includes(query) ||
+      (guest.email || '').toLowerCase().includes(query) ||
+      buildGuestCode(guest).toLowerCase().includes(query);
+    const matchesStatus = guestStatusFilter === 'All' || guest.status === guestStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const updateTaskLocally = (taskId: string, updater: (task: TaskRecord) => TaskRecord) => {
     setTasks((prev) => prev.map((task) => (task._id === taskId ? updater(task) : task)));
@@ -347,6 +546,102 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
     await persistTaskPatch(task._id, {
       assignees: nextAssignees,
     });
+  };
+
+  const persistGuestPatch = async (guestId: string, payload: Record<string, unknown>) => {
+    if (!user) return false;
+
+    setActingGuestId(guestId);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/coordinator/guest-registry', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          eventId: id,
+          guestId,
+          ...payload,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update guest.');
+      }
+
+      const updatedGuest = await response.json();
+      setGuests((prev) => prev.map((guest) => (guest._id === guestId ? updatedGuest : guest)));
+      return true;
+    } catch (error) {
+      console.error('Failed to update guest:', error);
+      return false;
+    } finally {
+      setActingGuestId(null);
+    }
+  };
+
+  const handleGuestStatusChange = async (guestId: string, status: GuestStatus) => {
+    await persistGuestPatch(guestId, { status });
+  };
+
+  const handleGuestSubmit = async () => {
+    if (!user || !guestForm.name.trim()) return;
+
+    setSubmittingGuest(true);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/coordinator/guest-registry', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          eventId: id,
+          name: guestForm.name.trim(),
+          email: guestForm.email.trim(),
+          tier: guestForm.tier,
+          status: guestForm.status,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create guest.');
+      }
+
+      const createdGuest = await response.json();
+      setGuests((prev) => [createdGuest, ...prev]);
+      setGuestForm(createGuestFormState());
+      setIsGuestModalOpen(false);
+    } catch (error) {
+      console.error('Failed to create guest:', error);
+    } finally {
+      setSubmittingGuest(false);
+    }
+  };
+
+  const handleSendGuestLink = async (guest: GuestRecord) => {
+    const code = buildGuestCode(guest);
+    const guestName = guest.name?.trim() || 'Guest';
+    const subject = `RSVP Code for ${event?.title || 'Your Event Invitation'}`;
+    const body = encodeURIComponent(`Hi ${guestName},\n\nYour RSVP code is ${code}.`);
+
+    if (guest.email?.trim()) {
+      window.location.href = `mailto:${guest.email.trim()}?subject=${encodeURIComponent(subject)}&body=${body}`;
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedGuestId(guest._id);
+      window.setTimeout(() => {
+        setCopiedGuestId((current) => (current === guest._id ? null : current));
+      }, 1800);
+    } catch (error) {
+      console.error('Failed to copy RSVP code:', error);
+    }
   };
 
   const renderTaskSection = (
@@ -674,32 +969,293 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
           </div>
 
           <div className={activeTab === 'rsvp' ? 'block' : 'hidden'}>
-            <div className="pb-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between mb-4 gap-6">
+            <div className="pb-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between mb-6 gap-6">
               <div>
                 <h3 className="text-2xl font-black text-[#1d1d1f] flex items-center gap-2 tracking-tight">
                   <Users size={24} className="text-[#a1a1aa]" /> Guest Registry
                 </h3>
-                <p className="text-sm font-semibold text-[#71717a] mt-2">Guest confirmation totals are sourced from the event record.</p>
+                <p className="text-sm font-semibold text-[#71717a] mt-2">Guest confirmation totals are sourced from the live registry.</p>
               </div>
 
-              <div className="w-full sm:w-auto bg-[#fafafa] border border-gray-100 px-6 py-4 sm:py-3 rounded-2xl flex items-center justify-center gap-6 shrink-0">
-                <div className="flex flex-col text-right pr-6 border-r border-gray-200">
-                  <span className="text-2xl font-black text-emerald-600 leading-none">{guestConfirmed}</span>
-                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mt-2">Confirmed</span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGuestForm(createGuestFormState());
+                    setIsGuestModalOpen(true);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#1d1d1f] text-white text-[12px] font-black tracking-wide hover:bg-[#2a2a2d] transition-colors shadow-sm"
+                >
+                  <Plus size={14} />
+                  Add Guest
+                </button>
+                <Link
+                  href={`/coordinator/events/${id}/scan`}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#f4c41d] text-[#1d1d1f] text-[12px] font-black tracking-wide hover:bg-[#e8b200] transition-colors shadow-sm"
+                >
+                  <QrCode size={14} />
+                  Scan QR
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+              <div className="bg-white rounded-[14px] border border-gray-100 border-l-4 border-l-[#f4c41d] p-5 shadow-sm">
+                <p className="text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8] mb-2">Total Guests</p>
+                <div className="flex items-end gap-3">
+                  <span className="text-4xl font-black text-[#1d1d1f] leading-none">{guestInvited}</span>
+                  <span className="text-[11px] font-bold text-[#d4a017] pb-1">{guestInvited === 0 ? 'Registry empty' : 'Live total'}</span>
                 </div>
-                <div className="flex flex-col text-left pl-2">
-                  <span className="text-2xl font-black text-gray-300 leading-none">{Math.max(guestInvited - guestConfirmed, 0)}</span>
-                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mt-2">Pending</span>
+              </div>
+
+              <div className="bg-white rounded-[14px] border border-gray-100 border-l-4 border-l-[#1d1d1f] p-5 shadow-sm">
+                <p className="text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8] mb-2">Confirmed Count</p>
+                <div className="flex items-end gap-3">
+                  <span className="text-4xl font-black text-[#1d1d1f] leading-none">{guestConfirmed}</span>
+                  <span className="text-[11px] font-medium text-[#94a3b8] pb-1">{guestPct.toFixed(1)}% Ratio</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[14px] border border-gray-100 border-l-4 border-l-[#f4c41d] p-5 shadow-sm">
+                <p className="text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8] mb-2">Codes Used</p>
+                <div className="flex items-center gap-4">
+                  <span className="text-4xl font-black text-[#1d1d1f] leading-none">{guestCheckInPct}%</span>
+                  <div className="flex-1">
+                    <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-[#f4c41d] transition-all" style={{ width: `${guestCheckInPct}%` }}></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-sm font-medium text-[#71717a]">
-              RSVP metrics are available for this event. Detailed guest roster actions are managed from the event guest workflows.
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+              <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-gray-100">
+                <h4 className="text-[15px] font-black text-[#1d1d1f] uppercase tracking-widest">Guest Registry</h4>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="relative">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#a1a1aa]" />
+                    <input
+                      type="text"
+                      value={guestSearch}
+                      onChange={(e) => setGuestSearch(e.target.value)}
+                      placeholder="Search guest..."
+                      className="w-full sm:w-60 pl-11 pr-4 py-3 bg-[#fbfbfb] border border-gray-200 rounded-xl text-[13px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1aa] focus:outline-none focus:ring-2 focus:ring-[#f4c41d]/30 focus:border-[#f4c41d] transition-all"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <select
+                      value={guestStatusFilter}
+                      onChange={(e) => setGuestStatusFilter(e.target.value as 'All' | GuestStatus)}
+                      className="appearance-none min-w-[150px] px-4 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-[#334155] focus:outline-none focus:ring-2 focus:ring-[#f4c41d]/30 focus:border-[#f4c41d]"
+                    >
+                      <option value="All">All Status</option>
+                      {guestStatusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#94a3b8]">⌄</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-left">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-[#fcfcfc]">
+                      <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Guest</th>
+                      <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">RSVP Code</th>
+                      <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Status</th>
+                      <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadingGuests ? (
+                      <tr>
+                        <td colSpan={4} className="px-5 py-12 text-center">
+                          <div className="inline-flex items-center gap-3 text-sm font-medium text-[#71717a]">
+                            <Loader2 size={18} className="animate-spin text-[#d4a017]" />
+                            Loading guest registry...
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredGuests.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-5 py-12 text-center text-sm font-medium text-[#71717a]">
+                          No guests match the current search and status filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredGuests.map((guest) => {
+                        const statusTone = getGuestStatusTone(guest.status);
+                        const isActing = actingGuestId === guest._id;
+
+                        return (
+                          <tr key={guest._id} className="border-b border-gray-100 last:border-b-0 hover:bg-[#fcfcfc] transition-colors">
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-[#f1f5f9] border border-gray-200 flex items-center justify-center text-[13px] font-black text-[#475569]">
+                                  {getInitials(guest.name)}
+                                </div>
+                                <div>
+                                  <p className="text-[15px] font-bold text-[#1d1d1f]">{guest.name || 'Unnamed Guest'}</p>
+                                  <div className="flex items-center gap-2 text-[12px] text-[#7c3aed]">
+                                    <span className="font-medium text-[#7c3aed]">{guest.tier || 'Standard'}</span>
+                                    {guest.checkedIn && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-emerald-600">
+                                        <Check size={12} />
+                                        Checked In
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="inline-flex rounded-lg border border-gray-200 bg-[#f8fafc] px-3 py-1.5 font-mono text-[11px] text-[#64748b]">
+                                {buildGuestCode(guest)}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className={`inline-flex items-center gap-2 text-[14px] font-medium ${statusTone.text}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${statusTone.dot}`}></span>
+                                {guest.status || 'Pending'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={isActing}
+                                  onClick={() => handleGuestStatusChange(guest._id, 'Confirmed')}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-600 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                                >
+                                  <Check size={12} />
+                                  Confirm
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isActing}
+                                  onClick={() => handleGuestStatusChange(guest._id, 'Declined')}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-bold text-rose-600 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                                >
+                                  <X size={12} />
+                                  Decline
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isActing}
+                                  onClick={() => handleSendGuestLink(guest)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] font-bold text-sky-600 hover:bg-sky-100 transition-colors disabled:opacity-50"
+                                >
+                                  <Link2 size={12} />
+                                  {copiedGuestId === guest._id ? 'Copied' : 'Send Link'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {isGuestModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-[540px] rounded-[18px] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] overflow-visible">
+            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Add New Guest</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mt-1">Guest registry setup</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGuestModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                aria-label="Close guest modal"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">
+                  Full Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={guestForm.name}
+                  onChange={(e) => setGuestForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter full name"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-[#eebf43] focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none placeholder:text-gray-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={guestForm.email}
+                  onChange={(e) => setGuestForm((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder="guest@example.com"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none placeholder:text-gray-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <GuestModalSelect
+                    label="Tier"
+                    value={guestForm.tier}
+                    options={guestTierSelectOptions}
+                    onChange={(next) => setGuestForm((prev) => ({ ...prev, tier: next }))}
+                  />
+                </div>
+
+                <div>
+                  <GuestModalSelect
+                    label="Initial Status"
+                    value={guestForm.status}
+                    options={guestStatusSelectOptions}
+                    onChange={(next) => setGuestForm((prev) => ({ ...prev, status: next as GuestStatus }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-5 px-6 pb-5 mt-0 flex items-center justify-end gap-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setIsGuestModalOpen(false)}
+                className="px-6 py-3 text-[12px] font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-wider"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingGuest || !guestForm.name.trim()}
+                onClick={handleGuestSubmit}
+                className="inline-flex items-center gap-2 px-8 py-3 bg-[#eebf43] hover:bg-[#dcae32] disabled:opacity-70 text-white text-[12px] font-extrabold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#eebf43]/20"
+              >
+                {submittingGuest ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                Save Guest
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmTask && (
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px] flex items-center justify-center px-4">
