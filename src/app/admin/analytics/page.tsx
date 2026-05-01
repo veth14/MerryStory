@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowRight, 
   TrendingUp, 
@@ -12,9 +12,64 @@ import {
   GlassWater, 
   Users 
 } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
+
+interface AnalyticsData {
+  monthlyFrequency: Array<{ label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number }>;
+  quarterlyFrequency: Array<{ label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number }>;
+  halfYearFrequency: Array<{ label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number }>;
+  annualFrequency: { label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number };
+  peakMonths: {
+    bookings: { month: string; count: number };
+    inquiries: { month: string; count: number };
+  };
+  eventTypeBreakdown: Array<{ type: string; count: number; bookings: number; inquiries: number; percentage: number }>;
+}
 
 export default function AnalyticsAdminPage() {
+  const { user } = useAuth();
   const [frequency, setFrequency] = useState<'Monthly' | 'Quarterly' | 'Half-Year' | 'Annual'>('Monthly');
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch('/api/admin/analytics', {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        if (response.ok) {
+          const analyticsData = await response.json();
+          console.log('Analytics Data Received:', analyticsData);
+          setData(analyticsData);
+        }
+      } catch (err) {
+        console.error('Error fetching analytics:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [user]);
+
+  const getChartData = () => {
+    if (!data) return [];
+    switch (frequency) {
+      case 'Quarterly':
+        return data.quarterlyFrequency;
+      case 'Half-Year':
+        return data.halfYearFrequency;
+      case 'Annual':
+        return [data.annualFrequency];
+      case 'Monthly':
+      default:
+        return data.monthlyFrequency;
+    }
+  };
+
+  const chartData = getChartData();
 
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20">
@@ -57,9 +112,9 @@ export default function AnalyticsAdminPage() {
             <div>
               <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Peak Performance (Bookings)</p>
               <h2 className="text-2xl font-black text-[#1d1d1f] flex items-center gap-2">
-                October & November <Award className="text-[#eebf43]" size={20} />
+                {data?.peakMonths.bookings.month || 'Loading'} <Award className="text-[#eebf43]" size={20} />
               </h2>
-              <p className="text-xs text-[#71717a] mt-1 font-medium">Historically highest conversion months</p>
+              <p className="text-xs text-[#71717a] mt-1 font-medium">{data?.peakMonths.bookings.count || 0} bookings - Highest conversion month</p>
             </div>
             <div className="w-14 h-14 rounded-full bg-[#f9f1d8] flex items-center justify-center border border-[#f4d98a]/50 group-hover:scale-110 transition-transform">
               <TrendingUp className="text-[#dcae32]" size={24} />
@@ -70,9 +125,9 @@ export default function AnalyticsAdminPage() {
             <div>
               <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Peak Performance (Inquiries)</p>
               <h2 className="text-2xl font-black text-[#1d1d1f] flex items-center gap-2">
-                January & February <BarChart3 className="text-blue-500" size={20} />
+                {data?.peakMonths.inquiries.month || 'Loading'} <BarChart3 className="text-blue-500" size={20} />
               </h2>
-              <p className="text-xs text-[#71717a] mt-1 font-medium">Highest volume of initial leads</p>
+              <p className="text-xs text-[#71717a] mt-1 font-medium">{data?.peakMonths.inquiries.count || 0} inquiries - Highest volume month</p>
             </div>
             <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 group-hover:scale-110 transition-transform">
               <Calendar className="text-blue-500" size={24} />
@@ -82,7 +137,7 @@ export default function AnalyticsAdminPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Chart Card (Frequency Analysis) - Span 2 */}
-          <div className="bg-white p-8 rounded-[24px] border border-gray-100 shadow-sm lg:col-span-2 flex flex-col">
+          <div className="bg-white p-8 rounded-[24px] border border-gray-100 shadow-sm lg:col-span-2 flex flex-col h-[400px]">
             <div className="flex justify-between items-start mb-8">
               <div>
                 <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Frequency Analysis</h3>
@@ -95,7 +150,7 @@ export default function AnalyticsAdminPage() {
             </div>
 
             {/* Custom CSS Bar Chart Space */}
-            <div className="flex-1 flex items-end gap-2 sm:gap-4 h-[250px] relative mt-4 ml-6">
+            <div className="flex items-end gap-2 sm:gap-4 h-[500px] relative mt-4 ml-6 flex-1">
               {/* Y-Axis lines */}
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none mb-6">
                 {[100, 75, 50, 25, 0].map(val => (
@@ -106,30 +161,29 @@ export default function AnalyticsAdminPage() {
               </div>
               
               {/* Chart Bars */}
-              {[
-                { label: 'Jan', b: 35, i: 85 },
-                { label: 'Feb', b: 40, i: 90 },
-                { label: 'Mar', b: 45, i: 70 },
-                { label: 'Apr', b: 50, i: 65 },
-                { label: 'May', b: 65, i: 80 },
-                { label: 'Jun', b: 70, i: 75 },
-                { label: 'Jul', b: 60, i: 60 },
-                { label: 'Aug', b: 55, i: 50 },
-                { label: 'Sep', b: 80, i: 65 },
-                { label: 'Oct', b: 95, i: 70 },
-                { label: 'Nov', b: 90, i: 65 },
-                { label: 'Dec', b: 60, i: 40 },
-              ].slice(0, frequency === 'Monthly' ? 12 : frequency === 'Quarterly' ? 4 : frequency === 'Half-Year' ? 2 : 1).map((data, idx) => (
-                <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full z-10 group">
-                  <div className="flex items-end gap-1.5 sm:gap-2 w-full justify-center h-[calc(100%-24px)]">
-                    <div className="w-full max-w-[12px] bg-[#1d1d1f]/80 rounded-t-full transition-all duration-500 group-hover:bg-[#1d1d1f] group-hover:shadow-[0_0_8px_rgba(29,29,31,0.2)] relative" style={{ height: `${data.b}%` }}></div>
-                    <div className="w-full max-w-[12px] bg-[#eebf43]/80 rounded-t-full transition-all duration-500 group-hover:bg-[#eebf43] group-hover:shadow-[0_0_8px_rgba(238,191,67,0.3)] relative" style={{ height: `${data.i}%` }}></div>
+            {chartData.map((data, idx) => (
+              <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full z-10 group relative">
+                {/* Tooltip */}
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-xl shadow-sm px-3 py-2 text-[11px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                  <p className="font-bold text-[#a1a1aa] uppercase tracking-wider mb-1">{data.label}</p>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="w-2 h-2 rounded-full bg-[#1d1d1f]/80 inline-block"></span>
+                    <span className="text-[#1d1d1f] font-bold">Bookings: {data.actualBookings !== undefined ? data.actualBookings : data.bookings}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-[#a1a1aa] mt-2 block h-[16px] uppercase tracking-wider group-hover:text-[#1d1d1f] transition-colors">
-                    {frequency === 'Quarterly' ? `Q${idx+1}` : frequency === 'Half-Year' ? `H${idx+1}` : frequency === 'Annual' ? '2026' : data.label}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#eebf43] inline-block"></span>
+                    <span className="text-[#1d1d1f] font-bold">Inquiries: {data.actualInquiries !== undefined ? data.actualInquiries : data.inquiries}</span>
+                  </div>
                 </div>
-              ))}
+
+                {/* Existing bars */}
+                <div className="flex items-end gap-1.5 sm:gap-2 w-full justify-center h-[calc(100%-24px)]">
+                  <div className="w-full max-w-[12px] bg-[#1d1d1f]/80 rounded-t-full ..." style={{ height: `${data.bookings}%` }}></div>
+                  <div className="w-full max-w-[12px] bg-[#eebf43]/80 rounded-t-full ..." style={{ height: `${data.inquiries}%` }}></div>
+                </div>
+                <span className="...">{data.label}</span>
+              </div>
+            ))}
             </div>
           </div>
 
@@ -144,30 +198,41 @@ export default function AnalyticsAdminPage() {
             </div>
 
             <div className="space-y-6 flex-1 flex flex-col justify-center">
-              {[
-                { type: "Weddings", count: 42, percentage: 45, icon: GlassWater, color: "bg-pink-100", text: "text-pink-600", bar: "bg-pink-400" },
-                { type: "Corporate Galas", count: 28, percentage: 30, icon: Briefcase, color: "bg-blue-100", text: "text-blue-600", bar: "bg-blue-400" },
-                { type: "Private Parties", count: 14, percentage: 15, icon: Users, color: "bg-purple-100", text: "text-purple-600", bar: "bg-purple-400" },
-                { type: "Charity / Non-Profit", count: 9, percentage: 10, icon: Award, color: "bg-emerald-100", text: "text-emerald-600", bar: "bg-emerald-400" },
-              ].map((item, idx) => (
-                <div key={idx} className="group">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full ${item.color} flex items-center justify-center border border-white shadow-sm`}>
-                        <item.icon size={14} className={item.text} />
+              {data?.eventTypeBreakdown && data.eventTypeBreakdown.length > 0 ? (
+                data.eventTypeBreakdown.map((item, idx) => {
+                  const colors = [
+                    { color: "bg-pink-100", text: "text-pink-600", bar: "bg-pink-400" },
+                    { color: "bg-blue-100", text: "text-blue-600", bar: "bg-blue-400" },
+                    { color: "bg-purple-100", text: "text-purple-600", bar: "bg-purple-400" },
+                    { color: "bg-emerald-100", text: "text-emerald-600", bar: "bg-emerald-400" },
+                  ];
+                  const colorScheme = colors[idx % colors.length];
+                  const icons = [GlassWater, Briefcase, Users, Award];
+                  const IconComponent = icons[idx % icons.length];
+
+                  return (
+                    <div key={idx} className="group">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full ${colorScheme.color} flex items-center justify-center border border-white shadow-sm`}>
+                            <IconComponent size={14} className={colorScheme.text} />
+                          </div>
+                          <span className="text-xs font-black text-[#1d1d1f]">{item.type}</span>
+                        </div>
+                        <div className="text-right">
+                           <span className="text-xs font-black text-[#1d1d1f] block">{item.count} Total</span>
+                           <span className="text-[9px] font-bold text-[#a1a1aa]">{item.bookings || 0} bookings · {item.inquiries || 0} inquiries</span>
+                        </div>
                       </div>
-                      <span className="text-xs font-black text-[#1d1d1f]">{item.type}</span>
+                      <div className="w-full h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100/50">
+                        <div className={`h-full ${colorScheme.bar} rounded-full transition-all duration-1000`} style={{ width: `${item.percentage}%` }}></div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                       <span className="text-xs font-black text-[#1d1d1f] block">{item.count} Events</span>
-                       <span className="text-[10px] font-bold text-[#a1a1aa]">{item.percentage}% of total</span>
-                    </div>
-                  </div>
-                  <div className="w-full h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100/50">
-                    <div className={`h-full ${item.bar} rounded-full transition-all duration-1000`} style={{ width: `${item.percentage}%` }}></div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              ) : (
+                <p className="text-[#a1a1aa] text-xs text-center">No event data available</p>
+              )}
             </div>
             
           </div>
