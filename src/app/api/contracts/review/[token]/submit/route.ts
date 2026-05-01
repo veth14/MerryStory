@@ -4,6 +4,7 @@ import { sendContractStatusEmail } from '@/lib/email';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { createContractAdminAccessToken } from '@/lib/contract-review-access';
+import { writeAuditLog } from '@/lib/audit';
 
 function decodeDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(.+);base64,(.+)$/);

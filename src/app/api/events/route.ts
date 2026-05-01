@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
     
     await writeAuditLog({
       request,
-      category: "SYSTEM",
+      category: "EVENT_MANAGEMENT",
       action: "EVENT_CREATED",
-      message: `Created new event: ${title}`,
+      message: `New event created: ${title}`,
       actor: {
         uid: user.uid,
         email: user.email,

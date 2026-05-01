@@ -53,17 +53,22 @@ export async function POST(request: NextRequest) {
     // Audit Log
     await writeAuditLog({
       request,
-      category: "SYSTEM",
-      action: "USER_CREATED", // Re-using existing action or I should add VENDOR_CREATED
-      message: `Created new vendor: ${name}`,
+      category: "VENDOR_MANAGEMENT",
+      action: "VENDOR_CREATED",
+      message: `New vendor created: ${name} (${category})`,
       actor: {
         uid: user.uid,
         email: user.email,
         role: user.role
       },
+      target: {
+        type: "vendor",
+        uid: result.insertedId.toString()
+      },
       details: {
-        vendorId: result.insertedId,
-        vendorName: name
+        vendorId: result.insertedId.toString(),
+        vendorName: name,
+        category
       }
     });
 

@@ -12,7 +12,10 @@ export async function GET(request: NextRequest) {
     const logsCollection = db.collection("audit_logs");
 
     let query: any = {
-      category: "TASK_MANAGEMENT"
+      $or: [
+        { category: "TASK_MANAGEMENT" },
+        { category: "INQUIRY_MANAGEMENT" }
+      ]
     };
 
     if (targetUid && (user as any).role === "admin") {
@@ -22,16 +25,40 @@ export async function GET(request: NextRequest) {
       // Regular user or admin requesting their own activity
       const userName = (user as any).displayName || "";
       query.$or = [
-        { actorUid: user.uid },
-        { message: { $regex: userName, $options: "i" } },
-        { "details.assignee": userName }
+        { 
+          $and: [
+            { actorUid: user.uid },
+            { $or: [
+              { category: "TASK_MANAGEMENT" },
+              { category: "INQUIRY_MANAGEMENT" }
+            ]}
+          ]
+        },
+        { 
+          $and: [
+            { message: { $regex: userName, $options: "i" } },
+            { $or: [
+              { category: "TASK_MANAGEMENT" },
+              { category: "INQUIRY_MANAGEMENT" }
+            ]}
+          ]
+        },
+        { 
+          $and: [
+            { "details.assignee": userName },
+            { $or: [
+              { category: "TASK_MANAGEMENT" },
+              { category: "INQUIRY_MANAGEMENT" }
+            ]}
+          ]
+        }
       ];
     }
 
     const logs = await logsCollection
       .find(query)
       .sort({ createdAt: -1 })
-      .limit(10)
+      .limit(15)
       .toArray();
 
     const activities = logs.map(log => ({
@@ -40,6 +67,7 @@ export async function GET(request: NextRequest) {
       message: log.message,
       time: log.createdAt,
       actor: log.actorEmail === user.email ? "You" : (log.actorEmail || "System"),
+      type: log.category === "INQUIRY_MANAGEMENT" ? "inquiry" : "task",
       details: log.details
     }));
 

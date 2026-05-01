@@ -1,22 +1,52 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-// Real function to fetch activity logs for a member
+// Real function to fetch activity logs - fetches all system activities
 async function fetchMemberActivity(memberId: string, idToken: string) {
   try {
-    const res = await fetch(`/api/activities?uid=${memberId}`, {
+    // Fetch all activities from the system (not filtered by user)
+    const res = await fetch(`/api/activities`, {
       headers: { Authorization: `Bearer ${idToken}` }
     });
-    if (res.ok) {
-      const data = await res.json();
-      return data.map((log: any) => ({
-        time: new Date(log.time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        action: log.message,
-        actor: log.actor
-      }));
+    if (!res.ok) {
+      console.warn(`Activity API returned ${res.status}`);
+      return [];
     }
-    return [];
+    const data = await res.json();
+    
+    // Handle both array and object responses
+    const activities = Array.isArray(data) ? data : (data.activities || data.logs || []);
+    
+    if (!Array.isArray(activities)) {
+      console.warn('Activity data is not an array:', data);
+      return [];
+    }
+    
+    return activities
+      .sort((a: any, b: any) => new Date(b.time || b.createdAt).getTime() - new Date(a.time || a.createdAt).getTime())
+      .slice(0, 15) // Limit to 15 most recent activities system-wide
+      .map((log: any) => {
+        // Determine activity type from category or action
+        let type = 'Update';
+        if (log.category === 'INQUIRY_MANAGEMENT' || log.action?.includes('INQUIRY') || log.action?.includes('STATUS')) {
+          type = 'Inquiry';
+        } else if (log.category === 'TASK_MANAGEMENT' || log.action?.includes('TASK')) {
+          type = 'Task';
+        }
+        
+        return {
+          time: new Date(log.time || log.createdAt).toLocaleString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+          action: log.message || log.action || 'Activity recorded',
+          actor: log.actor || log.user || 'System',
+          type: type
+        };
+      });
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching system activities:', err);
     return [];
   }
 }
@@ -55,9 +85,8 @@ function getStatusConfig(status?: string) {
 }
 
 export default function AdminDashboard() {
-    const [openActivityMember, setOpenActivityMember] = useState<string | null>(null);
-    const [activityLogs, setActivityLogs] = useState<Record<string, any[]>>({});
-    const [activityLoading, setActivityLoading] = useState<Record<string, boolean>>({});
+    const [systemActivities, setSystemActivities] = useState<any[]>([]);
+    const [activityLoading, setActivityLoading] = useState<boolean>(false);
   const { user } = useAuth();
 
   const [activeEventsCount, setActiveEventsCount] = useState<number>(0);
@@ -116,12 +145,13 @@ export default function AdminDashboard() {
         const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
         const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
 
-        // Filter and sort active events by updatedAt or createdAt
-        const active = events
-          .filter(event => event.status && event.status.toLowerCase().includes('active'))
+        // Include ALL events sorted by updatedAt or createdAt (for real-time detection of changes)
+        // Include ALL events sorted by updatedAt or createdAt (for real-time detection of changes)
+        const allEventsSorted = events
           .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-        setActiveEvents(active);
-        // For count and percent change - include both active and pre-production, count from current month onwards (exclude previous months)
+        setActiveEvents(allEventsSorted);
+        
+        // For active events count - include both active and pre-production
         const allActiveAndPreProduction = events
           .filter(event => event.status && (event.status.toLowerCase().includes('active') || event.status.toLowerCase().includes('pre-production')))
           .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
@@ -191,8 +221,7 @@ export default function AdminDashboard() {
           const bookings = events.filter(e => {
             if (!e.date) return false;
             const d = new Date(e.date);
-            return d.getFullYear() === thisYear && d.getMonth() === i &&
-              e.status?.toLowerCase().includes('active');
+            return d.getFullYear() === thisYear && d.getMonth() === i;
           }).length;
 
           const monthInquiries = inquiries.filter((inq: any) => {
@@ -242,9 +271,10 @@ export default function AdminDashboard() {
             : ((currentWeekTasks - prevWeekTasks) / prevWeekTasks) * 100
         );
 
-        // Calculate Production Quality based on active events' health scores
-        if (active.length > 0) {
-          const healthScores = active
+        // Calculate Production Quality based on active/pre-production events' health scores
+        const activeForQuality = allActiveAndPreProduction.filter(event => event.status && event.status.toLowerCase().includes('active'));
+        if (activeForQuality.length > 0) {
+          const healthScores = activeForQuality
             .map((event: any) => event.health || 0)
             .filter((score: number) => score > 0);
           
@@ -309,6 +339,24 @@ export default function AdminDashboard() {
       }
     };
     fetchStaff();
+  }, [user]);
+
+  // Fetch activities on mount
+  useEffect(() => {
+    const fetchActivities = async () => {
+      if (!user) return;
+      try {
+        setActivityLoading(true);
+        const idToken = await user.getIdToken();
+        const logs = await fetchMemberActivity('', idToken);
+        setSystemActivities(logs);
+      } catch (err) {
+        console.error('Error fetching activities on mount:', err);
+      } finally {
+        setActivityLoading(false);
+      }
+    };
+    fetchActivities();
   }, [user]);
 
   return (
@@ -569,13 +617,15 @@ export default function AdminDashboard() {
           </a>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {(() => {
-            // Prioritize ongoing event today
+            // Prioritize ongoing event today, then most recently updated events
             const ongoing = activeEvents.find(isEventOngoingToday);
             const rest = activeEvents.filter(e => !ongoing || e._id !== ongoing._id);
             const prioritized = ongoing ? [ongoing, ...rest] : rest;
-            const cards = prioritized.slice(0, 3).map(event => {
+            // Always display exactly 2 events
+            const displayedEvents = prioritized.slice(0, 2);
+            const cards = displayedEvents.map(event => {
               const budget = event.budget || {};
               const progress = budget.total ? Math.round((budget.utilized || 0) / budget.total * 100) : (event.health || 0);
               const progressLabel = budget.total ? 'Budget Spent' : 'Health';
@@ -634,7 +684,7 @@ export default function AdminDashboard() {
             const addEventCard = (
               <div
                 key="add-event"
-                className="bg-gradient-to-br from-[#d4a017]/5 to-yellow-50 rounded-xl border border-[#d4a017]/20 shadow-sm hover:shadow-xl hover:border-[#d4a017] transition-all duration-300 overflow-hidden flex flex-col items-center justify-center group cursor-pointer relative min-h-[400px]"
+                className="relative rounded-xl overflow-hidden flex flex-col items-center justify-center group cursor-pointer min-h-[400px] shadow-sm hover:shadow-lg transition-all duration-300"
                 onClick={(e) => {
                   e.currentTarget.classList.add('animate-slideOutLeft');
                   setTimeout(() => {
@@ -643,14 +693,45 @@ export default function AdminDashboard() {
                 }}
                 style={{ position: 'relative' }}
               >
-                <div className="flex flex-col items-center justify-center w-full h-full gap-6">
-                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full border-2 border-[#d4a017] bg-white group-hover:bg-[#d4a017] transition-all duration-300">
-                    <svg className="w-10 h-10 text-[#d4a017] group-hover:text-white transition-colors duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+                {/* Gradient background with layered effect */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white via-[#facc15]/5 to-[#d4a017]/10 group-hover:from-white group-hover:via-[#facc15]/10 group-hover:to-[#d4a017]/15 transition-all duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-tl from-transparent via-transparent to-[#d4a017]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                
+                {/* Border with gradient */}
+                <div className="absolute inset-0 rounded-xl border border-gray-100 group-hover:border-[#d4a017]/30 transition-colors duration-300 pointer-events-none" />
+
+                {/* Animated accent blob on hover */}
+                <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-[#facc15]/20 to-transparent rounded-full blur-3xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                
+                <div className="flex flex-col items-center justify-center w-full h-full gap-6 relative z-10 px-8">
+                  {/* Icon with gold highlight */}
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#facc15]/20 to-[#d4a017]/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <div className="relative bg-gradient-to-br from-[#facc15]/30 to-[#facc15]/10 p-6 rounded-2xl border border-[#d4a017]/20 group-hover:border-[#d4a017]/50 group-hover:from-[#facc15]/40 group-hover:to-[#facc15]/20 transition-all duration-300">
+                      <svg className="w-12 h-12 text-[#d4a017] group-hover:scale-125 group-hover:text-[#facc15] transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    </div>
                   </div>
-                  <p className="text-lg font-bold text-gray-900 group-hover:text-[#d4a017] transition-colors duration-300">Click to add an Event</p>
+
+                  {/* Text content */}
+                  <div className="text-center space-y-2">
+                    <h4 className="text-2xl font-bold text-gray-900 group-hover:text-[#d4a017] transition-colors duration-300">New Production</h4>
+                    <p className="text-sm text-gray-500 font-medium group-hover:text-gray-600 transition-colors duration-300">Kickstart your next project</p>
+                  </div>
+
+                  {/* CTA Button */}
+                  <div className="mt-6 relative group/btn">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-[#d4a017] to-[#facc15] rounded-lg blur opacity-40 group-hover/btn:opacity-100 transition-opacity duration-300" />
+                    <button className="relative px-6 py-2.5 bg-gradient-to-r from-[#1c1c1c] to-[#1c1c1c] text-[#facc15] font-semibold text-sm rounded-lg flex items-center gap-2 group-hover/btn:from-[#d4a017] group-hover/btn:to-[#facc15] group-hover/btn:text-white transition-all duration-300 shadow-md group-hover/btn:shadow-lg">
+                      Launch Event
+                      <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
+
                 <style jsx>{`
                   .animate-slideOutLeft {
                     animation: slideOutLeft 0.35s cubic-bezier(0.4,0,0.2,1) forwards;
@@ -663,156 +744,157 @@ export default function AdminDashboard() {
               </div>
             );
 
-            return [...cards, addEventCard];
+            // Only show add card if we have less than 2 events
+            return displayedEvents.length < 2 ? [...cards, addEventCard] : [...cards, addEventCard];
           })()}
         </div>
       </div>
 
-      {/* Staff Section */}
-      <div className="flex flex-col xl:flex-row gap-8 pb-12 border-t border-gray-200 pt-10">
-        <div className="w-80 shrink-0 pr-6">
-          <h2 className="text-xl md:text-[22px] font-bold text-gray-900 mb-3">Core Production Team</h2>
-          <p className="text-[14px] text-gray-500 leading-relaxed mb-8">
-            Our specialized leads and their current deployment status across regional territories.
-          </p>
-          <a href="/admin/users" className="text-[11px] font-bold tracking-widest uppercase text-[#d4a017] flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all cursor-pointer">
-            Staff Directory
-            <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
-          {!staffLoading && !staffError && (
-            <p className="text-[11px] text-gray-400 mt-4">{staff.length} member{staff.length !== 1 ? 's' : ''}</p>
-          )}
-        </div>
-
-        {/* Scrollable list */}
-        <div
-          style={{
-            maxHeight: 420,
-            overflowY: 'auto',
-            minHeight: 0,
-            width: '100%'
-          }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
-        >
-
-          {/* Skeletons */}
-          {staffLoading && [...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center gap-5 animate-pulse">
-              <div className="w-12 h-12 rounded bg-gray-100 shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3 bg-gray-100 rounded w-1/3" />
-                <div className="h-2.5 bg-gray-100 rounded w-1/4" />
-              </div>
-              <div className="hidden sm:block space-y-2">
-                <div className="h-2 bg-gray-100 rounded w-12 ml-auto" />
-                <div className="h-3 bg-gray-100 rounded w-20 ml-auto" />
-              </div>
+      {/* Staff Section with Activities */}
+      <div className="pb-12 border-t border-gray-200 pt-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left: Staff List */}
+          <div>
+            <div className="mb-8">
+              <h2 className="text-xl md:text-[22px] font-bold text-gray-900 mb-3">Core Production Team</h2>
+              <p className="text-[14px] text-gray-500 leading-relaxed">
+                Our specialized leads and their current deployment status across regional territories.
+              </p>
             </div>
-          ))}
 
-          {/* Error */}
-          {staffError && (
-            <div className="bg-red-50 border border-red-100 text-red-500 text-[13px] font-medium p-5 rounded-xl">
-              {staffError}
+            <div className="flex gap-3 mb-6">
+              <a href="/admin/users" className="text-[11px] font-bold tracking-widest uppercase text-[#d4a017] flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all cursor-pointer flex-1">
+                Staff Directory
+                <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
             </div>
-          )}
+            {!staffLoading && !staffError && (
+              <p className="text-[11px] text-gray-400 mb-6">{staff.length} member{staff.length !== 1 ? 's' : ''}</p>
+            )}
 
-          {/* Empty */}
-          {!staffLoading && !staffError && staff.length === 0 && (
-            <div className="text-[13px] text-gray-400 p-5">No staff members found.</div>
-          )}
+            {/* Staff List - Single Column */}
+            <div
+              style={{
+                maxHeight: '600px',
+                overflowY: 'auto',
+                minHeight: 0
+              }}
+              className="space-y-3 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-3"
+            >
+              {/* Skeletons */}
+              {staffLoading && [...Array(4)].map((_, i) => (
+                <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4 animate-pulse">
+                  <div className="w-10 h-10 rounded bg-gray-100 shrink-0" />
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div className="h-3 bg-gray-100 rounded w-1/2" />
+                    <div className="h-2.5 bg-gray-100 rounded w-1/3" />
+                  </div>
+                </div>
+              ))}
 
-          {/* Staff rows — merged from users + staff collections */}
-          {!staffLoading && !staffError && staff.map((member, i) => {
-            const { dot, label, textClass } = getStatusConfig(member.status);
-            const isUnavailable = !member.status || member.status.toLowerCase() === 'unavailable';
+              {/* Error */}
+              {staffError && (
+                <div className="bg-red-50 border border-red-100 text-red-500 text-[13px] font-medium p-4 rounded-xl">
+                  {staffError}
+                </div>
+              )}
 
-            const memberId = member._id?.toString() ?? i.toString();
-            const isOpen = openActivityMember === memberId;
-            return (
-              <div
-                key={memberId}
-                className={`bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-2 hover:border-gray-200 transition-colors ${isUnavailable ? 'opacity-70 hover:opacity-100' : ''}`}
-              >
-                <div className="flex items-center justify-between gap-5">
-                  <div className="flex items-center gap-5">
+              {/* Empty */}
+              {!staffLoading && !staffError && staff.length === 0 && (
+                <div className="text-[13px] text-gray-400 p-4">No staff members found.</div>
+              )}
+
+              {/* Staff rows — merged from users + staff collections */}
+              {!staffLoading && !staffError && staff.map((member, i) => {
+                const { dot, label, textClass } = getStatusConfig(member.status);
+                const isUnavailable = !member.status || member.status.toLowerCase() === 'unavailable';
+
+                const memberId = member._id?.toString() ?? i.toString();
+                return (
+                  <div
+                    key={memberId}
+                    className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4 hover:border-gray-200 transition-colors ${isUnavailable ? 'opacity-70 hover:opacity-100' : ''}`}
+                  >
                     {member.avatarUrl ? (
                       <img
-                        className={`w-12 h-12 rounded bg-gray-100 object-cover shadow-sm ${isUnavailable ? 'grayscale' : ''}`}
+                        className={`w-10 h-10 rounded bg-gray-100 object-cover shadow-sm shrink-0 ${isUnavailable ? 'grayscale' : ''}`}
                         src={member.avatarUrl}
                         alt={member.name}
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded bg-gray-100 shadow-sm flex items-center justify-center text-gray-400 font-bold text-lg">
+                      <div className="w-10 h-10 rounded bg-gray-100 shadow-sm flex items-center justify-center text-gray-400 font-bold text-sm shrink-0">
                         {member.name?.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <div>
-                      <p className="text-[15px] font-bold text-gray-900">{member.name}</p>
-                      <p className="text-[11px] font-bold tracking-wider text-gray-400 uppercase mt-1">
-                        {member.role || '—'}
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{member.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-[11px] font-bold tracking-wider text-gray-400 uppercase truncate">
+                          {member.role || '—'}
+                        </p>
+                        <span className={`w-2 h-2 rounded-full ${dot} shrink-0`} />
+                        <p className={`text-[11px] ${textClass} truncate`}>
+                          {label}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-8">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Status</p>
-                      <p className={`text-[12px] mt-1.5 flex items-center justify-end gap-2 ${textClass}`}>
-                        <span className={`w-2 h-2 rounded-full ${dot}`} />
-                        {label}
-                      </p>
-                    </div>
-                    <button
-                      className={`text-[12px] font-bold text-[#eebf43] hover:underline px-3 py-1.5 rounded transition-colors ${isOpen ? 'underline' : ''}`}
-                      title="View Activity"
-                      onClick={async () => {
-                        if (isOpen) {
-                          setOpenActivityMember(null);
-                        } else {
-                          setOpenActivityMember(memberId);
-                          if (!activityLogs[memberId]) {
-                            setActivityLoading(prev => ({ ...prev, [memberId]: true }));
-                            const idToken = await user?.getIdToken();
-                            if (idToken) {
-                              const logs = await fetchMemberActivity(memberId, idToken);
-                              setActivityLogs(prev => ({ ...prev, [memberId]: logs }));
-                            }
-                            setActivityLoading(prev => ({ ...prev, [memberId]: false }));
-                          }
-                        }
-                      }}
-                    >
-                      View Activity
-                    </button>
-                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Recent Activities */}
+          <div>
+            <div className="mb-8">
+              <p className="text-[11px] font-bold tracking-widest text-gray-400 uppercase mb-2">System Activity</p>
+              <h2 className="text-xl md:text-[22px] font-bold text-gray-900">Recent activities</h2>
+            </div>
+
+            <div
+              style={{
+                maxHeight: '600px',
+                overflowY: 'auto',
+                minHeight: 0
+              }}
+              className="space-y-3 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-3"
+            >
+              {activityLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <div className="w-8 h-8 border-4 border-gray-200 border-t-[#d4a017] rounded-full animate-spin mb-4" />
+                  <p className="text-sm font-medium">Loading activities...</p>
                 </div>
-                {isOpen && (
-                  <div className="mt-3 bg-gray-50 border border-gray-100 rounded-xl p-4 text-[13px] text-gray-700 shadow-inner animate-in fade-in duration-300">
-                    <div className="font-bold text-[12px] text-gray-900 mb-2">Recent Activity</div>
-                    {activityLoading[memberId] ? (
-                      <div className="text-gray-400 italic">Loading...</div>
-                    ) : (
-                      <ul className="space-y-1">
-                        {(activityLogs[memberId] || []).map((log: any, idx: number) => (
-                          <li key={idx} className="flex flex-col gap-0.5 border-l-2 border-gray-100 pl-3 py-1">
-                            <span className="text-[10px] font-bold text-gray-400">{log.time}</span>
-                            <span className="text-[11px] font-medium text-gray-700 leading-snug">{log.action}</span>
-                          </li>
-                        ))}
-                        {(!activityLogs[memberId] || activityLogs[memberId].length === 0) && (
-                          <li className="text-gray-400 italic">No activity found.</li>
-                        )}
-                      </ul>
+              ) : (systemActivities || []).length > 0 ? (
+                systemActivities.map((log: any, idx: number) => (
+                  <div key={idx} className="rounded-xl border border-gray-100 bg-gray-50 hover:bg-gray-100 p-4 transition-colors">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#d4a017] bg-[#facc15]/10 px-2.5 py-1 rounded-full shrink-0">
+                        {log.type || 'Update'}
+                      </span>
+                      <span className="text-[10px] text-gray-500 whitespace-nowrap shrink-0">{log.time}</span>
+                    </div>
+                    <p className="text-sm text-gray-700 font-medium mb-1.5">{log.action}</p>
+                    {log.actor && (
+                      <p className="text-[11px] text-gray-400 font-medium">by {log.actor}</p>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                  <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-gray-500 font-medium">No recent activities found.</p>
+                  <p className="text-gray-400 text-sm mt-1">Activities will appear here as actions are performed.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
+
     </div>
   );
 }
