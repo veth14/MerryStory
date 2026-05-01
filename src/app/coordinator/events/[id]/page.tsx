@@ -230,8 +230,9 @@ const getGuestStatusTone = (status?: string) => {
 
 const buildGuestCode = (guest: GuestRecord) => {
   if (guest.rsvpCode?.trim()) return guest.rsvpCode.trim();
-  const idToken = guest._id?.slice(-4).toUpperCase() || '0000';
-  return `SG-${new Date().getFullYear()}-${idToken}`;
+  const rawToken = (guest._id || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  const token = rawToken.slice(-8).padStart(8, '0');
+  return guest.tier === 'VIP' ? `VIP-${token}` : token;
 };
 
 function GuestModalSelect({
