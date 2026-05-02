@@ -13,7 +13,7 @@ export default function CoordinatorScannerPage({ params }: { params: Promise<{ i
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleScan = (result: any) => {
+  const handleScan = async (result: any) => {
     if (isProcessing) return;
     
     try {
@@ -32,24 +32,30 @@ export default function CoordinatorScannerPage({ params }: { params: Promise<{ i
 
       setIsProcessing(true);
       setErrorMsg('');
+      const response = await fetch('/api/rsvp/check-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: id,
+          rawValue,
+        }),
+      });
 
-      const payload = JSON.parse(rawValue);
-
-      if (payload && payload.code) {
-        setScannedData(payload);
-        
-        // Auto-reset the camera shortly after successful scan
-        setTimeout(() => {
-          setScannedData(null);
-          setIsProcessing(false);
-        }, 3000);
-      } else {
-        throw new Error("Invalid QR code format.");
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Invalid QR code format.');
       }
+
+      setScannedData(payload);
+      
+      setTimeout(() => {
+        setScannedData(null);
+        setIsProcessing(false);
+      }, 3000);
 
     } catch (error) {
       console.error('Scan Parse Error:', error);
-      setErrorMsg('Unrecognized QR format. Please scan a valid check-in ticket.');
+      setErrorMsg(error instanceof Error ? error.message : 'Unrecognized QR format. Please scan a valid check-in ticket.');
       setTimeout(() => {
         setIsProcessing(false);
         setErrorMsg('');
@@ -196,7 +202,7 @@ export default function CoordinatorScannerPage({ params }: { params: Promise<{ i
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                       <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Party Size</p>
-                      <p className="text-xl font-black text-[#d4a017]">{scannedData.attendees || 1} PAX</p>
+                      <p className="text-xl font-black text-[#d4a017]">1 PAX</p>
                     </div>
                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                       <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Pass Code</p>

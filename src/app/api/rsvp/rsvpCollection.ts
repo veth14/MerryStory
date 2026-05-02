@@ -6,6 +6,8 @@ export type GuestTier = 'VIP' | 'STANDARD';
 export type RsvpRecord = {
   _id?: ObjectId;
   eventId: ObjectId;
+  eventSlug?: string;
+  eventName?: string;
   guestName: string;
   code: string;
   status: RsvpStatus;
@@ -15,6 +17,7 @@ export type RsvpRecord = {
   usedAt?: Date | null;
   expiresAt?: Date | null;
   qrScannedAt?: Date | null;
+  invitationSentAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };

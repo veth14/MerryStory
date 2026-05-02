@@ -650,6 +650,19 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
       }
 
       const createdGuest = await response.json();
+      if (guestForm.email.trim()) {
+        await fetch('/api/coordinator/guest-registry/send-link', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            eventId: id,
+            guestId: createdGuest._id,
+          }),
+        });
+      }
       setGuests((prev) => [createdGuest, ...prev]);
       setGuestForm(createGuestFormState());
       setIsGuestModalOpen(false);
@@ -661,18 +674,36 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   };
 
   const handleSendGuestLink = async (guest: GuestRecord) => {
-    if (!guest.email?.trim()) return;
+    if (!guest.email?.trim() || !user) return;
 
-    const code = buildGuestCode(guest);
-    const guestName = guest.name?.trim() || 'Guest';
-    const subject = `RSVP Code for ${event?.title || 'Your Event Invitation'}`;
-    const body = encodeURIComponent(`Hi ${guestName},\n\nYour RSVP code is ${code}.`);
+    setActingGuestId(guest._id);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/coordinator/guest-registry/send-link', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          eventId: id,
+          guestId: guest._id,
+        }),
+      });
 
-    window.location.href = `mailto:${guest.email.trim()}?subject=${encodeURIComponent(subject)}&body=${body}`;
-    setCopiedGuestId(guest._id);
-    window.setTimeout(() => {
-      setCopiedGuestId((current) => (current === guest._id ? null : current));
-    }, 1800);
+      if (!response.ok) {
+        throw new Error('Failed to send guest RSVP link.');
+      }
+
+      setCopiedGuestId(guest._id);
+      window.setTimeout(() => {
+        setCopiedGuestId((current) => (current === guest._id ? null : current));
+      }, 1800);
+    } catch (error) {
+      console.error('Failed to send RSVP invite:', error);
+    } finally {
+      setActingGuestId(null);
+    }
   };
 
   const renderTaskSection = (
@@ -1194,7 +1225,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                                   className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] font-bold text-sky-600 hover:bg-sky-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   <Link2 size={12} />
-                                  {copiedGuestId === guest._id ? 'Opened' : 'Send Link'}
+                                  {copiedGuestId === guest._id ? 'Sent' : 'Send Link'}
                                 </button>
                               </div>
                             </td>

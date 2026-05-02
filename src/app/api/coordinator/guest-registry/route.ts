@@ -12,6 +12,7 @@ import {
   type RsvpRecord,
   type RsvpStatus,
 } from '@/app/api/rsvp/rsvpCollection';
+import { resolveEventIdentity, syncEventGuestCounts } from '@/app/api/rsvp/rsvpFlow';
 
 type GuestStatus = 'Confirmed' | 'Pending' | 'Declined';
 
@@ -54,30 +55,6 @@ const normalizeRequestedCode = (value: unknown, tier: GuestTier) => {
 const validateGuestCode = (code: string, tier: GuestTier) => {
   const pattern = buildGuestCodePattern(tier);
   return pattern.test(code);
-};
-
-const syncEventGuestCounts = async (eventId: ObjectId) => {
-  const db = await getMongoDb();
-  const rsvpCollection = getRsvpCollection(db);
-  const [invited, confirmed, checkedIn] = await Promise.all([
-    rsvpCollection.countDocuments({ eventId }),
-    rsvpCollection.countDocuments({ eventId, status: 'confirmed' }),
-    rsvpCollection.countDocuments({
-      eventId,
-      $or: [{ qrScannedAt: { $ne: null } }, { usedAt: { $ne: null } }],
-    }),
-  ]);
-
-  await db.collection('events').updateOne(
-    { _id: eventId },
-    {
-      $set: {
-        'guests.invited': invited,
-        'guests.rsvp': confirmed,
-        'guests.checkedIn': checkedIn,
-      },
-    }
-  );
 };
 
 const resolveGuestCode = async ({
@@ -135,33 +112,17 @@ const mapRsvpToGuest = (record: RsvpRecord & { _id: ObjectId }) => ({
   notes: record.notes || '',
   tier: record.tier || '',
   status: normalizeStatus(record.status),
-  checkedIn: Boolean(record.qrScannedAt || record.usedAt),
+  checkedIn: Boolean(record.qrScannedAt),
   rsvpCode: record.code,
   usedAt: record.usedAt || null,
   qrScannedAt: record.qrScannedAt || null,
   expiresAt: record.expiresAt || null,
+  eventSlug: record.eventSlug || '',
+  eventName: record.eventName || '',
+  invitationSentAt: record.invitationSentAt || null,
   createdAt: record.createdAt,
   updatedAt: record.updatedAt,
 });
-
-const resolveExpiryDate = async (eventId: string) => {
-  const db = await getMongoDb();
-  const event = await db.collection('events').findOne(
-    { _id: new ObjectId(eventId) },
-    { projection: { date: 1 } }
-  );
-
-  if (event?.date) {
-    const eventDate = new Date(event.date);
-    if (!Number.isNaN(eventDate.getTime())) {
-      return eventDate;
-    }
-  }
-
-  const fallback = new Date();
-  fallback.setDate(fallback.getDate() + 30);
-  return fallback;
-};
 
 export async function GET(request: Request) {
   try {
@@ -214,8 +175,8 @@ export async function POST(request: Request) {
     const rsvpCollection = getRsvpCollection(db);
     const status = toRsvpStatus(body.status);
     const now = new Date();
-    const expiresAt = await resolveExpiryDate(eventId);
     const eventObjectId = new ObjectId(eventId);
+    const eventIdentity = await resolveEventIdentity(db, eventObjectId);
     const tier = normalizeGuestTier(body.tier);
     const code = await resolveGuestCode({
       eventId: eventObjectId,
@@ -225,6 +186,8 @@ export async function POST(request: Request) {
 
     const newGuest: RsvpRecord = {
       eventId: eventObjectId,
+      eventSlug: eventIdentity.eventSlug,
+      eventName: eventIdentity.eventName,
       guestName,
       code,
       status,
@@ -232,8 +195,9 @@ export async function POST(request: Request) {
       notes: String(body.notes || '').trim(),
       tier: tier === 'VIP' ? 'VIP' : 'Standard',
       usedAt: null,
-      expiresAt,
+      expiresAt: eventIdentity.eventDate,
       qrScannedAt: null,
+      invitationSentAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -269,6 +233,7 @@ export async function PATCH(request: Request) {
     const db = await getMongoDb();
     const rsvpCollection = getRsvpCollection(db);
     const eventObjectId = new ObjectId(eventId);
+    const eventIdentity = await resolveEventIdentity(db, eventObjectId);
     const guestObjectId = new ObjectId(guestId);
     const existingGuest = await rsvpCollection.findOne({
       _id: guestObjectId,
@@ -301,6 +266,8 @@ export async function PATCH(request: Request) {
     if (body.usedAt !== undefined) updateData.usedAt = body.usedAt ? new Date(body.usedAt) : null;
     if (body.qrScannedAt !== undefined) updateData.qrScannedAt = body.qrScannedAt ? new Date(body.qrScannedAt) : null;
     if (body.expiresAt !== undefined) updateData.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+    updateData.eventSlug = eventIdentity.eventSlug;
+    updateData.eventName = eventIdentity.eventName;
 
     await rsvpCollection.updateOne(
       { _id: guestObjectId, eventId: eventObjectId },
