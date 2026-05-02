@@ -132,6 +132,7 @@ const mapRsvpToGuest = (record: RsvpRecord & { _id: ObjectId }) => ({
   _id: record._id.toString(),
   name: record.guestName,
   email: record.email || '',
+  notes: record.notes || '',
   tier: record.tier || '',
   status: normalizeStatus(record.status),
   checkedIn: Boolean(record.qrScannedAt || record.usedAt),
@@ -228,6 +229,7 @@ export async function POST(request: Request) {
       code,
       status,
       email: String(body.email || '').trim(),
+      notes: String(body.notes || '').trim(),
       tier: tier === 'VIP' ? 'VIP' : 'Standard',
       usedAt: null,
       expiresAt,
@@ -294,6 +296,7 @@ export async function PATCH(request: Request) {
       });
     }
     if (body.email !== undefined) updateData.email = String(body.email || '').trim();
+    if (body.notes !== undefined) updateData.notes = String(body.notes || '').trim();
     if (body.tier !== undefined) updateData.tier = nextTier === 'VIP' ? 'VIP' : 'Standard';
     if (body.usedAt !== undefined) updateData.usedAt = body.usedAt ? new Date(body.usedAt) : null;
     if (body.qrScannedAt !== undefined) updateData.qrScannedAt = body.qrScannedAt ? new Date(body.qrScannedAt) : null;
@@ -320,6 +323,44 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error('COORDINATOR GUEST REGISTRY PATCH ERROR:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    await requireAuthenticatedUser(request);
+
+    const url = new URL(request.url);
+    const eventId = url.searchParams.get('eventId');
+    const guestId = url.searchParams.get('guestId');
+
+    if (!eventId || !ObjectId.isValid(eventId) || !guestId || !ObjectId.isValid(guestId)) {
+      return NextResponse.json({ error: 'Valid eventId and guestId are required.' }, { status: 400 });
+    }
+
+    const db = await getMongoDb();
+    const rsvpCollection = getRsvpCollection(db);
+    const eventObjectId = new ObjectId(eventId);
+    const guestObjectId = new ObjectId(guestId);
+
+    const deleteResult = await rsvpCollection.deleteOne({
+      _id: guestObjectId,
+      eventId: eventObjectId,
+    });
+
+    if (deleteResult.deletedCount === 0) {
+      return NextResponse.json({ error: 'Guest not found.' }, { status: 404 });
+    }
+
+    await syncEventGuestCounts(eventObjectId);
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (error) {
+    if (error instanceof AuthGuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    console.error('COORDINATOR GUEST REGISTRY DELETE ERROR:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

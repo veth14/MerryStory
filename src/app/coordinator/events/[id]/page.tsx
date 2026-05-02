@@ -21,6 +21,8 @@ import {
   Loader2,
   X,
   ChevronDown,
+  Eye,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -72,6 +74,7 @@ type GuestRecord = {
   _id: string;
   name?: string;
   email?: string;
+  notes?: string;
   phone?: string;
   gender?: string;
   age?: number | null;
@@ -339,6 +342,8 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const [submittingGuest, setSubmittingGuest] = useState(false);
   const [actingGuestId, setActingGuestId] = useState<string | null>(null);
   const [copiedGuestId, setCopiedGuestId] = useState<string | null>(null);
+  const [selectedGuest, setSelectedGuest] = useState<GuestRecord | null>(null);
+  const [guestPendingRemoval, setGuestPendingRemoval] = useState<GuestRecord | null>(null);
   const { id } = use(params);
 
   useEffect(() => {
@@ -574,6 +579,8 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
 
       const updatedGuest = await response.json();
       setGuests((prev) => prev.map((guest) => (guest._id === guestId ? updatedGuest : guest)));
+      setSelectedGuest((current) => (current?._id === guestId ? updatedGuest : current));
+      setGuestPendingRemoval((current) => (current?._id === guestId ? updatedGuest : current));
       return true;
     } catch (error) {
       console.error('Failed to update guest:', error);
@@ -585,6 +592,36 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
 
   const handleGuestStatusChange = async (guestId: string, status: GuestStatus) => {
     await persistGuestPatch(guestId, { status });
+  };
+
+  const handleGuestRemoval = async (guest: GuestRecord) => {
+    if (!user) return;
+
+    setActingGuestId(guest._id);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch(
+        `/api/coordinator/guest-registry?eventId=${encodeURIComponent(id)}&guestId=${encodeURIComponent(guest._id)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to remove guest.');
+      }
+
+      setGuests((prev) => prev.filter((entry) => entry._id !== guest._id));
+      setGuestPendingRemoval(null);
+      setSelectedGuest((current) => (current?._id === guest._id ? null : current));
+    } catch (error) {
+      console.error('Failed to remove guest:', error);
+    } finally {
+      setActingGuestId(null);
+    }
   };
 
   const handleGuestSubmit = async () => {
@@ -624,25 +661,18 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   };
 
   const handleSendGuestLink = async (guest: GuestRecord) => {
+    if (!guest.email?.trim()) return;
+
     const code = buildGuestCode(guest);
     const guestName = guest.name?.trim() || 'Guest';
     const subject = `RSVP Code for ${event?.title || 'Your Event Invitation'}`;
     const body = encodeURIComponent(`Hi ${guestName},\n\nYour RSVP code is ${code}.`);
 
-    if (guest.email?.trim()) {
-      window.location.href = `mailto:${guest.email.trim()}?subject=${encodeURIComponent(subject)}&body=${body}`;
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopiedGuestId(guest._id);
-      window.setTimeout(() => {
-        setCopiedGuestId((current) => (current === guest._id ? null : current));
-      }, 1800);
-    } catch (error) {
-      console.error('Failed to copy RSVP code:', error);
-    }
+    window.location.href = `mailto:${guest.email.trim()}?subject=${encodeURIComponent(subject)}&body=${body}`;
+    setCopiedGuestId(guest._id);
+    window.setTimeout(() => {
+      setCopiedGuestId((current) => (current === guest._id ? null : current));
+    }, 1800);
   };
 
   const renderTaskSection = (
@@ -1065,13 +1095,13 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-left">
+                <table className="w-full min-w-[940px] table-fixed">
                   <thead>
                     <tr className="border-b border-gray-100 bg-[#fcfcfc]">
-                      <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Guest</th>
-                      <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">RSVP Code</th>
-                      <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Status</th>
-                      <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Actions</th>
+                      <th className="w-[28%] px-5 py-4 text-left text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Guest</th>
+                      <th className="w-[18%] px-5 py-4 text-center text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">RSVP Code</th>
+                      <th className="w-[18%] px-5 py-4 text-center text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Status</th>
+                      <th className="w-[36%] px-5 py-4 text-center text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1094,17 +1124,18 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                       filteredGuests.map((guest) => {
                         const statusTone = getGuestStatusTone(guest.status);
                         const isActing = actingGuestId === guest._id;
+                        const hasEmail = Boolean(guest.email?.trim());
 
                         return (
                           <tr key={guest._id} className="border-b border-gray-100 last:border-b-0 hover:bg-[#fcfcfc] transition-colors">
-                            <td className="px-5 py-4">
+                            <td className="px-5 py-4 align-middle">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-[#f1f5f9] border border-gray-200 flex items-center justify-center text-[13px] font-black text-[#475569]">
                                   {getInitials(guest.name)}
                                 </div>
-                                <div>
-                                  <p className="text-[15px] font-bold text-[#1d1d1f]">{guest.name || 'Unnamed Guest'}</p>
-                                  <div className="flex items-center gap-2 text-[12px] text-[#7c3aed]">
+                                <div className="min-w-0">
+                                  <p className="truncate text-[15px] font-bold text-[#1d1d1f]">{guest.name || 'Unnamed Guest'}</p>
+                                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#7c3aed]">
                                     <span className="font-medium text-[#7c3aed]">{guest.tier || 'Standard'}</span>
                                     {guest.checkedIn && (
                                       <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-emerald-600">
@@ -1116,45 +1147,54 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                                 </div>
                               </div>
                             </td>
-                            <td className="px-5 py-4">
-                              <span className="inline-flex rounded-lg border border-gray-200 bg-[#f8fafc] px-3 py-1.5 font-mono text-[11px] text-[#64748b]">
+                            <td className="px-5 py-4 text-center align-middle">
+                              <span className="inline-flex max-w-full items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-[#f8fafc] px-3 py-1.5 font-mono text-[11px] text-[#64748b]">
                                 {buildGuestCode(guest)}
                               </span>
                             </td>
-                            <td className="px-5 py-4">
-                              <span className={`inline-flex items-center gap-2 text-[14px] font-medium ${statusTone.text}`}>
+                            <td className="px-5 py-4 text-center align-middle">
+                              <span className={`inline-flex items-center justify-center gap-2 text-[14px] font-medium ${statusTone.text}`}>
                                 <span className={`h-1.5 w-1.5 rounded-full ${statusTone.dot}`}></span>
                                 {guest.status || 'Pending'}
                               </span>
                             </td>
-                            <td className="px-5 py-4">
-                              <div className="flex flex-wrap items-center gap-2">
+                            <td className="px-5 py-4 text-center align-middle">
+                              <div className="flex items-center justify-center gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
                                   disabled={isActing}
+                                  onClick={() => setSelectedGuest(guest)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold text-[#1d1d1f] hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                >
+                                  <Eye size={12} />
+                                  View Details
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isActing || hasEmail}
                                   onClick={() => handleGuestStatusChange(guest._id, 'Confirmed')}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-600 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-600 hover:bg-emerald-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   <Check size={12} />
                                   Confirm
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={isActing}
+                                  disabled={isActing || hasEmail}
                                   onClick={() => handleGuestStatusChange(guest._id, 'Declined')}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-bold text-rose-600 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-bold text-rose-600 hover:bg-rose-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   <X size={12} />
                                   Decline
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={isActing}
+                                  disabled={isActing || !hasEmail}
                                   onClick={() => handleSendGuestLink(guest)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] font-bold text-sky-600 hover:bg-sky-100 transition-colors disabled:opacity-50"
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] font-bold text-sky-600 hover:bg-sky-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   <Link2 size={12} />
-                                  {copiedGuestId === guest._id ? 'Copied' : 'Send Link'}
+                                  {copiedGuestId === guest._id ? 'Opened' : 'Send Link'}
                                 </button>
                               </div>
                             </td>
@@ -1252,6 +1292,131 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
               >
                 {submittingGuest ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                 Save Guest
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedGuest && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-[640px] rounded-[18px] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Guest Details</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mt-1">View guest information</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedGuest(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                aria-label="Close guest details modal"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Full Name</label>
+                  <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[#1d1d1f] text-[15px] font-bold">
+                    {selectedGuest.name?.trim() || 'Unnamed Guest'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Email Address</label>
+                  <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[#1d1d1f] text-[15px] font-bold break-all">
+                    {selectedGuest.email?.trim() || 'No email added'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Tier</label>
+                  <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[#1d1d1f] text-[15px] font-bold">
+                    {selectedGuest.tier || 'Standard'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Status</label>
+                  <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl">
+                    <span className={`inline-flex items-center gap-2 text-[15px] font-bold ${getGuestStatusTone(selectedGuest.status).text}`}>
+                      <span className={`h-2 w-2 rounded-full ${getGuestStatusTone(selectedGuest.status).dot}`}></span>
+                      {selectedGuest.status || 'Pending'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">RSVP Code</label>
+                <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-mono text-[15px] text-[#64748b]">
+                  {buildGuestCode(selectedGuest)}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Notes</label>
+                <div className="min-h-[128px] w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[15px] leading-relaxed text-[#71717a] italic">
+                  {selectedGuest.notes?.trim() || 'No notes added'}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 border-t border-gray-100 flex justify-end">
+              <button
+                type="button"
+                disabled={actingGuestId === selectedGuest._id}
+                onClick={() => setGuestPendingRemoval(selectedGuest)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#ffcab8] bg-white px-5 py-3 text-[12px] font-extrabold text-[#f05a28] hover:bg-[#fff5f1] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 size={14} />
+                Remove Guest
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {guestPendingRemoval && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-[540px] rounded-[18px] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Remove Guest</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mt-1">Guest registry update</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGuestPendingRemoval(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                aria-label="Close guest removal modal"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <p className="text-sm font-medium text-[#71717a] leading-relaxed">
+                Remove <span className="font-bold text-[#1d1d1f]">{guestPendingRemoval.name || 'this guest'}</span> from the registry? This will also update the live guest totals for the event.
+              </p>
+            </div>
+
+            <div className="pt-5 px-6 pb-5 mt-0 flex items-center justify-end gap-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setGuestPendingRemoval(null)}
+                className="px-6 py-3 text-[12px] font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-wider"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actingGuestId === guestPendingRemoval._id}
+                onClick={() => handleGuestRemoval(guestPendingRemoval)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[#eebf43] hover:bg-[#dcae32] disabled:opacity-70 text-white text-[12px] font-extrabold uppercase tracking-widest rounded-xl transition-all"
+              >
+                {actingGuestId === guestPendingRemoval._id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                Remove Guest
               </button>
             </div>
           </div>

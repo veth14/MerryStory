@@ -10,6 +10,7 @@ export type RsvpRecord = {
   code: string;
   status: RsvpStatus;
   email?: string;
+  notes?: string;
   tier?: string;
   usedAt?: Date | null;
   expiresAt?: Date | null;
