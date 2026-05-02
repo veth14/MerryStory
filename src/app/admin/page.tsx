@@ -31,6 +31,16 @@ async function fetchMemberActivity(memberId: string, idToken: string) {
           type = 'Inquiry';
         } else if (log.category === 'TASK_MANAGEMENT' || log.action?.includes('TASK')) {
           type = 'Task';
+        } else if (log.category === 'EVENT_MANAGEMENT' || log.action?.includes('EVENT')) {
+          type = 'Event';
+        } else if (log.category === 'EXPENSE_MANAGEMENT' || log.action?.includes('EXPENSE')) {
+          type = 'Expense';
+        } else if (log.category === 'CONTRACT_MANAGEMENT' || log.action?.includes('CONTRACT')) {
+          type = 'Contract';
+        } else if (log.category === 'USER_MANAGEMENT' || log.action?.includes('USER')) {
+          type = 'Staff';
+        } else if (log.category === 'VENDOR_MANAGEMENT' || log.action?.includes('VENDOR')) {
+          type = 'Vendor';
         }
         
         return {
@@ -358,6 +368,36 @@ export default function AdminDashboard() {
     };
     fetchActivities();
   }, [user]);
+
+  // Smart auto-refresh: poll activities every 30 seconds, only update if new activities found
+  useEffect(() => {
+    if (!user) return;
+
+    const pollActivities = async () => {
+      try {
+        const idToken = await user.getIdToken();
+        const freshLogs = await fetchMemberActivity('', idToken);
+        
+        // Only update if we have new activities (compare first item's action to detect changes)
+        if (freshLogs.length > 0 && systemActivities.length > 0) {
+          if (freshLogs[0].action !== systemActivities[0].action || 
+              freshLogs[0].time !== systemActivities[0].time) {
+            setSystemActivities(freshLogs);
+          }
+        } else if (freshLogs.length > systemActivities.length) {
+          // More activities than before
+          setSystemActivities(freshLogs);
+        }
+      } catch (err) {
+        console.error('Error polling activities:', err);
+      }
+    };
+
+    // Start polling after initial load
+    const interval = setInterval(pollActivities, 30000); // Poll every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user, systemActivities]);
 
   return (
     <div className="space-y-12 w-full max-w-none">
