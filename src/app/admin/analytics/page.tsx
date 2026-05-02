@@ -309,7 +309,7 @@ export default function AnalyticsAdminPage() {
                 return (
                   <div 
                     key={idx}
-                    className={`border rounded-2xl p-5 group animate-in slide-in-from-right-full duration-300 shadow-lg ${bgColors[rec.type]}`}
+                    className={`border rounded-2xl p-5 group animate-in slide-in-from-right-full duration-300 shadow-lg ${showToast ? '' : 'animate-out fade-out duration-300'} ${bgColors[rec.type]}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconColors[rec.type]}`}>
