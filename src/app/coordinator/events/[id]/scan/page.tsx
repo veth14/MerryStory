@@ -4,10 +4,12 @@ import { useRouter } from 'next/navigation';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, AlertCircle, ScanLine, Loader2, UserCheck, ShieldCheck, ChevronLeft } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function CoordinatorScannerPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
+  const { user } = useAuth();
   
   const [scannedData, setScannedData] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -32,9 +34,18 @@ export default function CoordinatorScannerPage({ params }: { params: Promise<{ i
 
       setIsProcessing(true);
       setErrorMsg('');
+      const idToken = await user?.getIdToken();
+
+      if (!idToken) {
+        throw new Error('Missing or invalid authorization token.');
+      }
+
       const response = await fetch('/api/rsvp/check-in', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           eventId: id,
           rawValue,
