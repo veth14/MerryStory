@@ -1,29 +1,51 @@
 'use client';
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Scanner } from '@yudiel/react-qr-scanner';
-import Link from 'next/link';
-import { ArrowRight, CheckCircle2, AlertCircle, ScanLine, Loader2, UserCheck, ShieldCheck, ChevronLeft } from 'lucide-react';
 
-export default function RsvpScannerPage() {
-  const router = useRouter();
-  const [scannedData, setScannedData] = useState<any>(null);
+import React, { Suspense, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Scanner } from '@yudiel/react-qr-scanner';
+import {
+  ArrowRight,
+  AlertCircle,
+  ScanLine,
+  Loader2,
+  UserCheck,
+  ShieldCheck,
+  ChevronLeft,
+  CheckCircle2,
+} from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
+
+type CheckInPayload = {
+  guestName?: string;
+  eventName?: string;
+  code?: string;
+};
+
+function AdminScanInner() {
+  const searchParams = useSearchParams();
+  const eventId = searchParams.get('eventId') || '';
+  const { user } = useAuth();
+
+  const [scannedData, setScannedData] = useState<CheckInPayload | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleScan = (result: any) => {
-    if (isProcessing) return;
-    
+  const backHref = eventId ? `/admin/rsvp/${eventId}` : '/admin/events';
+
+  const handleScan = async (result: unknown) => {
+    if (isProcessing || !eventId) return;
+
     try {
       let rawValue = '';
-      if (Array.isArray(result) && result.length > 0) {
-        rawValue = result[0].rawValue;
+      if (Array.isArray(result) && result.length > 0 && typeof (result as { rawValue?: string }[])[0]?.rawValue === 'string') {
+        rawValue = (result as { rawValue: string }[])[0].rawValue;
       } else if (typeof result === 'string') {
         rawValue = result;
-      } else if (result?.text) {
-        rawValue = result.text;
-      } else if (result?.rawValue) {
-        rawValue = result.rawValue;
+      } else if (result && typeof result === 'object') {
+        const r = result as { text?: string; rawValue?: string };
+        if (r.text) rawValue = r.text;
+        else if (r.rawValue) rawValue = r.rawValue;
       }
 
       if (!rawValue) return;
@@ -31,23 +53,37 @@ export default function RsvpScannerPage() {
       setIsProcessing(true);
       setErrorMsg('');
 
-      const payload = JSON.parse(rawValue);
-
-      if (payload && payload.code) {
-        setScannedData(payload);
-        
-        // Auto-reset the camera shortly after successful scan
-        setTimeout(() => {
-          setScannedData(null);
-          setIsProcessing(false);
-        }, 3000);
-      } else {
-        throw new Error("Invalid QR code format.");
+      const idToken = await user?.getIdToken();
+      if (!idToken) {
+        throw new Error('Missing or invalid authorization token.');
       }
 
+      const response = await fetch('/api/rsvp/check-in', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          eventId,
+          rawValue,
+        }),
+      });
+
+      const payload = (await response.json()) as CheckInPayload & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || 'Invalid QR code format.');
+      }
+
+      setScannedData(payload);
+
+      setTimeout(() => {
+        setScannedData(null);
+        setIsProcessing(false);
+      }, 3000);
     } catch (error) {
-      console.error('Scan Parse Error:', error);
-      setErrorMsg('Unrecognized QR format. Please scan a valid MerryStory ticket.');
+      console.error('Scan error:', error);
+      setErrorMsg(error instanceof Error ? error.message : 'Unrecognized QR format. Please scan a valid check-in ticket.');
       setTimeout(() => {
         setIsProcessing(false);
         setErrorMsg('');
@@ -56,189 +92,188 @@ export default function RsvpScannerPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 w-full px-4 sm:px-6 lg:px-8 pb-12 mt-2">
-      {/* Breadcrumb / Back Navigation */}
-      <Link href="/admin/rsvp" className="inline-flex items-center gap-2 text-[11px] font-extrabold text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-colors mb-4 group">
-        <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform" strokeWidth={3} />
-        BACK TO REGISTRY
+    <div className="animate-in fade-in mt-2 w-full duration-500 px-4 pb-12 sm:px-6 lg:px-8">
+      <Link
+        href={backHref}
+        className="group mb-4 inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-widest text-gray-400 transition-colors hover:text-gray-900"
+      >
+        <ChevronLeft size={14} strokeWidth={3} className="transition-transform group-hover:-translate-x-1" />
+        Back to Registry
       </Link>
 
-      {/* Header Section */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2">
-        <div className="max-w-3xl">
-          <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
-            Invitations <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Authentication</span>
-          </p>
-          <h1 className="text-5xl font-black text-[#1d1d1f] tracking-tight">
-            Ticket <span className="text-[#eebf43] italic pr-2">Scanner</span>
-          </h1>
-          <p className="text-[#71717a] text-sm mt-4 max-w-lg leading-relaxed font-medium">
-            Point your camera at a guest's unique QR code. The system will instantly authenticate their invitation and update the live registry.
-          </p>
+      {!eventId ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4 text-sm font-medium text-amber-950">
+          Open the scanner from an event&apos;s Guest Registry so we know which event to check guests into ({' '}
+          <Link href="/admin/events" className="font-bold underline">
+            Events
+          </Link>
+          ).
         </div>
-        <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-5 py-3 rounded-2xl shrink-0">
-          <ShieldCheck size={20} className="text-emerald-500" />
-          <div>
-            <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Connection</p>
-            <p className="text-sm font-bold text-gray-900">Secure & Encrypted</p>
+      ) : (
+        <>
+          <div className="mb-8 flex flex-col justify-between gap-4 pt-2 md:flex-row md:items-end">
+            <div className="max-w-3xl">
+              <p className="mb-3 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa]">
+                Invitations <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Authentication</span>
+              </p>
+              <h1 className="text-5xl font-black tracking-tight text-[#1d1d1f]">
+                Ticket <span className="pr-2 italic text-[#eebf43]">Scanner</span>
+              </h1>
+              <p className="mt-4 max-w-lg text-sm font-medium leading-relaxed text-[#71717a]">
+                Point your camera at a guest&apos;s unique QR code. The system will authenticate their invitation and update the live registry check-in status.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-5 py-3">
+              <ShieldCheck size={20} className="text-emerald-500" />
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Connection</p>
+                <p className="text-sm font-bold text-gray-900">Secure & Encrypted</p>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Split Content Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 mt-4 items-start">
-        
-        {/* Left Col: Camera View */}
-        <div className="lg:col-span-7 xl:col-span-8">
-           <div className="relative bg-black rounded-[2rem] overflow-hidden shadow-2xl aspect-[4/3] md:aspect-video lg:aspect-[16/10] ring-1 ring-gray-900/5">
-             
-             {!scannedData ? (
-                <>
-                  <Scanner
-                    onScan={handleScan}
-                    onError={(err) => {
-                      if (err && typeof err === 'string' && !err.includes("No QR code found")) {
-                        console.log('Scanner Error:', err);
-                      }
-                    }}
-                    styles={{
-                      container: { width: '100%', height: '100%' },
-                      video: { objectFit: 'cover' }
-                    }}
-                  />
-                  
-                  {/* Floating targeting reticle */}
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-56 h-56 sm:w-72 sm:h-72 border-[3px] border-white/20 rounded-3xl relative transition-all duration-300">
-                      {/* Corner accents */}
-                      <div className="absolute -top-1 -left-1 w-10 h-10 border-t-[4px] border-l-[4px] border-[#eebf43] rounded-tl-3xl"></div>
-                      <div className="absolute -top-1 -right-1 w-10 h-10 border-t-[4px] border-r-[4px] border-[#eebf43] rounded-tr-3xl"></div>
-                      <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-[4px] border-l-[4px] border-[#eebf43] rounded-bl-3xl"></div>
-                      <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-[4px] border-r-[4px] border-[#eebf43] rounded-br-3xl"></div>
-                      
-                      {/* Scanning line animation */}
-                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#eebf43] opacity-50 shadow-[0_0_20px_#eebf43] animate-[scan_2s_ease-in-out_infinite]"></div>
+          <div className="mt-4 grid grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-12">
+            <div className="lg:col-span-7 xl:col-span-8">
+              <div className="relative aspect-[4/3] overflow-hidden rounded-[2rem] bg-black shadow-2xl ring-1 ring-gray-900/5 md:aspect-video lg:aspect-[16/10]">
+                {!scannedData ? (
+                  <>
+                    <Scanner
+                      onScan={handleScan}
+                      onError={(err: unknown) => {
+                        const msg = typeof err === 'string' ? err : '';
+                        if (msg && !msg.includes('No QR code found')) console.log('Scanner Error:', msg);
+                      }}
+                      styles={{
+                        container: { width: '100%', height: '100%' },
+                        video: { objectFit: 'cover' },
+                      }}
+                    />
+
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <div className="relative h-56 w-56 rounded-3xl border-[3px] border-white/20 sm:h-72 sm:w-72">
+                        <div className="absolute -left-1 -top-1 h-10 w-10 rounded-tl-3xl border-l-[4px] border-t-[4px] border-[#eebf43]" />
+                        <div className="absolute -right-1 -top-1 h-10 w-10 rounded-tr-3xl border-r-[4px] border-t-[4px] border-[#eebf43]" />
+                        <div className="absolute -bottom-1 -left-1 h-10 w-10 rounded-bl-3xl border-b-[4px] border-l-[4px] border-[#eebf43]" />
+                        <div className="absolute -bottom-1 -right-1 h-10 w-10 rounded-br-3xl border-b-[4px] border-r-[4px] border-[#eebf43]" />
+
+                        <div className="animate-[scan_2s_ease-in-out_infinite] absolute left-0 right-0 top-0 h-0.5 bg-[#eebf43] opacity-50 shadow-[0_0_20px_#eebf43]" />
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Camera overlay UI */}
-                  <div className="absolute top-6 left-6 right-6 flex justify-between items-center z-10 pointer-events-none">
-                     <span className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-white text-[10px] font-extrabold tracking-widest uppercase">
-                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                       Camera Active
-                     </span>
-                     {isProcessing && (
-                       <span className="flex items-center gap-2 bg-[#eebf43]/90 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-extrabold tracking-widest uppercase shadow-lg shadow-[#eebf43]/20">
-                         <Loader2 size={12} className="animate-spin" /> Analyzing
-                       </span>
-                     )}
-                  </div>
-                </>
-             ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-20 animate-in zoom-in duration-300">
-                  <div className="text-center p-8">
-                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500 text-white mb-6 animate-bounce shadow-[0_0_40px_rgba(16,185,129,0.3)]">
-                      <CheckCircle2 size={48} strokeWidth={2.5} />
+                    <div className="pointer-events-none absolute left-6 right-6 top-6 z-10 flex items-center justify-between">
+                      <span className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2 text-[10px] font-extrabold uppercase tracking-widest text-white backdrop-blur-md">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                        Camera Active
+                      </span>
+                      {isProcessing && (
+                        <span className="flex items-center gap-2 rounded-full bg-[#eebf43]/90 px-4 py-2 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-lg shadow-[#eebf43]/20 backdrop-blur-md">
+                          <Loader2 size={12} className="animate-spin" /> Analyzing
+                        </span>
+                      )}
                     </div>
-                    <h2 className="text-3xl font-black text-white mb-3 tracking-tight">Access Granted</h2>
-                    <p className="text-emerald-400 font-bold uppercase tracking-widest text-sm flex items-center justify-center gap-2">
-                       <Loader2 size={16} className="animate-spin" /> Ready for next ticket shortly...
-                    </p>
-                  </div>
-                </div>
-             )}
-
-           </div>
-
-           {/* Mobile error msg (shows below camera on small screens) */}
-           {errorMsg && (
-             <div className="mt-4 lg:hidden animate-in slide-in-from-top-2 flex items-center justify-center gap-3 p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100">
-               <AlertCircle size={20} className="shrink-0" />
-               <p className="text-sm font-bold">{errorMsg}</p>
-             </div>
-           )}
-        </div>
-
-        {/* Right Col: Info & Scan Results */}
-        <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-6">
-           
-           {scannedData ? (
-             <div className="bg-white rounded-[2rem] p-8 sm:p-10 border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] animate-in slide-in-from-right-8 duration-500 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <UserCheck size={28} />
-                  </div>
-                  <div>
-                    <h3 className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Valid Credential</h3>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 pb-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-lg border border-emerald-100 leading-none">
-                      Verified
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="pb-6 border-b border-gray-100">
-                    <p className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Guest Name</p>
-                    <p className="text-2xl font-black text-gray-900 tracking-tight">{scannedData.guestName || 'Unknown Guest'}</p>
-                  </div>
-                  
-                  <div className="pb-6 border-b border-gray-100">
-                    <p className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Event Assignment</p>
-                    <p className="text-lg font-bold text-gray-900">{scannedData.eventName || 'Unassigned Event'}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                      <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Party Size</p>
-                      <p className="text-xl font-black text-[#eebf43]">{scannedData.attendees || 1} PAX</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                      <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Pass Code</p>
-                      <p className="text-sm font-extrabold font-mono text-gray-600 pt-1">{scannedData.code}</p>
-                    </div>
-                  </div>
-                </div>
-             </div>
-           ) : (
-             <div className="bg-[#fafafa] rounded-[2rem] p-8 sm:p-10 border border-gray-100 h-full flex flex-col justify-center">
-                <div className="w-16 h-16 rounded-3xl bg-white shadow-sm border border-gray-200 flex items-center justify-center text-gray-400 mb-8 mx-auto xl:mx-0">
-                  <ScanLine size={32} />
-                </div>
-                
-                <h3 className="text-xl font-black text-gray-900 mb-4 text-center xl:text-left">Awaiting Scan</h3>
-                <p className="text-sm font-medium text-gray-500 leading-relaxed text-center xl:text-left mb-8">
-                  Hover the camera over the guest's QR code. Ensure adequate lighting and keep the code completely within the gold markers.
-                </p>
-
-                {errorMsg && (
-                  <div className="hidden lg:flex animate-in fade-in items-start gap-3 p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100">
-                    <AlertCircle size={20} className="shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-bold tracking-tight">Invalid Scan</p>
-                      <p className="text-xs font-medium mt-1 text-red-500/80">{errorMsg}</p>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 z-20 flex animate-in zoom-in duration-300 items-center justify-center bg-gray-900">
+                    <div className="p-8 text-center">
+                      <div className="mx-auto mb-6 flex h-24 w-24 animate-bounce items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_0_40px_rgba(16,185,129,0.3)]">
+                        <CheckCircle2 size={48} strokeWidth={2.5} />
+                      </div>
+                      <h2 className="mb-3 text-3xl font-black tracking-tight text-white">Access Granted</h2>
+                      <p className="flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-widest text-emerald-400">
+                        <Loader2 size={16} className="animate-spin" /> Ready for next ticket shortly...
+                      </p>
                     </div>
                   </div>
                 )}
+              </div>
 
-                <div className="mt-auto pt-8 flex items-center justify-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">
-                  <ShieldCheck size={14} /> Scanner operates entirely on-device
+              {errorMsg ? (
+                <div className="mt-4 flex animate-in slide-in-from-top-2 items-center justify-center gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-red-600 lg:hidden">
+                  <AlertCircle size={20} className="shrink-0" />
+                  <p className="text-sm font-bold">{errorMsg}</p>
                 </div>
-             </div>
-           )}
+              ) : null}
+            </div>
 
-        </div>
-      </div>
-      
-      {/* Custom keyframes for scanning line */}
-      <style dangerouslySetInnerHTML={{__html: `
+            <div className="flex flex-col gap-6 lg:col-span-5 xl:col-span-4">
+              {scannedData ? (
+                <div className="animate-in slide-in-from-right-8 relative overflow-hidden rounded-[2rem] border border-gray-100 bg-white p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] duration-500 sm:p-10">
+                  <div className="absolute left-0 top-0 h-2 w-full bg-emerald-500" />
+                  <div className="mb-8 flex items-center gap-4">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                      <UserCheck size={28} />
+                    </div>
+                    <div>
+                      <h3 className="mb-1.5 text-[11px] font-extrabold uppercase tracking-widest text-gray-400">Valid Credential</h3>
+                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1 pb-1.5 text-[10px] font-black uppercase leading-none tracking-widest text-emerald-700">
+                        Verified
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="border-b border-gray-100 pb-6">
+                      <p className="mb-2 text-[11px] font-extrabold uppercase tracking-widest text-gray-400">Guest Name</p>
+                      <p className="text-2xl font-black tracking-tight text-gray-900">{scannedData.guestName || 'Unknown Guest'}</p>
+                    </div>
+                    <div className="border-b border-gray-100 pb-6">
+                      <p className="mb-2 text-[11px] font-extrabold uppercase tracking-widest text-gray-400">Event Assignment</p>
+                      <p className="text-lg font-bold text-gray-900">{scannedData.eventName || 'Unassigned Event'}</p>
+                    </div>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                      <p className="mb-1 text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Pass Code</p>
+                      <p className="pt-1 font-mono text-sm font-extrabold text-gray-600">{scannedData.code}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full flex-col justify-center rounded-[2rem] border border-gray-100 bg-[#fafafa] p-8 sm:p-10">
+                  <div className="mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-3xl border border-gray-200 bg-white text-gray-400 shadow-sm xl:mx-0">
+                    <ScanLine size={32} />
+                  </div>
+                  <h3 className="mb-4 text-center text-xl font-black text-gray-900 xl:text-left">Awaiting Scan</h3>
+                  <p className="mb-8 text-center text-sm font-medium leading-relaxed text-gray-500 xl:text-left">
+                    Keep the QR code within frame with good lighting until you hear confirmation.
+                  </p>
+                  {errorMsg ? (
+                    <div className="animate-in fade-in hidden items-start gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-red-600 lg:flex">
+                      <AlertCircle size={20} className="mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold tracking-tight">Invalid Scan</p>
+                        <p className="mt-1 text-xs font-medium text-red-500/80">{errorMsg}</p>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="mt-auto flex items-center justify-center gap-2 pt-8 text-center text-xs font-bold uppercase tracking-widest text-gray-400 xl:justify-start">
+                    <ShieldCheck size={14} /> Scanner verifies against this event registry
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
         @keyframes scan {
           0% { top: 0; opacity: 0; }
           10% { opacity: 1; }
           90% { opacity: 1; }
           100% { top: 100%; opacity: 0; }
         }
-      `}} />
+      `,
+            }}
+          />
+        </>
+      )}
     </div>
+  );
+}
+
+export default function AdminRsvpScannerPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-gray-500">Loading scanner…</div>}>
+      <AdminScanInner />
+    </Suspense>
   );
 }
