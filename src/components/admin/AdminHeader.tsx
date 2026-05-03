@@ -73,12 +73,8 @@ export default function AdminHeader() {
   return (
     <header className="bg-[#fafafa]/80 backdrop-blur-md h-20 flex items-center justify-between px-10 relative border-b border-gray-100/50">
       <div className="flex items-center w-full max-w-md relative">
-        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          placeholder="Global search..."
-          className="w-full pl-10 pr-4 py-2 bg-transparent text-sm focus:outline-none text-gray-500 placeholder-gray-400 font-medium"
-        />
+        
+       
       </div>
       <div className="flex items-center space-x-6 text-[#52525b]" ref={dropdownRef}>
         
