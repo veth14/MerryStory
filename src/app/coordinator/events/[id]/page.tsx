@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Eye,
   Trash2,
+  UserCheck,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -34,9 +35,11 @@ type EventRecord = {
   location?: string;
   status?: string;
   initialAlert?: string;
+  coverImageUrl?: string;
   guests?: {
     invited?: number;
     rsvp?: number;
+    checkedIn?: number;
   };
 };
 
@@ -84,6 +87,8 @@ type GuestRecord = {
   plusOne?: boolean;
   checkedIn?: boolean;
   rsvpCode?: string;
+  /** Set when the guest completes the public RSVP flow (one-time code consumed). */
+  usedAt?: string | null;
 };
 
 type GuestFormState = {
@@ -238,6 +243,8 @@ const buildGuestCode = (guest: GuestRecord) => {
   return guest.tier === 'VIP' ? `VIP-${token}` : token;
 };
 
+const GUESTS_PER_PAGE = 5;
+
 function GuestModalSelect({
   label,
   value,
@@ -311,6 +318,106 @@ function GuestModalSelect({
   );
 }
 
+function GuestAddModal({
+  submitting,
+  onClose,
+  onSubmit,
+}: {
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (form: GuestFormState) => Promise<void>;
+}) {
+  const [form, setForm] = useState<GuestFormState>(createGuestFormState());
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-[540px] rounded-[18px] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] overflow-visible">
+        <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Add New Guest</h3>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mt-1">Guest registry setup</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+            aria-label="Close guest modal"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          <div>
+            <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">
+              Full Name <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Enter full name"
+              className="w-full px-4 py-2.5 bg-gray-50 border border-[#eebf43] focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none placeholder:text-gray-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">
+              Email Address
+            </label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+              placeholder="guest@example.com"
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none placeholder:text-gray-400"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <GuestModalSelect
+                label="Tier"
+                value={form.tier}
+                options={guestTierSelectOptions}
+                onChange={(next) => setForm((prev) => ({ ...prev, tier: next }))}
+              />
+            </div>
+
+            <div>
+              <GuestModalSelect
+                label="Initial Status"
+                value={form.status}
+                options={guestStatusSelectOptions}
+                onChange={(next) => setForm((prev) => ({ ...prev, status: next as GuestStatus }))}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-5 px-6 pb-5 mt-0 flex items-center justify-end gap-3 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-3 text-[12px] font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-wider"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={submitting || !form.name.trim()}
+            onClick={() => onSubmit(form)}
+            className="inline-flex items-center gap-2 px-8 py-3 bg-[#eebf43] hover:bg-[#dcae32] disabled:opacity-70 text-white text-[12px] font-extrabold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#eebf43]/20"
+          >
+            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+            Save Guest
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CoordinatorEventDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense fallback={<div className="p-8">Loading event details...</div>}>
@@ -338,12 +445,12 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [guestSearch, setGuestSearch] = useState('');
   const [guestStatusFilter, setGuestStatusFilter] = useState<'All' | GuestStatus>('All');
-  const [guestForm, setGuestForm] = useState<GuestFormState>(createGuestFormState());
   const [submittingGuest, setSubmittingGuest] = useState(false);
   const [actingGuestId, setActingGuestId] = useState<string | null>(null);
   const [copiedGuestId, setCopiedGuestId] = useState<string | null>(null);
   const [selectedGuest, setSelectedGuest] = useState<GuestRecord | null>(null);
   const [guestPendingRemoval, setGuestPendingRemoval] = useState<GuestRecord | null>(null);
+  const [guestPage, setGuestPage] = useState(1);
   const { id } = use(params);
 
   useEffect(() => {
@@ -470,19 +577,39 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const taskCompletionPct = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
   const guestInvited = guests.length;
   const guestConfirmed = guests.filter((guest) => guest.status === 'Confirmed').length;
-  const guestCheckedIn = guests.filter((guest) => guest.checkedIn).length;
+  const guestCodesUsed = guests.filter((guest) => Boolean(guest.usedAt)).length;
   const guestPct = guestInvited > 0 ? (guestConfirmed / guestInvited) * 100 : 0;
-  const guestCheckInPct = guestInvited > 0 ? Math.round((guestCheckedIn / guestInvited) * 100) : 0;
-  const filteredGuests = guests.filter((guest) => {
-    const query = guestSearch.trim().toLowerCase();
-    const matchesSearch =
-      !query ||
-      (guest.name || '').toLowerCase().includes(query) ||
-      (guest.email || '').toLowerCase().includes(query) ||
-      buildGuestCode(guest).toLowerCase().includes(query);
-    const matchesStatus = guestStatusFilter === 'All' || guest.status === guestStatusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const guestCodesUsedPct = guestInvited > 0 ? Math.round((guestCodesUsed / guestInvited) * 100) : 0;
+  const filteredGuests = useMemo(
+    () =>
+      guests.filter((guest) => {
+        const query = guestSearch.trim().toLowerCase();
+        const matchesSearch =
+          !query ||
+          (guest.name || '').toLowerCase().includes(query) ||
+          (guest.email || '').toLowerCase().includes(query) ||
+          buildGuestCode(guest).toLowerCase().includes(query);
+        const matchesStatus = guestStatusFilter === 'All' || guest.status === guestStatusFilter;
+        return matchesSearch && matchesStatus;
+      }),
+    [guestSearch, guestStatusFilter, guests]
+  );
+  const totalGuestPages = Math.max(1, Math.ceil(filteredGuests.length / GUESTS_PER_PAGE));
+  const paginatedGuests = useMemo(() => {
+    const startIndex = (guestPage - 1) * GUESTS_PER_PAGE;
+    return filteredGuests.slice(startIndex, startIndex + GUESTS_PER_PAGE);
+  }, [filteredGuests, guestPage]);
+  const guestRowPlaceholders = Math.max(0, GUESTS_PER_PAGE - paginatedGuests.length);
+
+  useEffect(() => {
+    setGuestPage(1);
+  }, [guestSearch, guestStatusFilter]);
+
+  useEffect(() => {
+    if (guestPage > totalGuestPages) {
+      setGuestPage(totalGuestPages);
+    }
+  }, [guestPage, totalGuestPages]);
 
   const updateTaskLocally = (taskId: string, updater: (task: TaskRecord) => TaskRecord) => {
     setTasks((prev) => prev.map((task) => (task._id === taskId ? updater(task) : task)));
@@ -590,8 +717,25 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const handleGuestStatusChange = async (guestId: string, status: GuestStatus) => {
-    await persistGuestPatch(guestId, { status });
+  const handleGuestStatusChange = async (guest: GuestRecord, status: GuestStatus) => {
+    if (status === 'Confirmed') {
+      await persistGuestPatch(guest._id, { status });
+      return;
+    }
+    await persistGuestPatch(guest._id, {
+      status,
+      usedAt: null,
+      qrScannedAt: null,
+    });
+  };
+
+  /** Door check-in for email-less guests confirmed manually (no QR ticket from email flow). */
+  const handleGuestCheckIn = async (guest: GuestRecord) => {
+    if (!guest.checkedIn) {
+      await persistGuestPatch(guest._id, {
+        qrScannedAt: new Date().toISOString(),
+      });
+    }
   };
 
   const handleGuestRemoval = async (guest: GuestRecord) => {
@@ -624,7 +768,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const handleGuestSubmit = async () => {
+  const handleGuestSubmit = async (guestForm: GuestFormState) => {
     if (!user || !guestForm.name.trim()) return;
 
     setSubmittingGuest(true);
@@ -664,7 +808,6 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
         });
       }
       setGuests((prev) => [createdGuest, ...prev]);
-      setGuestForm(createGuestFormState());
       setIsGuestModalOpen(false);
     } catch (error) {
       console.error('Failed to create guest:', error);
@@ -1043,17 +1186,16 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                 <button
                   type="button"
                   onClick={() => {
-                    setGuestForm(createGuestFormState());
                     setIsGuestModalOpen(true);
                   }}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#1d1d1f] text-white text-[12px] font-black tracking-wide hover:bg-[#2a2a2d] transition-colors shadow-sm"
+                  className="inline-flex min-w-[142px] items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#1d1d1f] text-white text-[11px] font-black uppercase tracking-[0.1em] hover:bg-[#2a2a2d] transition-colors shadow-sm shrink-0"
                 >
                   <Plus size={14} />
                   Add Guest
                 </button>
                 <Link
                   href={`/coordinator/events/${id}/scan`}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#f4c41d] text-[#1d1d1f] text-[12px] font-black tracking-wide hover:bg-[#e8b200] transition-colors shadow-sm"
+                  className="inline-flex min-w-[142px] items-center justify-center gap-2 rounded-xl bg-[#eebf43] px-5 py-3 text-[11px] font-black uppercase tracking-[0.1em] text-white shadow-md shadow-[#eebf43]/20 transition-colors hover:bg-[#dcae32] shrink-0"
                 >
                   <QrCode size={14} />
                   Scan QR
@@ -1081,10 +1223,10 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
               <div className="bg-white rounded-[14px] border border-gray-100 border-l-4 border-l-[#f4c41d] p-5 shadow-sm">
                 <p className="text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8] mb-2">Codes Used</p>
                 <div className="flex items-center gap-4">
-                  <span className="text-4xl font-black text-[#1d1d1f] leading-none">{guestCheckInPct}%</span>
+                  <span className="text-4xl font-black text-[#1d1d1f] leading-none">{guestCodesUsedPct}%</span>
                   <div className="flex-1">
                     <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-[#f4c41d] transition-all" style={{ width: `${guestCheckInPct}%` }}></div>
+                      <div className="h-full rounded-full bg-[#f4c41d] transition-all" style={{ width: `${guestCodesUsedPct}%` }}></div>
                     </div>
                   </div>
                 </div>
@@ -1152,7 +1294,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                         </td>
                       </tr>
                     ) : (
-                      filteredGuests.map((guest) => {
+                      paginatedGuests.map((guest) => {
                         const statusTone = getGuestStatusTone(guest.status);
                         const isActing = actingGuestId === guest._id;
                         const hasEmail = Boolean(guest.email?.trim());
@@ -1200,19 +1342,31 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                                   <Eye size={12} />
                                   View Details
                                 </button>
+                                {!hasEmail && guest.status === 'Confirmed' ? (
+                                  <button
+                                    type="button"
+                                    disabled={isActing || guest.checkedIn}
+                                    onClick={() => handleGuestCheckIn(guest)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-[12px] font-bold text-cyan-700 hover:bg-cyan-100 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <UserCheck size={12} />
+                                    {guest.checkedIn ? 'Checked In' : 'Check In'}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={isActing || hasEmail}
+                                    onClick={() => handleGuestStatusChange(guest, 'Confirmed')}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-600 hover:bg-emerald-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <Check size={12} />
+                                    Confirm
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   disabled={isActing || hasEmail}
-                                  onClick={() => handleGuestStatusChange(guest._id, 'Confirmed')}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-600 hover:bg-emerald-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  <Check size={12} />
-                                  Confirm
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isActing || hasEmail}
-                                  onClick={() => handleGuestStatusChange(guest._id, 'Declined')}
+                                  onClick={() => handleGuestStatusChange(guest, 'Declined')}
                                   className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-bold text-rose-600 hover:bg-rose-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   <X size={12} />
@@ -1233,8 +1387,44 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                         );
                       })
                     )}
+                    {!loadingGuests &&
+                      filteredGuests.length > 0 &&
+                      Array.from({ length: guestRowPlaceholders }).map((_, index) => (
+                        <tr key={`placeholder-${index}`} className="border-b border-gray-100 last:border-b-0">
+                          <td colSpan={4} className="h-[74px] px-5 py-4"></td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#94a3b8]">
+                  Showing {filteredGuests.length === 0 ? 0 : (guestPage - 1) * GUESTS_PER_PAGE + 1}-
+                  {Math.min(guestPage * GUESTS_PER_PAGE, filteredGuests.length)} of {filteredGuests.length}
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={guestPage === 1}
+                    onClick={() => setGuestPage((current) => Math.max(1, current - 1))}
+                    className="inline-flex h-10 min-w-[92px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-[11px] font-extrabold uppercase tracking-widest text-[#64748b] transition-colors hover:border-[#d4a017]/40 hover:text-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <div className="inline-flex h-10 min-w-[112px] items-center justify-center rounded-xl border border-[#f4ead0] bg-[#fff9ec] px-4 text-[11px] font-extrabold uppercase tracking-widest text-[#d4a017]">
+                    Page {guestPage} / {totalGuestPages}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={guestPage >= totalGuestPages}
+                    onClick={() => setGuestPage((current) => Math.min(totalGuestPages, current + 1))}
+                    className="inline-flex h-10 min-w-[92px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-[11px] font-extrabold uppercase tracking-widest text-[#64748b] transition-colors hover:border-[#d4a017]/40 hover:text-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1242,91 +1432,11 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
       </div>
 
       {isGuestModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-[540px] rounded-[18px] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] overflow-visible">
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Add New Guest</h3>
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mt-1">Guest registry setup</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsGuestModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-                aria-label="Close guest modal"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              <div>
-                <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">
-                  Full Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={guestForm.name}
-                  onChange={(e) => setGuestForm((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-[#eebf43] focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none placeholder:text-gray-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={guestForm.email}
-                  onChange={(e) => setGuestForm((prev) => ({ ...prev, email: e.target.value }))}
-                  placeholder="guest@example.com"
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none placeholder:text-gray-400"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <GuestModalSelect
-                    label="Tier"
-                    value={guestForm.tier}
-                    options={guestTierSelectOptions}
-                    onChange={(next) => setGuestForm((prev) => ({ ...prev, tier: next }))}
-                  />
-                </div>
-
-                <div>
-                  <GuestModalSelect
-                    label="Initial Status"
-                    value={guestForm.status}
-                    options={guestStatusSelectOptions}
-                    onChange={(next) => setGuestForm((prev) => ({ ...prev, status: next as GuestStatus }))}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-5 px-6 pb-5 mt-0 flex items-center justify-end gap-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setIsGuestModalOpen(false)}
-                className="px-6 py-3 text-[12px] font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-wider"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={submittingGuest || !guestForm.name.trim()}
-                onClick={handleGuestSubmit}
-                className="inline-flex items-center gap-2 px-8 py-3 bg-[#eebf43] hover:bg-[#dcae32] disabled:opacity-70 text-white text-[12px] font-extrabold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#eebf43]/20"
-              >
-                {submittingGuest ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                Save Guest
-              </button>
-            </div>
-          </div>
-        </div>
+        <GuestAddModal
+          submitting={submittingGuest}
+          onClose={() => setIsGuestModalOpen(false)}
+          onSubmit={handleGuestSubmit}
+        />
       )}
 
       {selectedGuest && (

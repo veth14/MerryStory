@@ -13,8 +13,10 @@ export type EventIdentity = {
   eventId: ObjectId;
   eventName: string;
   eventSlug: string;
+  eventType: string;
   eventDate: Date | null;
   location: string;
+  coverImageUrl: string;
 };
 
 const RSVP_EMAIL_FROM = '"Merry Story Productions" <merrystoryeventservices@gmail.com>';
@@ -61,8 +63,10 @@ export const resolveEventIdentity = async (db: Db, eventId: ObjectId): Promise<E
     eventId,
     eventName,
     eventSlug: buildEventSlug(eventName),
+    eventType: String(event?.type || 'Private Event').trim(),
     eventDate,
     location: String(event?.location || 'Merry Story Productions Venue').trim(),
+    coverImageUrl: String(event?.coverImageUrl || '').trim(),
   };
 };
 

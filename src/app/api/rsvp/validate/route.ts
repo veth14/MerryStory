@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getMongoDb } from '@/lib/mongodb';
-import { findRsvpBySlugAndCode } from '@/app/api/rsvp/rsvpFlow';
+import { findRsvpBySlugAndCode, resolveEventIdentity } from '@/app/api/rsvp/rsvpFlow';
 
 export async function POST(request: Request) {
   try {
@@ -27,6 +27,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This RSVP code has expired.' }, { status: 410 });
     }
 
+    const eventIdentity = await resolveEventIdentity(db, record.eventId);
+
     return NextResponse.json(
       {
         guestId: record._id.toString(),
@@ -34,7 +36,11 @@ export async function POST(request: Request) {
         email: record.email || '',
         tier: record.tier || 'Standard',
         status: record.status,
-        eventName: record.eventName || '',
+        eventName: record.eventName || eventIdentity.eventName,
+        eventType: eventIdentity.eventType,
+        location: eventIdentity.location,
+        coverImageUrl: eventIdentity.coverImageUrl,
+        date: eventIdentity.eventDate ? eventIdentity.eventDate.toISOString() : null,
       },
       { status: 200 }
     );
