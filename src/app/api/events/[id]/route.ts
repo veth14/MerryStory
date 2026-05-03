@@ -158,6 +158,35 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       { $set: updateData }
     );
 
+    // Log event update
+    const { writeAuditLog } = await import("@/lib/audit");
+    const user = await requireAuthenticatedUser(request);
+    
+    let changes = [];
+    if (existingEvent.status !== status) changes.push(`status: ${existingEvent.status} → ${status}`);
+    if (existingEvent.health !== health) changes.push(`health: ${existingEvent.health}% → ${health}%`);
+    if (existingEvent.title !== title) changes.push(`title updated`);
+    
+    await writeAuditLog({
+      request,
+      category: "EVENT_MANAGEMENT",
+      action: "EVENT_UPDATED",
+      message: `Event updated: ${title}${changes.length ? ` (${changes.join(', ')})` : ''}`,
+      actor: {
+        uid: user.uid,
+        email: user.email,
+        role: user.role
+      },
+      target: {
+        type: "event",
+        uid: id
+      },
+      details: {
+        eventTitle: title,
+        changes: changes
+      }
+    });
+
     return NextResponse.json({ message: "Event updated successfully" }, { status: 200 });
   } catch (error) {
     if (error instanceof AuthGuardError) {
