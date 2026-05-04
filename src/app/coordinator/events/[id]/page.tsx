@@ -1268,29 +1268,29 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[940px] table-fixed">
+                <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-gray-100 bg-[#fcfcfc]">
-                      <th className="w-[28%] px-5 py-4 text-left text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Guest</th>
-                      <th className="w-[18%] px-5 py-4 text-center text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">RSVP Code</th>
-                      <th className="w-[18%] px-5 py-4 text-center text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Status</th>
-                      <th className="w-[36%] px-5 py-4 text-center text-[11px] font-extrabold uppercase tracking-widest text-[#94a3b8]">Actions</th>
+                    <tr>
+                      <th className="px-6 py-4 text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest border-b border-gray-50">Guest</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest border-b border-gray-50">RSVP Code</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest border-b border-gray-50">Status</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest border-b border-gray-50 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loadingGuests ? (
                       <tr>
-                        <td colSpan={4} className="px-5 py-12 text-center">
-                          <div className="inline-flex items-center gap-3 text-sm font-medium text-[#71717a]">
-                            <Loader2 size={18} className="animate-spin text-[#d4a017]" />
-                            Loading guest registry...
+                        <td colSpan={4} className="px-6 py-10 text-center text-sm text-[#71717a]">
+                          <div className="inline-flex items-center gap-2 font-semibold">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Loading guests...
                           </div>
                         </td>
                       </tr>
                     ) : filteredGuests.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-5 py-12 text-center text-sm font-medium text-[#71717a]">
-                          No guests match the current search and status filters.
+                        <td colSpan={4} className="px-6 py-10 text-center text-sm text-[#71717a]">
+                          No guests found matching your filters.
                         </td>
                       </tr>
                     ) : (
@@ -1300,129 +1300,114 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                         const hasEmail = Boolean(guest.email?.trim());
 
                         return (
-                          <tr key={guest._id} className="border-b border-gray-100 last:border-b-0 hover:bg-[#fcfcfc] transition-colors">
-                            <td className="px-5 py-4 align-middle">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-[#f1f5f9] border border-gray-200 flex items-center justify-center text-[13px] font-black text-[#475569]">
+                          <tr 
+                            key={guest._id} 
+                            onClick={() => setSelectedGuest(guest)}
+                            className="group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0 cursor-pointer"
+                          >
+                            <td className="px-6 py-5">
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-[#f4f4f5] border border-[#e4e4e7] flex items-center justify-center text-[#71717a] text-xs font-bold shadow-sm">
                                   {getInitials(guest.name)}
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="truncate text-[15px] font-bold text-[#1d1d1f]">{guest.name || 'Unnamed Guest'}</p>
-                                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#7c3aed]">
-                                    <span className="font-medium text-[#7c3aed]">{guest.tier || 'Standard'}</span>
-                                    {guest.checkedIn && (
-                                      <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-emerald-600">
-                                        <Check size={12} />
-                                        Checked In
-                                      </span>
-                                    )}
-                                  </div>
+                                <div>
+                                  <p className="text-[#1d1d1f] font-bold text-sm">{guest.name || 'Unnamed Guest'}</p>
+                                  <p className="text-[#71717a] text-[11px]">{guest.email || 'No email'}</p>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-5 py-4 text-center align-middle">
-                              <span className="inline-flex max-w-full items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-[#f8fafc] px-3 py-1.5 font-mono text-[11px] text-[#64748b]">
+                            <td className="px-6 py-5">
+                              <span className="inline-flex py-1.5 px-3 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase">
                                 {buildGuestCode(guest)}
                               </span>
                             </td>
-                            <td className="px-5 py-4 text-center align-middle">
-                              <span className={`inline-flex items-center justify-center gap-2 text-[14px] font-medium ${statusTone.text}`}>
-                                <span className={`h-1.5 w-1.5 rounded-full ${statusTone.dot}`}></span>
-                                {guest.status || 'Pending'}
-                              </span>
-                            </td>
-                            <td className="px-5 py-4 text-center align-middle">
-                              <div className="flex items-center justify-center gap-2 whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  disabled={isActing}
-                                  onClick={() => setSelectedGuest(guest)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold text-[#1d1d1f] hover:bg-gray-50 transition-colors disabled:opacity-50"
-                                >
-                                  <Eye size={12} />
-                                  View Details
-                                </button>
-                                {!hasEmail && guest.status === 'Confirmed' ? (
-                                  <button
-                                    type="button"
-                                    disabled={isActing || guest.checkedIn}
-                                    onClick={() => handleGuestCheckIn(guest)}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-[12px] font-bold text-cyan-700 hover:bg-cyan-100 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    <UserCheck size={12} />
-                                    {guest.checkedIn ? 'Checked In' : 'Check In'}
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    disabled={isActing || hasEmail}
-                                    onClick={() => handleGuestStatusChange(guest, 'Confirmed')}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-600 hover:bg-emerald-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    <Check size={12} />
-                                    Confirm
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  disabled={isActing || hasEmail}
-                                  onClick={() => handleGuestStatusChange(guest, 'Declined')}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-bold text-rose-600 hover:bg-rose-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  <X size={12} />
-                                  Decline
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isActing || !hasEmail}
-                                  onClick={() => handleSendGuestLink(guest)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] font-bold text-sky-600 hover:bg-sky-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  <Link2 size={12} />
-                                  {copiedGuestId === guest._id ? 'Sent' : 'Send Link'}
-                                </button>
+                            <td className="px-6 py-5">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${statusTone.dot}`}></span>
+                                <span className="text-[#3f3f46] text-xs font-semibold">{guest.status || 'Pending'}</span>
                               </div>
+                            </td>
+                            <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
+                              {guest.checkedIn ? (
+                                <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-white shadow-sm shadow-emerald-500/20">
+                                  <Check size={13} />
+                                  <span className="text-[11px] font-black uppercase tracking-[0.1em]">Checked In</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap items-center justify-end gap-2">
+                                  {!hasEmail && guest.status === 'Confirmed' ? (
+                                    <button
+                                      type="button"
+                                      disabled={isActing}
+                                      onClick={() => handleGuestCheckIn(guest)}
+                                      className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <UserCheck size={13} />
+                                      Check In
+                                    </button>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        disabled={isActing || hasEmail}
+                                        onClick={() => handleGuestStatusChange(guest, 'Confirmed')}
+                                        className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8] disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        <Check size={13} />
+                                        Confirm
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isActing || hasEmail}
+                                        onClick={() => handleGuestStatusChange(guest, 'Declined')}
+                                        className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8] disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        <X size={13} />
+                                        Decline
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isActing || !hasEmail}
+                                        onClick={() => handleSendGuestLink(guest)}
+                                        className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8] disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        <Link2 size={13} />
+                                        {copiedGuestId === guest._id ? 'Sent' : 'Send Link'}
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              )}
                             </td>
                           </tr>
                         );
                       })
                     )}
-                    {!loadingGuests &&
-                      filteredGuests.length > 0 &&
-                      Array.from({ length: guestRowPlaceholders }).map((_, index) => (
-                        <tr key={`placeholder-${index}`} className="border-b border-gray-100 last:border-b-0">
-                          <td colSpan={4} className="h-[74px] px-5 py-4"></td>
-                        </tr>
-                      ))}
                   </tbody>
                 </table>
               </div>
 
-              <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-[#94a3b8]">
-                  Showing {filteredGuests.length === 0 ? 0 : (guestPage - 1) * GUESTS_PER_PAGE + 1}-
-                  {Math.min(guestPage * GUESTS_PER_PAGE, filteredGuests.length)} of {filteredGuests.length}
-                </p>
-
-                <div className="flex items-center gap-2">
-                  <button
+              <div className="mt-auto px-6 py-4 flex items-center justify-between border-t border-gray-50 bg-[#fafafa]/50 rounded-b-xl">
+                <span className="text-xs text-[#a1a1aa] font-medium">Showing {filteredGuests.length} of {filteredGuests.length} Guests</span>
+                <div className="flex items-center gap-1">
+                  <button 
                     type="button"
                     disabled={guestPage === 1}
                     onClick={() => setGuestPage((current) => Math.max(1, current - 1))}
-                    className="inline-flex h-10 min-w-[92px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-[11px] font-extrabold uppercase tracking-widest text-[#64748b] transition-colors hover:border-[#d4a017]/40 hover:text-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#a1a1aa] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Prev
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7"></path></svg>
                   </button>
-                  <div className="inline-flex h-10 min-w-[112px] items-center justify-center rounded-xl border border-[#f4ead0] bg-[#fff9ec] px-4 text-[11px] font-extrabold uppercase tracking-widest text-[#d4a017]">
-                    Page {guestPage} / {totalGuestPages}
-                  </div>
-                  <button
+                  <button className="w-8 h-8 flex items-center justify-center rounded bg-[#eebf43] text-[#1d1d1f] font-bold text-xs shadow-sm shadow-[#eebf43]/20">
+                    {guestPage}
+                  </button>
+                  <button 
                     type="button"
                     disabled={guestPage >= totalGuestPages}
                     onClick={() => setGuestPage((current) => Math.min(totalGuestPages, current + 1))}
-                    className="inline-flex h-10 min-w-[92px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-[11px] font-extrabold uppercase tracking-widest text-[#64748b] transition-colors hover:border-[#d4a017]/40 hover:text-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#1d1d1f] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Next
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 19l7-7-7-7"></path></svg>
                   </button>
                 </div>
               </div>
