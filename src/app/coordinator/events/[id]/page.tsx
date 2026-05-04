@@ -208,6 +208,31 @@ const guestStatusSelectOptions = guestStatusOptions.map((option) => ({
 const guestDropdownTriggerClass =
   'w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-left flex items-center justify-between transition-all';
 
+const validateEmail = (email: string): boolean => {
+  if (!email.trim()) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const isEventDatePassed = (eventDate?: string): boolean => {
+  if (!eventDate) return false;
+
+  try {
+    const parsedEventDate = /^\d{4}-\d{2}-\d{2}/.test(eventDate)
+      ? new Date(`${eventDate.slice(0, 10)}T00:00:00`)
+      : new Date(eventDate);
+
+    if (Number.isNaN(parsedEventDate.getTime())) return false;
+
+    const absentCutoff = new Date(parsedEventDate);
+    absentCutoff.setHours(0, 0, 0, 0);
+    absentCutoff.setDate(absentCutoff.getDate() + 1);
+
+    return new Date() >= absentCutoff;
+  } catch {
+    return false;
+  }
+};
+
 const createGuestFormState = (): GuestFormState => ({
   name: '',
   email: '',
@@ -328,91 +353,127 @@ function GuestAddModal({
   onSubmit: (form: GuestFormState) => Promise<void>;
 }) {
   const [form, setForm] = useState<GuestFormState>(createGuestFormState());
+  const [emailError, setEmailError] = useState('');
+
+  const handleSubmit = () => {
+    if (!form.name.trim()) return;
+    if (!validateEmail(form.email)) {
+      setEmailError('Invalid email format');
+      return;
+    }
+    setEmailError('');
+    onSubmit(form);
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-[540px] rounded-[18px] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] overflow-visible">
-        <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900">Add New Guest</h3>
-            <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mt-1">Guest registry setup</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-            aria-label="Close guest modal"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5">
-          <div>
-            <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">
-              Full Name <span className="text-rose-500">*</span>
-            </label>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+      <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95">
+        <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">Add New <span className="text-[#facc15] italic">Guest</span></h2>
+        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-8">Guest Registry Addition</p>
+        
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Name <span className="text-rose-500">*</span></label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Enter full name"
-              className="w-full px-4 py-2.5 bg-gray-50 border border-[#eebf43] focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none placeholder:text-gray-400"
+              className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
             />
           </div>
-
-          <div>
-            <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">
-              Email Address
-            </label>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Address</label>
             <input
               type="email"
               value={form.email}
-              onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, email: e.target.value }));
+                setEmailError('');
+              }}
               placeholder="guest@example.com"
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none placeholder:text-gray-400"
+              className={`w-full px-5 py-4 bg-gray-50 border rounded-2xl text-[14px] font-bold outline-none transition-all ${
+                emailError ? 'border-rose-500 focus:border-rose-500' : 'border-gray-100 focus:border-[#facc15]'
+              }`}
             />
+            {emailError && <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest">{emailError}</p>}
           </div>
-
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <GuestModalSelect
-                label="Tier"
-                value={form.tier}
-                options={guestTierSelectOptions}
-                onChange={(next) => setForm((prev) => ({ ...prev, tier: next }))}
-              />
-            </div>
-
-            <div>
-              <GuestModalSelect
-                label="Initial Status"
-                value={form.status}
-                options={guestStatusSelectOptions}
-                onChange={(next) => setForm((prev) => ({ ...prev, status: next as GuestStatus }))}
-              />
-            </div>
+            <GuestModalSelect label="Tier" value={form.tier} options={guestTierSelectOptions} onChange={(next) => setForm((prev) => ({ ...prev, tier: next }))} />
+            <GuestModalSelect
+              label="Initial Status"
+              value={form.status}
+              options={guestStatusSelectOptions}
+              onChange={(next) => setForm((prev) => ({ ...prev, status: next as GuestStatus }))}
+            />
           </div>
         </div>
 
-        <div className="pt-5 px-6 pb-5 mt-0 flex items-center justify-end gap-3 border-t border-gray-100">
-          <button
-            type="button"
+        <div className="flex gap-4 mt-10">
+          <button 
             onClick={onClose}
-            className="px-6 py-3 text-[12px] font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-wider"
+            className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400"
           >
             Cancel
           </button>
-          <button
-            type="button"
-            disabled={submitting || !form.name.trim()}
-            onClick={() => onSubmit(form)}
-            className="inline-flex items-center gap-2 px-8 py-3 bg-[#eebf43] hover:bg-[#dcae32] disabled:opacity-70 text-white text-[12px] font-extrabold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#eebf43]/20"
+          <button 
+            onClick={handleSubmit}
+            disabled={submitting || !form.name.trim() || !validateEmail(form.email)}
+            className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 disabled:opacity-70 transition-all inline-flex items-center justify-center gap-2"
           >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-            Save Guest
+            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            Add Guest
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function LinkSentModal({
+  guest,
+  onClose,
+}: {
+  guest: GuestRecord | null;
+  onClose: () => void;
+}) {
+  if (!guest) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+      <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95">
+        <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">Link <span className="text-[#facc15] italic">Sent</span></h2>
+        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-8">RSVP Invitation Delivery</p>
+        
+        <div className="space-y-6 mb-10">
+          <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+            <Check className="text-emerald-600 flex-shrink-0" size={20} />
+            <div>
+              <p className="text-[12px] font-black text-emerald-900 uppercase tracking-widest">Successfully Sent</p>
+              <p className="text-[11px] text-emerald-700 mt-1">RSVP link has been delivered</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Guest Details</p>
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Name</p>
+                <p className="text-[14px] font-bold text-gray-900">{guest.name || 'Unnamed Guest'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Email</p>
+                <p className="text-[14px] font-bold text-gray-900 break-all">{guest.email || 'No email'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button 
+          onClick={onClose}
+          className="w-full py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 transition-all hover:bg-[#dcae32]"
+        >
+          Done
+        </button>
       </div>
     </div>
   );
@@ -447,7 +508,8 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const [guestStatusFilter, setGuestStatusFilter] = useState<'All' | GuestStatus>('All');
   const [submittingGuest, setSubmittingGuest] = useState(false);
   const [actingGuestId, setActingGuestId] = useState<string | null>(null);
-  const [copiedGuestId, setCopiedGuestId] = useState<string | null>(null);
+  const [isLinkSentModalOpen, setIsLinkSentModalOpen] = useState(false);
+  const [linkSentGuest, setLinkSentGuest] = useState<GuestRecord | null>(null);
   const [selectedGuest, setSelectedGuest] = useState<GuestRecord | null>(null);
   const [guestPendingRemoval, setGuestPendingRemoval] = useState<GuestRecord | null>(null);
   const [guestPage, setGuestPage] = useState(1);
@@ -838,10 +900,8 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
         throw new Error('Failed to send guest RSVP link.');
       }
 
-      setCopiedGuestId(guest._id);
-      window.setTimeout(() => {
-        setCopiedGuestId((current) => (current === guest._id ? null : current));
-      }, 1800);
+      setLinkSentGuest(guest);
+      setIsLinkSentModalOpen(true);
     } catch (error) {
       console.error('Failed to send RSVP invite:', error);
     } finally {
@@ -1333,6 +1393,11 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                                   <Check size={13} />
                                   <span className="text-[11px] font-black uppercase tracking-[0.1em]">Checked In</span>
                                 </div>
+                              ) : event && isEventDatePassed(event.date) ? (
+                                <div className="inline-flex items-center gap-2 rounded-full bg-gray-500 px-5 py-3 text-white shadow-sm shadow-gray-500/20">
+                                  <X size={13} />
+                                  <span className="text-[11px] font-black uppercase tracking-[0.1em]">Absent</span>
+                                </div>
                               ) : (
                                 <div className="flex flex-wrap items-center justify-end gap-2">
                                   {!hasEmail && guest.status === 'Confirmed' ? (
@@ -1372,7 +1437,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                                         className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8] disabled:cursor-not-allowed disabled:opacity-50"
                                       >
                                         <Link2 size={13} />
-                                        {copiedGuestId === guest._id ? 'Sent' : 'Send Link'}
+                                        Send Link
                                       </button>
                                     </>
                                   )}
@@ -1421,6 +1486,16 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
           submitting={submittingGuest}
           onClose={() => setIsGuestModalOpen(false)}
           onSubmit={handleGuestSubmit}
+        />
+      )}
+
+      {isLinkSentModalOpen && (
+        <LinkSentModal
+          guest={linkSentGuest}
+          onClose={() => {
+            setIsLinkSentModalOpen(false);
+            setLinkSentGuest(null);
+          }}
         />
       )}
 
