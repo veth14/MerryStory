@@ -1500,12 +1500,12 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
       )}
 
       {selectedGuest && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-[640px] rounded-[18px] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[32px] bg-white p-6 sm:p-8 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Guest Details</h3>
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mt-1">View guest information</p>
+                <h3 className="text-[22px] sm:text-[24px] font-black text-gray-900 tracking-tight">Guest <span className="text-[#facc15] italic">Details</span></h3>
+                <p className="mt-2 text-[11px] font-black uppercase tracking-widest text-gray-400">View Guest Information</p>
               </div>
               <button
                 type="button"
@@ -1517,30 +1517,30 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Full Name</label>
-                  <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[#1d1d1f] text-[15px] font-bold">
+                  <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Full Name</label>
+                  <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-[13px] sm:text-[14px] font-bold text-gray-900">
                     {selectedGuest.name?.trim() || 'Unnamed Guest'}
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Email Address</label>
-                  <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[#1d1d1f] text-[15px] font-bold break-all">
+                  <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Email Address</label>
+                  <div className="w-full break-all rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-[13px] sm:text-[14px] font-bold text-gray-900">
                     {selectedGuest.email?.trim() || 'No email added'}
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Tier</label>
-                  <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[#1d1d1f] text-[15px] font-bold">
+                  <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Tier</label>
+                  <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-[13px] sm:text-[14px] font-bold text-gray-900">
                     {selectedGuest.tier || 'Standard'}
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Status</label>
-                  <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl">
-                    <span className={`inline-flex items-center gap-2 text-[15px] font-bold ${getGuestStatusTone(selectedGuest.status).text}`}>
+                  <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Status</label>
+                  <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5">
+                    <span className={`inline-flex items-center gap-2 text-[13px] sm:text-[14px] font-bold ${getGuestStatusTone(selectedGuest.status).text}`}>
                       <span className={`h-2 w-2 rounded-full ${getGuestStatusTone(selectedGuest.status).dot}`}></span>
                       {selectedGuest.status || 'Pending'}
                     </span>
@@ -1549,26 +1549,33 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
               </div>
 
               <div>
-                <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">RSVP Code</label>
-                <div className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-mono text-[15px] text-[#64748b]">
+                <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">RSVP Code</label>
+                <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 font-mono text-[13px] sm:text-[14px] text-[#64748b]">
                   {buildGuestCode(selectedGuest)}
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-extrabold text-[#b3b3b3] uppercase tracking-widest mb-1.5">Notes</label>
-                <div className="min-h-[128px] w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[15px] leading-relaxed text-[#71717a] italic">
+                <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Notes</label>
+                <div className="min-h-[112px] w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-[13px] sm:text-[14px] leading-relaxed text-[#71717a] italic">
                   {selectedGuest.notes?.trim() || 'No notes added'}
                 </div>
               </div>
             </div>
 
-            <div className="px-6 py-5 border-t border-gray-100 flex justify-end">
+            <div className="flex gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => setSelectedGuest(null)}
+                className="flex-1 py-3.5 text-[11px] sm:text-[12px] font-black uppercase tracking-widest text-gray-400"
+              >
+                Close
+              </button>
               <button
                 type="button"
                 disabled={actingGuestId === selectedGuest._id}
                 onClick={() => setGuestPendingRemoval(selectedGuest)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#ffcab8] bg-white px-5 py-3 text-[12px] font-extrabold text-[#f05a28] hover:bg-[#fff5f1] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 py-3.5 bg-[#facc15] text-white text-[11px] sm:text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 transition-all inline-flex items-center justify-center gap-2 hover:bg-[#dcae32] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Trash2 size={14} />
                 Remove Guest

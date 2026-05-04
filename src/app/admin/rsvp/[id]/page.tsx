@@ -823,41 +823,46 @@ function AdminRsvpGuestRegistryContent({ params }: { params: Promise<{ id: strin
       )}
 
       {selectedGuest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-[640px] overflow-y-auto rounded-[18px] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)]">
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-md">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[32px] bg-white p-6 sm:p-8 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Guest Details</h3>
-                <p className="mt-1 text-[10px] font-extrabold uppercase tracking-widest text-gray-400">View guest information</p>
+                <h3 className="text-[22px] sm:text-[24px] font-black text-gray-900 tracking-tight">Guest <span className="text-[#facc15] italic">Details</span></h3>
+                <p className="mt-2 text-[11px] font-black uppercase tracking-widest text-gray-400">View Guest Information</p>
               </div>
-              <button type="button" onClick={() => setSelectedGuest(null)} className="p-1 text-gray-400 transition-colors hover:text-gray-600" aria-label="Close">
+              <button
+                type="button"
+                onClick={() => setSelectedGuest(null)}
+                className="text-gray-400 transition-colors hover:text-gray-600 p-1"
+                aria-label="Close"
+              >
                 <X className="h-6 w-6" />
               </button>
             </div>
-            <div className="space-y-5 p-6">
+            <div className="space-y-5">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-widest text-[#b3b3b3]">Full Name</label>
-                  <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] font-bold text-[#1d1d1f]">
+                  <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Full Name</label>
+                  <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-[13px] sm:text-[14px] font-bold text-gray-900">
                     {selectedGuest.name?.trim() || 'Unnamed Guest'}
                   </div>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-widest text-[#b3b3b3]">Email Address</label>
-                  <div className="w-full break-all rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] font-bold text-[#1d1d1f]">
+                  <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Email Address</label>
+                  <div className="w-full break-all rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-[13px] sm:text-[14px] font-bold text-gray-900">
                     {selectedGuest.email?.trim() || 'No email added'}
                   </div>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-widest text-[#b3b3b3]">Tier</label>
-                  <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] font-bold text-[#1d1d1f]">
+                  <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Tier</label>
+                  <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-[13px] sm:text-[14px] font-bold text-gray-900">
                     {selectedGuest.tier || 'Standard'}
                   </div>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-widest text-[#b3b3b3]">Status</label>
-                  <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                    <span className={`inline-flex items-center gap-2 text-[15px] font-bold ${getGuestStatusTone(selectedGuest.status).text}`}>
+                  <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Status</label>
+                  <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5">
+                    <span className={`inline-flex items-center gap-2 text-[13px] sm:text-[14px] font-bold ${getGuestStatusTone(selectedGuest.status).text}`}>
                       <span className={`h-2 w-2 rounded-full ${getGuestStatusTone(selectedGuest.status).dot}`} />
                       {selectedGuest.status || 'Pending'}
                     </span>
@@ -865,24 +870,32 @@ function AdminRsvpGuestRegistryContent({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-widest text-[#b3b3b3]">RSVP Code</label>
-                <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 font-mono text-[15px] text-[#64748b]">
+                <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">RSVP Code</label>
+                <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 font-mono text-[13px] sm:text-[14px] text-[#64748b]">
                   {buildGuestCode(selectedGuest)}
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-widest text-[#b3b3b3]">Notes</label>
-                <div className="min-h-[128px] w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] leading-relaxed italic text-[#71717a]">
+                <label className="mb-2 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Notes</label>
+                <div className="min-h-[112px] w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-[13px] sm:text-[14px] leading-relaxed italic text-[#71717a]">
                   {selectedGuest.notes?.trim() || 'No notes added'}
                 </div>
               </div>
             </div>
-            <div className="flex justify-end border-t border-gray-100 px-6 py-5">
+
+            <div className="flex gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => setSelectedGuest(null)}
+                className="flex-1 py-3.5 text-[11px] sm:text-[12px] font-black uppercase tracking-widest text-gray-400"
+              >
+                Close
+              </button>
               <button
                 type="button"
                 disabled={actingGuestId === selectedGuest._id}
                 onClick={() => setGuestPendingRemoval(selectedGuest)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#ffcab8] bg-white px-5 py-3 text-[12px] font-extrabold text-[#f05a28] transition-colors hover:bg-[#fff5f1] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 py-3.5 bg-[#facc15] text-white text-[11px] sm:text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 transition-all inline-flex items-center justify-center gap-2 hover:bg-[#dcae32] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Trash2 size={14} />
                 Remove Guest
