@@ -156,6 +156,9 @@ export default function GuestRsvpPage({ params }: { params: Promise<{ slug: stri
                   <span className="mt-4 block">We are sorry you won&apos;t be able to make it.</span>
                 )}
               </p>
+              <p className="mx-auto mt-6 max-w-xl text-[13px] font-medium leading-relaxed text-[#94a3b8]">
+                You can use your RSVP code to return and update your response at any time before check-in. Once your QR code is scanned at the event, your RSVP will be locked.
+              </p>
               <button
                 onClick={() => window.location.reload()}
                 className="mt-10 inline-flex items-center justify-center rounded-xl bg-[#0F172A] px-8 py-4 text-[11px] font-extrabold uppercase tracking-[0.2em] text-white transition-colors hover:bg-[#0f172a]/90"
@@ -174,7 +177,7 @@ export default function GuestRsvpPage({ params }: { params: Promise<{ slug: stri
                 Welcome to <span className="text-[#C5A028]">{eventName}</span>
               </h1>
               <p className="mx-auto mt-5 max-w-xl text-[15px] font-medium leading-8 text-[#64748B]">
-                Please enter your unique RSVP code to proceed.
+                Please enter your unique RSVP code to proceed. You can update your response at any time until check-in.
               </p>
             </div>
 

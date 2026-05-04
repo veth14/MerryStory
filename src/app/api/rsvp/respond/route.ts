@@ -29,8 +29,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid code for this event. Please try again.' }, { status: 404 });
     }
 
-    if (record.usedAt) {
-      return NextResponse.json({ error: 'This RSVP code has already been used.' }, { status: 409 });
+    if (record.qrScannedAt) {
+      return NextResponse.json({ error: 'Your RSVP has been locked after check-in and cannot be edited.' }, { status: 409 });
     }
 
     const rsvpCollection = getRsvpCollection(db);

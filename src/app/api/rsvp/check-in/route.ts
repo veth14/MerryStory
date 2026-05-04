@@ -49,10 +49,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This guest has not confirmed attendance.' }, { status: 409 });
     }
 
-    if (!record.usedAt) {
-      return NextResponse.json({ error: 'This RSVP code has not been confirmed yet.' }, { status: 409 });
-    }
-
     if (record.qrScannedAt) {
       return NextResponse.json({ error: 'This QR code has already been used for check-in.' }, { status: 409 });
     }
