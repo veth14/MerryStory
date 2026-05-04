@@ -76,12 +76,6 @@ export default function GuestRsvpPage({ params }: { params: Promise<{ slug: stri
 
       const data = await res.json();
       
-      // Log the mock email link in console so the developer can see the sent email in the terminal/console
-      if (data.previewUrl) {
-         console.log('--- TEST EMAIL SENT! CHECK IT HERE: ---');
-         console.log(data.previewUrl);
-      }
-      
       setIsSubmitted(true);
     } catch (err) {
       console.error('Failed to submit RSVP:', err);
