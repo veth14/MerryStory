@@ -17,24 +17,28 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     const body = await request.json();
-    const { name, category, contact, email, phone, status } = body;
+    const { name, category, contact, email, phone, status, rating } = body;
 
     const db = await getMongoDb();
     const vendorsCollection = db.collection("vendors");
 
+    const updateData: any = {
+      name, 
+      category, 
+      contact, 
+      email, 
+      phone, 
+      status,
+      updatedAt: new Date()
+    };
+
+    if (rating !== undefined) {
+      updateData.rating = rating;
+    }
+
     const result = await vendorsCollection.updateOne(
       { _id: new ObjectId(id) },
-      { 
-        $set: { 
-          name, 
-          category, 
-          contact, 
-          email, 
-          phone, 
-          status,
-          updatedAt: new Date()
-        } 
-      }
+      { $set: updateData }
     );
 
     if (result.matchedCount === 0) {

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowRight, ArrowLeft, Calendar, MapPin, Users, DollarSign, Briefcase, AlertTriangle, User, Tag, Loader2, CheckCircle2, Plus, Minus, Mail, Phone, X, Search, UserPlus, Check } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CustomSelect } from '@/components/ui/CustomInputs';
+import PostEventView from '@/components/admin/events/PostEventView';
 
 interface EventData {
   _id: string;
@@ -32,7 +33,8 @@ interface EventData {
 
 interface GuestData {
   _id: string;
-  name: string;
+  guestName?: string;
+  name?: string;
   email: string;
   phone: string;
   status: 'Confirmed' | 'Pending' | 'Declined';
@@ -319,7 +321,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                   <img src={event.leadAvatarUrl} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-[12px] font-black uppercase tracking-widest overflow-hidden border-2 border-white shadow-sm">
-                    {event.leadAssigned.charAt(0)}
+                    {String(event.leadAssigned || '').charAt(0)}
                   </div>
                 )}
                 <div className="flex-1">
@@ -336,7 +338,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                     <img src={member.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm" />
                   ) : (
                     <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-[10px] font-black uppercase tracking-widest border-2 border-white shadow-sm">
-                      {member.name.charAt(0)}
+                      {String(member.name || '').charAt(0)}
                     </div>
                   )}
                   <div className="flex-1">
@@ -372,10 +374,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   );
 
   const renderEventDay = () => {
-    const filteredGuests = guests.filter(g => 
-      g.name.toLowerCase().includes(guestSearch.toLowerCase()) || 
-      g.email.toLowerCase().includes(guestSearch.toLowerCase())
-    );
+    const filteredGuests = guests.filter((g) => {
+      const guestName = String(g.name || g.guestName || '').toLowerCase();
+      const guestEmail = String(g.email || '').toLowerCase();
+      const searchTerm = String(guestSearch || '').toLowerCase();
+      return guestName.includes(searchTerm) || guestEmail.includes(searchTerm);
+    });
 
     return (
       <div className="animate-in fade-in duration-500 py-10 space-y-16">
@@ -452,7 +456,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-[14px] font-black text-gray-400">
-                            {guest.name.charAt(0)}
+                            {String(guest.name || guest.guestName || '').charAt(0)}
                           </div>
                           <div>
                             <div className="text-[15px] font-black text-gray-900">{guest.name} {guest.plusOne && <span className="text-[#facc15] text-[10px]">+1</span>}</div>
@@ -577,9 +581,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   };
 
   const renderPostEvent = () => (
-    <div className="animate-in fade-in duration-300">
-      <p className="text-sm font-medium text-gray-400 text-center py-20">Post-event reconciliation will activate after the live date.</p>
-    </div>
+    <PostEventView eventId={id} user={user!} />
   );
 
   return (

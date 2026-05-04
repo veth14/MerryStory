@@ -51,7 +51,7 @@ export const CustomSelect = ({
             <img src={selectedOption.avatar} alt="" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
           ) : selectedOption ? (
              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-black text-gray-400 uppercase border border-gray-200/50">
-                {selectedOption.label.charAt(0)}
+                {String(selectedOption.label || '').charAt(0)}
              </div>
           ) : null}
           <span className={`text-[14px] font-extrabold ${selectedOption ? 'text-gray-900' : 'text-gray-400 font-medium'}`}>
@@ -77,7 +77,7 @@ export const CustomSelect = ({
                   <img src={opt.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-100" />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-[12px] font-bold text-gray-400 uppercase">
-                    {opt.label.charAt(0)}
+                    {String(opt.label || '').charAt(0)}
                   </div>
                 )}
                 <div>

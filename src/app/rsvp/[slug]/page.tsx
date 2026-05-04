@@ -83,6 +83,7 @@ export default function GuestRsvpPage({ params }: { params: Promise<{ slug: stri
         }),
       });
 
+<<<<<<< HEAD
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || 'Unable to validate this RSVP code.');
@@ -120,6 +121,14 @@ export default function GuestRsvpPage({ params }: { params: Promise<{ slug: stri
         throw new Error(payload.error || 'Unable to save your RSVP response.');
       }
 
+=======
+      const data = await res.json();
+      
+      setIsSubmitted(true);
+    } catch (err) {
+      console.error('Failed to submit RSVP:', err);
+      // Fallback submission if API fails
+>>>>>>> ca9a0d94469aa604a65cbe09b210dfc4f253d53c
       setIsSubmitted(true);
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : 'Unable to save your RSVP response.');

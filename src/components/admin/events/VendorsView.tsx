@@ -267,7 +267,7 @@ export default function VendorsView() {
                   <td className="py-5 px-8">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-2xl bg-[#facc15]/10 text-[#d4a017] flex items-center justify-center font-black text-lg shrink-0 border border-[#facc15]/20">
-                        {vendor.name.charAt(0)}
+                        {String(vendor.name || '').charAt(0)}
                       </div>
                       <div>
                         <div className="font-black text-[15px] text-gray-900 leading-tight">{vendor.name}</div>

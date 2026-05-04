@@ -12,7 +12,7 @@ export async function GET(
     const { id } = await params;
     const db = await getMongoDb();
     
-    const guests = await db.collection("event_guests")
+    const guests = await db.collection("rsvp")
       .find({ eventId: new ObjectId(id) })
       .sort({ createdAt: -1 })
       .toArray();
@@ -49,7 +49,7 @@ export async function POST(
       createdAt: new Date()
     };
 
-    const result = await db.collection("event_guests").insertOne(newGuest);
+    const result = await db.collection("rsvp").insertOne(newGuest);
     
     // Update event summary count
     if (body.status === "Confirmed") {

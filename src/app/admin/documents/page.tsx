@@ -1221,18 +1221,23 @@ export default function DocumentsAdminPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 overflow-hidden">
               <button onClick={() => setModal({ ...modal, isOpen: false })} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
                 <X size={16} strokeWidth={2.5} />
               </button>
-              <div className="w-12 h-12 rounded-2xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center mb-6">
-                <Info size={24} className="text-[#eebf43]" />
+              <div className="flex flex-col items-center text-center pt-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center mb-6 animate-in scale-in-95 duration-300 shadow-lg">
+                  <Info size={32} className="text-white animate-in scale-in-50 duration-500" strokeWidth={1.5} />
+                </div>
+                <h3 className="text-2xl font-black text-[#1d1d1f] mb-3 tracking-tight">{modal.title}</h3>
+                <p className="text-sm font-medium text-gray-600 leading-relaxed mb-8">{modal.message}</p>
+                <button 
+                  onClick={() => setModal({ ...modal, isOpen: false })} 
+                  className="w-full py-3.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:shadow-lg transition-all duration-200 shadow-md shadow-yellow-400/20 hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  Understood
+                </button>
               </div>
-              <h3 className="text-xl font-black text-[#1d1d1f] mb-2 tracking-tight">{modal.title}</h3>
-              <p className="text-sm font-medium text-gray-500 leading-relaxed mb-8">{modal.message}</p>
-              <button onClick={() => setModal({ ...modal, isOpen: false })} className="w-full py-3.5 bg-[#1d1d1f] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-black transition-colors shadow-md">
-                Understood
-              </button>
             </div>
           )}
         </div>
@@ -1240,73 +1245,86 @@ export default function DocumentsAdminPage() {
 
       {createContractOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200">
-            <button onClick={closeContractModal} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+          <div className="bg-white rounded-3xl p-6 lg:p-8 max-w-4xl w-full max-h-[88vh] overflow-y-auto shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200">
+            <button onClick={closeContractModal} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
               <X size={16} strokeWidth={2.5} />
             </button>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center">
-                <FileText size={18} className="text-[#eebf43]" />
+            
+            <div className="flex items-start justify-between mb-8 border-b border-gray-100 pb-6 pr-8">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2">Document Management</p>
+                <h3 className="text-3xl lg:text-4xl font-black text-[#1d1d1f] tracking-tight">{editingContractId ? 'Edit Contract' : 'New Contract'}</h3>
+                <p className="text-[12px] text-[#71717a] font-medium leading-relaxed mt-2.5 max-w-2xl">
+                  Create a new contract agreement, define the recipient, attach the contract file, and send it for signature through your preferred platform.
+                </p>
               </div>
-              <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">{editingContractId ? 'Edit Contract' : 'New Contract'}</h3>
+              <div className="hidden lg:flex w-16 h-16 rounded-2xl bg-[#fef9ec] items-center justify-center text-[#eebf43] shrink-0">
+                <FileText size={24} strokeWidth={1.5} />
+              </div>
             </div>
 
-            <div className="space-y-5 mb-8">
-              <div>
-                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Contract Title</label>
-                <input value={contractForm.name} onChange={(event) => setContractForm((current) => ({ ...current, name: event.target.value }))} type="text" placeholder="e.g. Santos Floral Agreement" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
-              </div>
-              <div>
-                <CustomSelect
-                  label="Associated Event"
-                  value={contractForm.eventId}
-                  onChange={(value) => setContractForm((current) => ({ ...current, eventId: value }))}
-                  options={contractEventOptions}
-                  icon={FileText}
-                  placeholder="Select an event..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-5">
                 <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Type</label>
-                  <input value={contractForm.type} onChange={(event) => setContractForm((current) => ({ ...current, type: event.target.value }))} type="text" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Contract Title</label>
+                  <input value={contractForm.name} onChange={(event) => setContractForm((current) => ({ ...current, name: event.target.value }))} type="text" placeholder="e.g. Santos Floral Agreement" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
                 </div>
+                
                 <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Value</label>
-                  <input value={contractForm.value} onChange={(event) => setContractForm((current) => ({ ...current, value: event.target.value }))} type="text" placeholder={`e.g. ${PESO_SYMBOL}45,000`} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Name</label>
-                  <input
-                    value={contractForm.recipientName}
-                    onChange={(event) => setContractForm((current) => ({ ...current, recipientName: event.target.value }))}
-                    type="text"
-                    placeholder="e.g. Ian Angelo Valomores"
-                    className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
+                  <CustomSelect
+                    label="Associated Event"
+                    value={contractForm.eventId}
+                    onChange={(value) => setContractForm((current) => ({ ...current, eventId: value }))}
+                    options={contractEventOptions}
+                    icon={FileText}
+                    placeholder="Select an event..."
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Email</label>
-                  <input
-                    value={contractForm.recipientEmail}
-                    onChange={(event) => setContractForm((current) => ({ ...current, recipientEmail: event.target.value }))}
-                    type="email"
-                    placeholder="name@example.com"
-                    className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
-                  />
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Type</label>
+                    <input value={contractForm.type} onChange={(event) => setContractForm((current) => ({ ...current, type: event.target.value }))} type="text" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Value</label>
+                    <input value={contractForm.value} onChange={(event) => setContractForm((current) => ({ ...current, value: event.target.value }))} type="text" placeholder={`e.g. ${PESO_SYMBOL}45,000`} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all" />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Name</label>
+                    <input
+                      value={contractForm.recipientName}
+                      onChange={(event) => setContractForm((current) => ({ ...current, recipientName: event.target.value }))}
+                      type="text"
+                      placeholder="e.g. Ian Angelo Valomores"
+                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Email</label>
+                    <input
+                      value={contractForm.recipientEmail}
+                      onChange={(event) => setContractForm((current) => ({ ...current, recipientEmail: event.target.value }))}
+                      type="email"
+                      placeholder="name@example.com"
+                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
+                    />
+                  </div>
                 </div>
               </div>
-              <div>
+              
+              <div className="lg:col-span-1">
                 <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Contract File</label>
-                <label className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-[#fef9ec]/50 hover:border-[#eebf43]/50 transition-colors cursor-pointer group">
+                <label className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-[#fef9ec]/50 hover:border-[#eebf43]/50 transition-colors cursor-pointer group h-48">
                   <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
                     <Upload size={16} className="text-[#eebf43]" />
                   </div>
-                  <span className="text-[12px] font-black text-[#1d1d1f]">{contractForm.contractFile ? contractForm.contractFile.name : 'Click to upload or drag & drop'}</span>
-                  <span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">
-                    {contractForm.existingFileName && !contractForm.contractFile ? `Current: ${contractForm.existingFileName}` : 'PDF, DOCX (Max 10MB)'}
+                  <span className="text-[11px] font-black text-[#1d1d1f] line-clamp-2">{contractForm.contractFile ? contractForm.contractFile.name : 'Click to upload'}</span>
+                  <span className="text-[9px] font-bold text-gray-400 mt-2 uppercase tracking-wider">
+                    {contractForm.existingFileName && !contractForm.contractFile ? `Current: ${contractForm.existingFileName}` : 'PDF, DOCX'}
                   </span>
                   <input
                     type="file"
@@ -1323,7 +1341,7 @@ export default function DocumentsAdminPage() {
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-8 pt-6 border-t border-gray-100">
               <button onClick={closeContractModal} className="flex-1 py-3.5 bg-gray-100 text-gray-500 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-gray-200 transition-colors">
                 Cancel
               </button>
