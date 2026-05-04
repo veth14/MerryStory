@@ -1,307 +1,387 @@
 'use client';
-import React, { useState, useEffect, use } from 'react';
-import Link from 'next/link';
 
-// Dummy implementation of a database/API fetch that links Event Slug -> Unique Codes returning Guest parameters
-const DUMMY_DB: Record<string, Record<string, { guestName: string, maxGuests: number }>> = {
-  'the-starlight-gala': {
-    'VIP-2024': { guestName: 'Isabella Thorne', maxGuests: 2 },
-    'PLATINUM-5': { guestName: 'Alexander Vance', maxGuests: 5 },
-    'GALA-S2': { guestName: 'Julian Mercer', maxGuests: 2 }
-  },
-  'corporate-summit': {
-    'EXEC-1': { guestName: 'Elena Sastro', maxGuests: 1 },
-    'TEAM-4': { guestName: 'Tech Team Alpha', maxGuests: 4 }
+import React, { useState, use } from 'react';
+
+type ValidationResponse = {
+  guestId: string;
+  guestName: string;
+  email: string;
+  tier: string;
+  status: string;
+  eventName: string;
+  eventType: string;
+  location: string;
+  coverImageUrl: string;
+  date: string | null;
+};
+
+const formatEventDate = (dateValue?: string | null) => {
+  if (!dateValue) return 'Date to be announced';
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return dateValue;
+  return parsed.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const formatEventTime = (dateValue?: string | null) => {
+  if (!dateValue) return 'Time to be announced';
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return 'Time to be announced';
+  return parsed.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+/** Two-line hero: navy line(s) except last word, last word gold (matches RSVP invite layout). */
+const splitEventTitle = (eventName: string): { leading: string; last: string | null } => {
+  const words = eventName.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 1) {
+    return { leading: eventName.trim(), last: null };
   }
+  return {
+    leading: words.slice(0, -1).join(' '),
+    last: words[words.length - 1] ?? null,
+  };
 };
 
 export default function GuestRsvpPage({ params }: { params: Promise<{ slug: string }> }) {
-  const unwrappedParams = use(params);
-  const slug = unwrappedParams.slug;
-  // Convert slug 'the-starlight-gala' to 'The Starlight Gala'
-  const eventName = slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  const { slug } = use(params);
+  const fallbackEventName = slug
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [code, setCode] = useState('');
+  const [validation, setValidation] = useState<ValidationResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  
-  // Dynamic State Based on Code Validation
-  const [maxAllowed, setMaxAllowed] = useState(1);
-  const [guestName, setGuestName] = useState('');
-
-  // Form State
-  const [isAttending, setIsAttending] = useState<boolean | null>(true);
-  const [attendees, setAttendees] = useState('1');
-  const [dietary, setDietary] = useState('');
-  const [email, setEmail] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [attending, setAttending] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isValidated, setIsValidated] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleVerifyCode = (e: React.FormEvent) => {
+  const eventName = validation?.eventName || fallbackEventName;
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    const eventDatabase = DUMMY_DB[slug];
-    
-    if (eventDatabase && eventDatabase[code.trim().toUpperCase()]) {
-      const guestInfo = eventDatabase[code.trim().toUpperCase()];
-      setGuestName(guestInfo.guestName);
-      setMaxAllowed(guestInfo.maxGuests);
-      setAttendees('1');
-      setErrorMsg('');
-      setStep(2);
-    } else {
-      setErrorMsg('Invalid code for this event. Please try again.');
-    }
-  };
+    setErrorMsg('');
+    setIsValidated(true);
 
-  const handleConfirmRsvp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isAttending && !email) return;
-
-    setIsSubmitting(true);
-    
     try {
-      const res = await fetch('/api/rsvp', {
+      const response = await fetch('/api/rsvp/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          eventName,
-          guestName,
-          email,
-          attendees,
-          dietary,
-          isAttending,
-          code
-        })
+          eventSlug: slug,
+          code: code.trim().toUpperCase(),
+        }),
       });
 
-      const data = await res.json();
-      
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to validate this RSVP code.');
+      }
+
+      setValidation(payload);
+      setStep(2);
+    } catch (error) {
+      setValidation(null);
+      setErrorMsg(error instanceof Error ? error.message : 'Unable to validate this RSVP code.');
+    } finally {
+      setIsValidated(false);
+    }
+  };
+
+  const handleSubmitRsvp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/rsvp/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventSlug: slug,
+          code: code.trim().toUpperCase(),
+          attending,
+          notes,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to save your RSVP response.');
+      }
+
       setIsSubmitted(true);
-    } catch (err) {
-      console.error('Failed to submit RSVP:', err);
-      // Fallback submission if API fails
-      setIsSubmitted(true);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Unable to save your RSVP response.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#faf9f6] flex flex-col font-sans selection:bg-[#facc15] selection:text-gray-900 overflow-x-hidden">
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col relative sm:p-6 lg:p-12">
-        {/* Background Decorative Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#fefbf0] via-[#f7f4e9] to-[#eeeadd] pointer-events-none -z-10" />
+  const titleParts = splitEventTitle(eventName);
 
+  return (
+    <div className="min-h-screen bg-[#F9F7F2] text-[#0F172A] selection:bg-[#C5A028]/30 selection:text-[#0F172A]">
+      <main className="relative min-h-screen">
         {isSubmitted ? (
-          <div className="relative z-10 w-full max-w-2xl mx-auto mt-20 sm:mt-32 p-8 sm:p-16 bg-white shadow-2xl shadow-gray-200/50 rounded-2xl border border-white text-center animate-in zoom-in-95 duration-500">
-            <div className="w-20 h-20 bg-green-50 text-green-500 flex items-center justify-center rounded-full mx-auto mb-8">
-               <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+          <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-3xl items-center px-6 py-16">
+            <div className="w-full rounded-2xl border border-[rgba(197,160,40,0.2)] bg-white px-8 py-12 text-center shadow-[0_24px_64px_-12px_rgba(15,23,42,0.1)] sm:px-14">
+              <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
+                <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-3xl font-black tracking-tight text-[#0F172A] sm:text-4xl">
+                RSVP {attending ? 'Confirmed' : 'Recorded'}
+              </h2>
+              <p className="mx-auto mt-4 max-w-xl text-[15px] font-medium leading-8 text-[#64748B]">
+                Thank you, {validation?.guestName || 'Guest'}. Your response for {eventName} has been saved.
+                {attending && validation?.email ? (
+                  <span className="mt-4 block">
+                    Your QR ticket has been sent to <strong className="text-[#0F172A]">{validation.email}</strong>.
+                  </span>
+                ) : attending ? (
+                  <span className="mt-4 block">Your coordinator can provide your QR ticket if needed.</span>
+                ) : (
+                  <span className="mt-4 block">We are sorry you won&apos;t be able to make it.</span>
+                )}
+              </p>
+              <p className="mx-auto mt-6 max-w-xl text-[13px] font-medium leading-relaxed text-[#94a3b8]">
+                You can use your RSVP code to return and update your response at any time before check-in. Once your QR code is scanned at the event, your RSVP will be locked.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-10 inline-flex items-center justify-center rounded-xl bg-[#0F172A] px-8 py-4 text-[11px] font-extrabold uppercase tracking-[0.2em] text-white transition-colors hover:bg-[#0f172a]/90"
+              >
+                Return Home
+              </button>
             </div>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">RSVP Confirmed!</h2>
-            <p className="text-gray-500 font-medium text-[15px] max-w-md mx-auto leading-relaxed mb-8">
-              Thank you! Your response for {eventName} has been successfully recorded. 
-              {isAttending === true ? (
-                <span className="block mt-4">
-                  We have sent a confirmation to <strong className="text-gray-900">{email}</strong> containing your <strong className="text-[#d4a017]">custom QR code</strong>. Please present this QR code upon entering the event.
-                </span>
-              ) : (
-                <span className="block mt-4">We are sorry you won't be able to make it!</span>
-              )}
-            </p>
-            <button onClick={() => window.location.reload()} className="px-8 py-3.5 bg-gray-900 hover:bg-black text-white font-extrabold uppercase tracking-widest text-[11px] transition-all rounded-sm shadow-xl shadow-gray-900/20">
-              RETURN HOME
-            </button>
           </div>
         ) : step === 1 ? (
-          /* STEP 1: CODE ENTRY */
-          <div className="relative z-10 w-full max-w-4xl mx-auto flex-1 flex flex-col justify-center py-12 lg:py-20 animate-in fade-in duration-500">
-            <div className="text-center mb-10 md:mb-16 px-4">
-              <h4 className="text-[10px] md:text-[11px] font-black text-[#d4a017] tracking-[0.3em] uppercase mb-4 md:mb-6">
-                EXCLUSIVE ACCESS
+          <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 py-16">
+            <div className="mx-auto max-w-3xl text-center">
+              <h4 className="mb-5 text-[10px] font-black uppercase tracking-[0.34em] text-[#C5A028]">
+                Exclusive Access
               </h4>
-              <h1 className="text-4xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-5">
-                 Welcome to <span className="text-[#d4a017]">{eventName}</span>
+              <h1 className="text-4xl font-black leading-tight tracking-tight text-[#0F172A] sm:text-6xl">
+                Welcome to <span className="text-[#C5A028]">{eventName}</span>
               </h1>
-              <p className="text-gray-500 font-medium text-[14px] md:text-[16px]">
-                Please enter your unique code to proceed.
+              <p className="mx-auto mt-5 max-w-xl text-[15px] font-medium leading-8 text-[#64748B]">
+                Please enter your unique RSVP code to proceed. You can update your response at any time until check-in.
               </p>
             </div>
 
-            {/* Input Form Box */}
-            <form onSubmit={handleVerifyCode} className="w-full max-w-xl mx-auto bg-white p-8 md:p-12 lg:p-16 shadow-2xl shadow-gray-200/50 rounded-lg sm:rounded-2xl border border-white relative z-20">
+            <form
+              onSubmit={handleVerifyCode}
+              className="mx-auto mt-12 w-full max-w-2xl rounded-2xl border border-[rgba(197,160,40,0.2)] bg-white px-8 py-10 shadow-[0_24px_64px_-12px_rgba(15,23,42,0.08)] sm:px-12 sm:py-14"
+            >
               {errorMsg && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-sm text-center">
-                  <p className="text-red-500 text-[12px] font-bold tracking-wide">{errorMsg}</p>
+                <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-center">
+                  <p className="text-[12px] font-bold tracking-wide text-red-500">{errorMsg}</p>
                 </div>
               )}
-              <div className="mb-8 md:mb-10 text-center">
-                <input 
+              <div className="mb-8 text-center">
+                <input
                   required
                   type="text"
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                   placeholder="UNIQUE EVENT CODE"
-                  className="w-full text-center text-[13px] md:text-[15px] font-extrabold tracking-[0.2em] text-gray-900 placeholder-gray-300 border-b-2 border-gray-100 focus:border-[#facc15] py-4 focus:outline-none transition-colors uppercase bg-transparent"
+                  className="w-full border-b-2 border-gray-100 bg-transparent py-4 text-center text-[14px] font-extrabold uppercase tracking-[0.22em] text-[#0F172A] placeholder:text-gray-300 focus:border-[#C5A028] focus:outline-none"
                 />
               </div>
-              <button 
+              <button
                 type="submit"
-                className="w-full bg-[#facc15] hover:bg-[#eab308] text-gray-900 font-black text-[11px] md:text-[12px] uppercase tracking-[0.2em] py-5 transition-all shadow-xl shadow-[#facc15]/20 flex items-center justify-center gap-3 rounded-sm group"
+                disabled={isValidated}
+                className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#C5A028] px-6 py-4 text-[11px] font-black uppercase tracking-[0.2em] text-white shadow-[0_16px_40px_-8px_rgba(197,160,40,0.45)] transition-colors hover:bg-[#b89120] disabled:bg-[#C5A028]/50"
               >
-                CONTINUE TO RSVP 
-                <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                {isValidated ? 'Verifying...' : 'Continue To RSVP'}
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
               </button>
             </form>
-
-            <div className="mt-16 text-center text-[9px] font-black text-gray-300 tracking-[0.4em] uppercase flex items-center justify-center gap-4 hidden sm:flex">
-               <span className="w-12 h-px bg-gray-200"></span>
-               MERRY STORY PRODUCTIONS
-               <span className="w-12 h-px bg-gray-200"></span>
-            </div>
-
-            {/* Decorative BG Image snippet mapped to bottom right behind the box */}
-            <div className="absolute right-0 bottom-0 w-64 md:w-96 h-64 md:h-96 opacity-20 md:opacity-40 mix-blend-multiply pointer-events-none hidden lg:block -z-10 translate-x-12 translate-y-12">
-               <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                <path fill="#d4a017" d="M44.7,-76.4C58.9,-69.2,71.8,-59.1,81.3,-46.3C90.8,-33.5,96.9,-18,97,-2.4C97.1,13.1,91.3,28.6,81.9,41.5C72.6,54.4,60,64.6,46,72.4C32.1,80.2,16.1,85.5,0.7,84.4C-14.7,83.3,-29.4,75.8,-42.6,67C-55.8,58.2,-67.4,48.1,-76.4,35.4C-85.4,22.7,-91.8,7.5,-91.5,-7.4C-91.2,-22.3,-84.1,-36.8,-74.6,-49.2C-65.1,-61.6,-53.1,-71.8,-39.7,-79.6C-26.2,-87.4,-13.1,-92.7,1.2,-94.7C15.6,-96.6,30.5,-83.6,44.7,-76.4Z" transform="translate(100 100)" />
-              </svg>
-            </div>
           </div>
         ) : (
-          /* STEP 2: ATTENDANCE SELECTION */
-          <form onSubmit={handleConfirmRsvp} className="relative z-10 w-full max-w-5xl mx-auto flex-1 flex flex-col pt-8 pb-16 animate-in slide-in-from-right-8 duration-500">
-             
-             {/* Info Section split */}
-             <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20 mb-8 lg:mb-16 px-4">
-                <div className="flex-1 text-center lg:text-left">
-                  <h4 className="text-[9px] md:text-[10px] font-black text-[#d4a017] tracking-[0.25em] uppercase mb-4">
-                    EVENT INVITATION FOR {guestName.toUpperCase()}
-                  </h4>
-                  <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-5">
-                    {eventName}
-                  </h1>
-                  <p className="text-gray-500 font-medium text-[14px] md:text-[15px] leading-relaxed max-w-md mx-auto lg:mx-0">
-                    Join us for an evening of celestial celebration and cinematic wonder. Your presence is the highlight of our story.
+          <div className="relative z-10 mx-auto flex w-full max-w-[1180px] flex-col gap-12 px-5 pb-20 pt-10 sm:px-8 lg:flex-row lg:items-start lg:gap-14 lg:pt-14 xl:px-10">
+            <div className="w-full shrink-0 text-left lg:max-w-[42%]">
+              <div className="mb-8 flex max-w-xl items-center gap-3">
+                <span className="h-px w-8 shrink-0 bg-[#C5A028]" aria-hidden />
+                <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#C5A028]">
+                  Event Invitation For {validation?.guestName?.toUpperCase() || 'Guest'}
+                </p>
+              </div>
+
+              <div className="max-w-xl">
+                {titleParts.last ? (
+                  <>
+                    <span className="block text-[2.625rem] font-black leading-[1.06] tracking-[-0.02em] text-[#0F172A] sm:text-[3.375rem] sm:leading-[1.04]">
+                      {titleParts.leading}
+                    </span>
+                    <span className="mt-1 block text-[2.625rem] font-black leading-[1.06] tracking-[-0.02em] text-[#C5A028] sm:mt-2 sm:text-[3.375rem]">
+                      {titleParts.last}
+                    </span>
+                  </>
+                ) : (
+                  <span className="block text-[2.625rem] font-black leading-[1.06] tracking-[-0.02em] text-[#0F172A] sm:text-[3.375rem]">
+                    {titleParts.leading}
+                  </span>
+                )}
+              </div>
+
+              <p className="mt-7 max-w-lg text-[16px] font-medium leading-[1.75] text-[#64748B]">
+                You&apos;re invited to join us for this special gathering. Confirm your attendance using your one-time RSVP code. Once
+                submitted, the same code cannot be used again.
+              </p>
+
+              <div className="mt-9 max-w-md space-y-3">
+                <div className="flex items-center gap-4 rounded-2xl border border-[rgba(197,160,40,0.32)] bg-white px-5 py-[18px] shadow-[0_12px_32px_-16px_rgba(15,23,42,0.12)]">
+                  <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[rgba(197,160,40,0.14)] text-[#C5A028]"
+                    aria-hidden
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#64748B]">Date</p>
+                    <p className="mt-1 text-[17px] font-bold text-[#0F172A]">{formatEventDate(validation?.date)}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 rounded-2xl border border-[rgba(197,160,40,0.32)] bg-white px-5 py-[18px] shadow-[0_12px_32px_-16px_rgba(15,23,42,0.12)]">
+                  <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[rgba(197,160,40,0.14)] text-[#C5A028]"
+                    aria-hidden
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#64748B]">Time</p>
+                    <p className="mt-1 text-[17px] font-bold text-[#0F172A]">{formatEventTime(validation?.date)}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 rounded-2xl border border-[rgba(197,160,40,0.32)] bg-white px-5 py-[18px] shadow-[0_12px_32px_-16px_rgba(15,23,42,0.12)]">
+                  <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[rgba(197,160,40,0.14)] text-[#C5A028]"
+                    aria-hidden
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#64748B]">Venue</p>
+                    <p className="mt-1 text-[17px] font-bold text-[#0F172A]">{validation?.location || 'Venue to be announced'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full lg:flex-1 lg:min-w-0 lg:max-w-none">
+              <form
+                onSubmit={handleSubmitRsvp}
+                className="rounded-2xl border border-[rgba(197,160,40,0.18)] bg-white px-8 py-9 shadow-[0_28px_64px_-20px_rgba(15,23,42,0.14)] sm:px-10 sm:py-10"
+              >
+                <header className="text-center">
+                  <h2 className="text-[1.875rem] font-black tracking-tight text-[#0F172A]">Confirm Your Attendance</h2>
+                  <p className="mt-2 text-[14px] font-medium leading-relaxed text-[#64748B]">
+                    Let us know if you&apos;ll be joining us
                   </p>
-                </div>
-                <div className="flex-1 w-full max-w-md mx-auto relative group">
-                   {/* Golden accent frame */}
-                   <div className="absolute inset-0 bg-[#facc15] translate-x-4 translate-y-4 rounded-sm" />
-                   {/* Dummy Image */}
-                   <img 
-                     src="https://images.unsplash.com/photo-1519225421980-715cb0215aed?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
-                     alt="Gala Event Setup" 
-                     className="relative z-10 w-full aspect-[4/5] object-cover grayscale opacity-90 group-hover:grayscale-0 transition-all duration-700 rounded-sm shadow-xl"
-                   />
-                </div>
-             </div>
+                </header>
 
-             {/* RSVP Details Box */}
-             <div className="w-full bg-white p-6 sm:p-10 lg:p-12 shadow-2xl shadow-gray-200/50 rounded-lg sm:rounded-2xl border-t-4 border-t-[#d4a017] z-20 relative mx-4 sm:mx-0 w-[calc(100%-2rem)] sm:w-full self-center">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-                   <button 
-                     type="button"
-                     onClick={() => setIsAttending(true)}
-                     className={`py-5 px-6 font-extrabold text-[12px] sm:text-[13px] uppercase tracking-widest transition-all border-2 flex items-center justify-center gap-3 ${
-                       isAttending 
-                         ? 'border-[#facc15] bg-[#facc15] text-gray-900 shadow-lg shadow-[#facc15]/20' 
-                         : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200 hover:bg-gray-50'
-                     }`}
-                   >
-                     {isAttending && <svg className="w-5 h-5 absolute left-6 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                     I WILL ATTEND!
-                   </button>
-                   
-                   <button 
-                     type="button"
-                     onClick={() => setIsAttending(false)}
-                     className={`py-5 px-6 font-extrabold text-[12px] sm:text-[13px] uppercase tracking-widest transition-all border-2 flex items-center justify-center gap-3 ${
-                       isAttending === false
-                         ? 'border-gray-900 bg-gray-900 text-white shadow-lg shadow-gray-900/20' 
-                         : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200 hover:bg-gray-50'
-                     }`}
-                   >
-                     {isAttending === false && <svg className="w-5 h-5 absolute left-6 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>}
-                     I CANNOT ATTEND
-                   </button>
-                </div>
+                {errorMsg ? (
+                  <div className="mt-8 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-center">
+                    <p className="text-[12px] font-bold tracking-wide text-red-600">{errorMsg}</p>
+                  </div>
+                ) : null}
 
-                <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 transition-opacity duration-300 ${!isAttending ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-                   <div>
-                     <label className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-3">
-                       NUMBER OF ATTENDEES (MAX {maxAllowed})
-                     </label>
-                     <input 
-                       type="number"
-                       min="1"
-                       max={maxAllowed}
-                       value={attendees}
-                       onChange={(e) => {
-                         const val = parseInt(e.target.value, 10);
-                         if (!isNaN(val) && val <= maxAllowed) {
-                           setAttendees(val.toString());
-                         } else if (e.target.value === '') {
-                           setAttendees('');
-                         }
-                       }}
-                       disabled={!isAttending}
-                       className="w-full text-[15px] font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-100 focus:border-[#facc15] pb-2 focus:outline-none transition-colors bg-transparent"
-                     />
-                   </div>
-                   <div>
-                     <label className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-3">
-                       DIETARY REQUIREMENTS
-                     </label>
-                     <input 
-                       type="text"
-                       value={dietary}
-                       onChange={(e) => setDietary(e.target.value)}
-                       disabled={!isAttending}
-                       placeholder="e.g. Vegan, Nut Allergy"
-                       className="w-full text-[15px] font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-100 focus:border-[#facc15] pb-2 focus:outline-none transition-colors bg-transparent"
-                     />
-                   </div>
+                <div className="mt-10 rounded-[14px] bg-[#EFEBE3] p-1.5">
+                  <div className="relative grid grid-cols-2 items-stretch">
+                    <div
+                      className={`pointer-events-none absolute inset-y-1.5 w-[calc(50%-6px)] rounded-xl border border-neutral-100/90 bg-white shadow-[0_6px_20px_-4px_rgba(15,23,42,0.12)] transition-[left] duration-300 ease-out ${
+                        attending ? 'left-1.5' : 'left-[calc(50%+3px)]'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAttending(true)}
+                      className={`relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-[18px] text-[14px] font-bold transition-colors ${
+                        attending ? 'text-[#0F172A]' : 'text-[#64748B]'
+                      }`}
+                    >
+                      <svg className="h-[18px] w-[18px] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      I Will Attend
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAttending(false)}
+                      className={`relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-[18px] text-[14px] font-bold transition-colors ${
+                        attending ? 'text-[#64748B]' : 'text-[#0F172A]'
+                      }`}
+                    >
+                      <svg className="h-[18px] w-[18px] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      I Cannot Attend
+                    </button>
+                  </div>
                 </div>
 
-                <div className={`mt-8 transition-opacity duration-300 ${!isAttending ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-                   <label className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-3">
-                     EMAIL ADDRESS (FOR ENTRY QR CODE TICKET)
-                   </label>
-                   <input 
-                     type="email"
-                     required={isAttending || undefined}
-                     value={email}
-                     onChange={(e) => setEmail(e.target.value)}
-                     disabled={!isAttending}
-                     placeholder="guest@example.com"
-                     className="w-full text-[15px] font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-100 focus:border-[#facc15] pb-2 focus:outline-none transition-colors bg-transparent"
-                   />
+                <div className="mt-8">
+                  <label htmlFor="rsvp-note" className="block text-[10px] font-bold tracking-[0.2em] text-[#64748B]">
+                    <span className="uppercase">RSVP note </span>
+                    <span className="normal-case lowercase tracking-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    id="rsvp-note"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={5}
+                    placeholder="Add optional notes for the coordinator..."
+                    className="mt-3 w-full rounded-2xl border border-[rgba(197,160,40,0.15)] bg-[#F9F7F2] px-5 py-[18px] text-[15px] font-medium leading-relaxed text-[#0F172A] outline-none transition-[border-color,box-shadow] placeholder:text-[#94a3b8] focus:border-[#C5A028]/50 focus:ring-2 focus:ring-[#C5A028]/20 resize-none"
+                  />
                 </div>
 
-                <div className="mt-12 flex flex-col items-center sm:items-end border-t border-gray-100 pt-8">
-                   <button 
-                     type="submit"
-                     disabled={isSubmitting || (isAttending && !email ? true : false)}
-                     className="w-full sm:w-auto px-12 py-4 bg-gray-900 hover:bg-black disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-extrabold text-[11px] uppercase tracking-[0.2em] transition-all shadow-xl shadow-gray-900/20 rounded-sm flex items-center justify-center gap-2"
-                   >
-                     {isSubmitting ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          SENDING...
-                        </>
-                      ) : (
-                        'CONFIRM RSVP'
-                      )}
-                   </button>
-                   <span className="text-[10px] font-bold text-gray-400 italic mt-4">
-                     Please respond by December 1st, 2024
-                   </span>
+                <div className="mt-10 flex flex-col gap-6 border-t border-[#E2E8F0] pt-8 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-[12px] font-medium text-[#64748B]">
+                    <svg className="h-4 w-4 shrink-0 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2h-1V9a5 5 0 00-10 0v2H6a2 2 0 00-2 2v6a2 2 0 002 2zm3-10V9a3 3 0 016 0v2H9z" />
+                    </svg>
+                    Your response is private & secure
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="inline-flex w-full shrink-0 items-center justify-center gap-2.5 rounded-xl bg-[#0F172A] px-10 py-[18px] text-[11px] font-extrabold uppercase tracking-[0.2em] text-white shadow-[0_12px_28px_-12px_rgba(15,23,42,0.45)] transition-colors hover:bg-[#0f172a]/92 disabled:bg-slate-400 sm:w-auto"
+                  >
+                    {isSubmitting ? 'Saving…' : 'Confirm RSVP'}
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
+                  </button>
                 </div>
-             </div>
-          </form>
+              </form>
+            </div>
+          </div>
         )}
       </main>
     </div>
