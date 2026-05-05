@@ -20,10 +20,11 @@ type EventDaySchedulePayload = {
 type EventDayScheduleModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (payload: EventDaySchedulePayload) => Promise<void>;
+  onSubmit: (payload: EventDaySchedulePayload) => Promise<void>;
   staffOptions: StaffOption[];
   vendorOptions: VendorOption[];
   productionDate: string;
+  initialData?: Partial<EventDaySchedulePayload> | null;
 };
 
 const FORM_TRIGGER_CLASS =
@@ -431,11 +432,13 @@ function AssigneeMultiSelect({
 export default function EventDayScheduleModal({
   isOpen,
   onClose,
-  onCreate,
+  onSubmit,
   staffOptions,
   vendorOptions,
   productionDate,
+  initialData,
 }: EventDayScheduleModalProps) {
+  const isEditing = Boolean(initialData);
   const [formData, setFormData] = useState<EventDaySchedulePayload>({
     title: '',
     description: '',
@@ -456,21 +459,28 @@ export default function EventDayScheduleModal({
   }, [vendorOptions]);
 
   useEffect(() => {
+    const nextState: EventDaySchedulePayload = {
+      title: initialData?.title || '',
+      description: initialData?.description || '',
+      status: initialData?.status || 'TO DO',
+      priority: initialData?.priority || 'MEDIUM',
+      dueDate: initialData?.dueDate || productionDate,
+      dueTime: initialData?.dueTime || '',
+      assignees: initialData?.assignees || [],
+      vendor: initialData?.vendor || 'None',
+    };
+
     if (!isOpen) {
-      setFormData({
-        title: '',
-        description: '',
-        status: 'TO DO',
-        priority: 'MEDIUM',
-        dueDate: productionDate,
-        dueTime: '',
-        assignees: [],
-        vendor: 'None',
-      });
+      setFormData(nextState);
       setError('');
       setIsSubmitting(false);
+      return;
     }
-  }, [isOpen, productionDate]);
+
+    setFormData(nextState);
+    setError('');
+    setIsSubmitting(false);
+  }, [initialData, isOpen, productionDate]);
 
   useEffect(() => {
     setFormData((prev) => ({ ...prev, dueDate: productionDate }));
@@ -505,10 +515,10 @@ export default function EventDayScheduleModal({
     setIsSubmitting(true);
 
     try {
-      await onCreate(formData);
+      await onSubmit(formData);
       onClose();
     } catch (submissionError: any) {
-      setError(submissionError?.message || 'Failed to create production schedule.');
+      setError(submissionError?.message || `Failed to ${isEditing ? 'update' : 'create'} production schedule.`);
       setIsSubmitting(false);
     }
   };
@@ -518,7 +528,7 @@ export default function EventDayScheduleModal({
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-visible animate-in zoom-in-95 duration-300">
         <div className="px-6 sm:px-8 py-5 sm:py-6 border-b border-gray-100 flex justify-between items-start">
           <div>
-            <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">Edit <span className="text-[#facc15] italic">Schedule</span></h2>
+            <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">{isEditing ? 'Edit' : 'New'} <span className="text-[#facc15] italic">Schedule</span></h2>
             <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Program timeline setup for event day</p>
           </div>
           <button onClick={onClose} type="button" className="text-gray-400 hover:text-gray-600 transition-colors p-1 shrink-0">
@@ -614,7 +624,7 @@ export default function EventDayScheduleModal({
               disabled={isSubmitting}
               className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 hover:bg-[#eab308] disabled:opacity-70 transition-all"
             >
-              {isSubmitting ? 'Saving...' : 'Save Schedule'}
+              {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Schedule'}
             </button>
           </div>
         </form>

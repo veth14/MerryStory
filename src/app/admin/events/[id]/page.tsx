@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, use, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, ArrowLeft, Calendar, MapPin, Users, DollarSign, Briefcase, AlertTriangle, User, Tag, Loader2, CheckCircle2, Plus, Minus, Mail, Phone, X, Search, UserPlus, Check, QrCode, Link2, UserCheck } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CustomSelect } from '@/components/ui/CustomInputs';
@@ -90,6 +91,11 @@ interface ProdTaskData {
   vendor?: {
     name?: string;
   };
+}
+
+interface EventTaskData {
+  _id?: string;
+  status?: string;
 }
 
 const extractStaff = (payload: any): StaffOption[] => {
@@ -249,6 +255,7 @@ const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
 
 export default function EventDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('pre-event');
   const [error, setError] = useState('');
@@ -259,11 +266,13 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   
   const [guests, setGuests] = useState<GuestData[]>([]);
   const [prodTasks, setProdTasks] = useState<ProdTaskData[]>([]);
+  const [eventTasks, setEventTasks] = useState<EventTaskData[]>([]);
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
   const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
   const [isEventDayLoading, setIsEventDayLoading] = useState(false);
   const [eventDayError, setEventDayError] = useState('');
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [editingProdTask, setEditingProdTask] = useState<ProdTaskData | null>(null);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [guestSearch, setGuestSearch] = useState('');
   const [guestPage, setGuestPage] = useState(1);
@@ -312,8 +321,11 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
       setEventDayError('');
       const idToken = await user!.getIdToken();
 
-      const [taskResponse, staffResponse, vendorResponse] = await Promise.all([
+      const [prodTaskResponse, eventTaskResponse, staffResponse, vendorResponse] = await Promise.all([
         fetch(`/api/admin/event-day?eventId=${id}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+        fetch(`/api/tasks?eventId=${id}`, {
           headers: { Authorization: `Bearer ${idToken}` },
         }),
         fetch('/api/staff', {
@@ -324,17 +336,19 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
         }),
       ]);
 
-      if (!taskResponse.ok) {
+      if (!prodTaskResponse.ok) {
         throw new Error('Failed to fetch event-day timeline.');
       }
 
-      const [tasksPayload, staffPayload, vendorPayload] = await Promise.all([
-        taskResponse.json(),
+      const [prodTasksPayload, eventTasksPayload, staffPayload, vendorPayload] = await Promise.all([
+        prodTaskResponse.json(),
+        eventTaskResponse.ok ? eventTaskResponse.json() : Promise.resolve([]),
         staffResponse.ok ? staffResponse.json() : Promise.resolve([]),
         vendorResponse.ok ? vendorResponse.json() : Promise.resolve([]),
       ]);
 
-      setProdTasks(Array.isArray(tasksPayload) ? tasksPayload : []);
+      setProdTasks(Array.isArray(prodTasksPayload) ? prodTasksPayload : []);
+      setEventTasks(Array.isArray(eventTasksPayload) ? eventTasksPayload : []);
       setStaffOptions(extractStaff(staffPayload));
       setVendorOptions(extractVendorOptions(vendorPayload));
     } catch (err) {
@@ -402,6 +416,50 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
     }
 
     setProdTasks((prev) => prev.map((entry) => (entry._id === task._id ? body : entry)));
+  };
+
+  const handleSaveProdTask = async (payload: {
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    dueDate: string;
+    dueTime: string;
+    assignees: string[];
+    vendor: string;
+  }) => {
+    if (!editingProdTask?._id) {
+      await handleCreateProdTask(payload);
+      return;
+    }
+
+    const idToken = await user!.getIdToken();
+    const response = await fetch('/api/admin/event-day', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        taskObjectId: editingProdTask._id,
+        ...payload,
+      }),
+    });
+
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Failed to update schedule.');
+    }
+
+    setProdTasks((prev) =>
+      prev
+        .map((entry) => (entry._id === editingProdTask._id ? body : entry))
+        .sort((first, second) => {
+          const firstKey = `${first?.due?.date || ''} ${first?.due?.time || ''}`;
+          const secondKey = `${second?.due?.date || ''} ${second?.due?.time || ''}`;
+          return firstKey.localeCompare(secondKey);
+        })
+    );
   };
 
   const toggleGuestCheckIn = async (guest: GuestData) => {
@@ -552,6 +610,23 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
     }
   }, [guestPage, totalGuestPages]);
 
+  const scheduleModalInitialData = useMemo(() => {
+    if (!editingProdTask) return null;
+
+    return {
+      title: editingProdTask.title || '',
+      description: editingProdTask.description || '',
+      status: editingProdTask.status || 'TO DO',
+      priority: editingProdTask.priority || 'MEDIUM',
+      dueDate: editingProdTask.due?.date || productionDate,
+      dueTime: editingProdTask.due?.time || '',
+      assignees:
+        editingProdTask.assignees?.map((entry) => entry?.name).filter(Boolean) ||
+        (editingProdTask.assignee?.name ? [editingProdTask.assignee.name] : []),
+      vendor: editingProdTask.vendor?.name || 'None',
+    };
+  }, [editingProdTask, productionDate]);
+
   const timelineItems = useMemo(() => {
     const sortedTasks = [...prodTasks].sort((first, second) => {
       const firstKey = `${first?.due?.date || ''} ${first?.due?.time || ''}`;
@@ -592,6 +667,8 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   }, [prodTasks, productionDate, todayDate]);
 
   const completedTimelineCount = timelineItems.filter((task) => task.completed).length;
+  const completedAllTasksCount = completedTimelineCount + eventTasks.filter((task) => isCompletedTask(task.status)).length;
+  const totalAllTasksCount = timelineItems.length + eventTasks.length;
   const timelineProgress = timelineItems.length ? Math.round((completedTimelineCount / timelineItems.length) * 100) : 0;
 
   if (loading) {
@@ -814,11 +891,11 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Tasks Complete</h3>
             <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">{completedTimelineCount}</span>
-              <span className="text-[18px] font-bold text-gray-400">/{timelineItems.length}</span>
+              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">{completedAllTasksCount}</span>
+              <span className="text-[18px] font-bold text-gray-400">/{totalAllTasksCount}</span>
             </div>
             <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-[#facc15] rounded-full" style={{ width: `${timelineProgress}%` }}></div>
+              <div className="h-full bg-[#facc15] rounded-full" style={{ width: `${totalAllTasksCount ? (completedAllTasksCount / totalAllTasksCount) * 100 : 0}%` }}></div>
             </div>
           </div>
 
@@ -857,7 +934,10 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 <p className="text-[12px] text-gray-500 font-medium mt-1">Live stage cues and schedule</p>
               </div>
               <button
-                onClick={() => setIsScheduleModalOpen(true)}
+                onClick={() => {
+                  setEditingProdTask(null);
+                  setIsScheduleModalOpen(true);
+                }}
                 className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
               >
                 <Calendar size={14} />
@@ -899,7 +979,11 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                   return (
                     <div
                       key={task._id || `${task.title}-${index}`}
-                      className={`flex gap-4 ${index !== timelineItems.length - 1 ? 'pb-6 border-b border-gray-100' : ''} ${wrapperClass}`}
+                      onClick={() => {
+                        setEditingProdTask(task);
+                        setIsScheduleModalOpen(true);
+                      }}
+                      className={`flex gap-4 cursor-pointer rounded-2xl transition-all duration-200 hover:bg-gray-50 hover:shadow-md hover:shadow-gray-100/60 ${index !== timelineItems.length - 1 ? 'pb-6 border-b border-gray-100' : ''} ${wrapperClass}`}
                     >
                       <div className="flex flex-col items-center">
                         <div className={`w-3 h-3 rounded-full border-2 border-white shadow-sm flex items-center justify-center ${accentClass}`}>
@@ -959,10 +1043,13 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                             </div>
                           </div>
                           <button
-                            onClick={() => updateProdTaskStatus(task, task.completed ? 'TO DO' : 'DONE').catch((err) => {
-                              console.error(err);
-                              setEventDayError('Could not update the program timeline status.');
-                            })}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              updateProdTaskStatus(task, task.completed ? 'TO DO' : 'DONE').catch((err) => {
+                                console.error(err);
+                                setEventDayError('Could not update the program timeline status.');
+                              });
+                            }}
                             className={`shrink-0 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
                               task.completed
                                 ? 'bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-bold tracking-widest uppercase hover:bg-emerald-100'
@@ -988,7 +1075,11 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Guest <span className="text-[#facc15] italic">Check-in</span></h2>
                 <p className="text-[12px] text-gray-500 font-medium mt-1">Real-time RSVP tracking and entry</p>
               </div>
-              <button className="bg-[#facc15] hover:bg-[#eab308] text-white text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg shadow-[#facc15]/20 flex items-center gap-2 transition-all">
+              <button
+                type="button"
+                onClick={() => router.push(`/admin/rsvp/scan?eventId=${encodeURIComponent(id)}`)}
+                className="bg-[#facc15] hover:bg-[#eab308] text-white text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg shadow-[#facc15]/20 flex items-center gap-2 transition-all"
+              >
                 <QrCode size={14} />
                 Launch Scanner
               </button>
@@ -1283,11 +1374,15 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
       <EventDayScheduleModal
         isOpen={isScheduleModalOpen}
-        onClose={() => setIsScheduleModalOpen(false)}
-        onCreate={handleCreateProdTask}
+        onClose={() => {
+          setIsScheduleModalOpen(false);
+          setEditingProdTask(null);
+        }}
+        onSubmit={handleSaveProdTask}
         staffOptions={staffOptions}
         vendorOptions={vendorOptions}
         productionDate={productionDate}
+        initialData={scheduleModalInitialData}
       />
 
       {isGuestModalOpen && (
