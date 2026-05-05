@@ -5,6 +5,8 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { ObjectId } from "mongodb";
 
 const PESO_SYMBOL = "\u20B1";
+const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "paid"]);
+const ALLOWED_PAYMENT_TYPES = new Set(["catering", "equipment", "decoration", "venue", "other"]);
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -80,15 +82,22 @@ export async function POST(
     const description = String(formData.get("description") || "").trim();
     const amount = Number(formData.get("amount"));
     const dueDate = String(formData.get("dueDate") || "").trim();
-    const status = String(formData.get("status") || "Pending").trim() || "Pending";
-    const paymentType = String(formData.get("paymentType") || "Payment").trim() || "Payment";
+    const statusInput = String(formData.get("status") || "pending").trim().toLowerCase();
+    const paymentTypeInput = String(formData.get("paymentType") || "other").trim().toLowerCase();
+    const status = ALLOWED_PAYMENT_STATUSES.has(statusInput) ? statusInput : "pending";
+    const paymentType = ALLOWED_PAYMENT_TYPES.has(paymentTypeInput) ? paymentTypeInput : "other";
     const attachment = formData.get("attachment");
-    
-    if (!vendor || !amount || !dueDate) {
+
+    if (!vendor || !description || !dueDate || !Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json(
-        { error: "Missing required fields: vendor, amount, dueDate" },
+        { error: "Missing or invalid required fields: vendor, description, amount, dueDate" },
         { status: 400 }
       );
+    }
+
+    const parsedDueDate = new Date(dueDate);
+    if (Number.isNaN(parsedDueDate.getTime())) {
+      return NextResponse.json({ error: "Due date is invalid." }, { status: 400 });
     }
     
     let attachmentUrl: string | null = null;
@@ -128,7 +137,7 @@ export async function POST(
       vendor,
       description,
       amount,
-      dueDate: new Date(dueDate),
+      dueDate: parsedDueDate,
       status,
       paymentType,
       attachmentUrl,

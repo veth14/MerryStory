@@ -5,6 +5,14 @@ import { ObjectId } from "mongodb";
 
 const PESO_SYMBOL = "\u20B1";
 
+function normalizeStatus(value: unknown) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "Pending";
+  if (normalized === "paid" || normalized === "cleared") return "Paid";
+  if (normalized === "overdue") return "Overdue";
+  return "Pending";
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -50,7 +58,7 @@ export async function GET(
         subtitle: exp.vendor || "Unknown Vendor",
         category: exp.paymentType || "Payment",
         amount: `${PESO_SYMBOL}${exp.amount.toLocaleString()}`,
-        status: exp.status || "Pending",
+        status: normalizeStatus(exp.status),
         attachmentUrl: exp.attachmentUrl || null,
         attachmentName: exp.attachmentName || null,
       }));
@@ -64,11 +72,14 @@ export async function GET(
         issue: new Date(inv.issueDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
         due: new Date(inv.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
         amount: `${PESO_SYMBOL}${inv.amount.toLocaleString()}`,
-        status: inv.status || "Pending",
+        status: normalizeStatus(inv.status),
       }));
 
     const upcomingPayments = expenses
-      .filter((exp) => new Date(exp.dueDate) > new Date() && exp.status !== "Cleared")
+      .filter((exp) => {
+        const normalizedStatus = normalizeStatus(exp.status);
+        return new Date(exp.dueDate) > new Date() && normalizedStatus !== "Paid";
+      })
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
       .slice(0, 5)
       .map((exp) => {
@@ -96,6 +107,8 @@ export async function GET(
       percentage: totalExpenses > 0 ? Math.round((amount / totalExpenses) * 100) : 0,
     }));
 
+    const budgetStatus = remaining < 0 ? "exceeded" : "within-limit";
+
     return NextResponse.json({
       eventName: event.title,
       eventId: event._id.toString(),
@@ -106,6 +119,13 @@ export async function GET(
       totalInvoiced: `${PESO_SYMBOL}${totalInvoiced.toLocaleString()}`,
       totalReceived: `${PESO_SYMBOL}${totalReceived.toLocaleString()}`,
       outstanding: `${PESO_SYMBOL}${outstanding.toLocaleString()}`,
+      totalBudgetValue: budgetTotal,
+      totalExpensesValue: totalExpenses,
+      remainingValue: remaining,
+      totalInvoicedValue: totalInvoiced,
+      totalReceivedValue: totalReceived,
+      outstandingValue: outstanding,
+      budgetStatus,
       upcomingPayments,
       recentExpenses,
       invoices: formattedInvoices,

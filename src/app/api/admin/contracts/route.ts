@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     const contracts = await db
       .collection('contracts')
       .find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ lastUpdated: -1, createdAt: -1 })
       .limit(50)
       .toArray();
 
