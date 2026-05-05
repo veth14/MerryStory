@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, use, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowRight, ArrowLeft, Calendar, MapPin, Users, DollarSign, Briefcase, AlertTriangle, User, Tag, Loader2, CheckCircle2, Plus, Minus, Mail, Phone, X, Search, UserPlus, Check } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Calendar, MapPin, Users, DollarSign, Briefcase, AlertTriangle, User, Tag, Loader2, CheckCircle2, Plus, Minus, Mail, Phone, X, Search, UserPlus, Check, QrCode, Link2, UserCheck } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CustomSelect } from '@/components/ui/CustomInputs';
 import PostEventView from '@/components/admin/events/PostEventView';
@@ -43,7 +43,15 @@ interface GuestData {
   tableNo: string;
   plusOne: boolean;
   checkedIn: boolean;
+  qrScannedAt?: string | null;
+  usedAt?: string | null;
 }
+
+type NormalizedGuestData = GuestData & {
+  normalizedRsvpStatus: 'Confirmed' | 'Pending' | 'Declined';
+  attendanceStatus: 'Checked In' | 'Absent' | 'Pending' | 'Declined';
+  isCheckedIn: boolean;
+};
 
 type OptionRecord = {
   uid?: string;
@@ -169,6 +177,26 @@ const getInitials = (name: string) =>
 
 const isCompletedTask = (status?: string) => ['DONE', 'COMPLETED'].includes(String(status || '').toUpperCase());
 
+const isEventDatePassed = (eventDate?: string): boolean => {
+  if (!eventDate) return false;
+
+  try {
+    const parsedEventDate = /^\d{4}-\d{2}-\d{2}/.test(eventDate)
+      ? new Date(`${eventDate.slice(0, 10)}T00:00:00`)
+      : new Date(eventDate);
+
+    if (Number.isNaN(parsedEventDate.getTime())) return false;
+
+    const absentCutoff = new Date(parsedEventDate);
+    absentCutoff.setHours(0, 0, 0, 0);
+    absentCutoff.setDate(absentCutoff.getDate() + 1);
+
+    return new Date() >= absentCutoff;
+  } catch {
+    return false;
+  }
+};
+
 const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, seconds: number } | null>(null);
 
@@ -238,6 +266,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [guestSearch, setGuestSearch] = useState('');
+  const [guestPage, setGuestPage] = useState(1);
   const [newGuest, setNewGuest] = useState({
     name: '', email: '', phone: '', status: 'Confirmed', tableNo: '', plusOne: false
   });
@@ -404,6 +433,37 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
     );
   };
 
+  const confirmGuest = async (guest: GuestData) => {
+    const idToken = await user!.getIdToken();
+    const response = await fetch(`/api/events/${id}/guests/${guest._id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ status: 'Confirmed' }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to confirm guest.');
+    }
+
+    setGuests((prev) => prev.map((entry) => (entry._id === guest._id ? { ...entry, status: 'Confirmed' } : entry)));
+  };
+
+  const sendGuestLink = async (guest: GuestData) => {
+    if (!guest.email?.trim()) return;
+    
+    try {
+      const idToken = await user!.getIdToken();
+      // Implement send link API call here
+      console.log('Sending RSVP link to:', guest.email);
+      // You can show a success toast or modal here
+    } catch (error) {
+      console.error('Failed to send guest link:', error);
+    }
+  };
+
   useEffect(() => {
     if (user && id) {
       fetchEventDetails();
@@ -419,20 +479,78 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
     }
   }, [activeTab, user, id]);
 
+  useEffect(() => {
+    if (activeTab !== 'event-day' || !user || !id) return;
+
+    const refreshGuests = () => {
+      fetchGuests();
+    };
+
+    const intervalId = window.setInterval(refreshGuests, 15000);
+    window.addEventListener('focus', refreshGuests);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshGuests);
+    };
+  }, [activeTab, user, id]);
+
   const productionDate = event ? toDateInputValue(event.date) : '';
   const todayDate = toDateInputValue(new Date());
 
-  const checkedInGuests = guests.filter((guest) => guest.checkedIn).length;
-  const pendingGuests = Math.max(guests.length - checkedInGuests, 0);
+  const normalizedGuests = useMemo<NormalizedGuestData[]>(() => {
+    const eventHasPassed = isEventDatePassed(event?.date);
+
+    return guests.map((guest) => {
+      const statusValue = String(guest?.status || '').toLowerCase();
+      const normalizedRsvpStatus =
+        statusValue === 'confirmed' ? 'Confirmed' : statusValue === 'declined' ? 'Declined' : 'Pending';
+      const isCheckedIn = Boolean(guest?.checkedIn || guest?.qrScannedAt);
+      const attendanceStatus = isCheckedIn
+        ? 'Checked In'
+        : normalizedRsvpStatus === 'Confirmed' && eventHasPassed
+          ? 'Absent'
+          : normalizedRsvpStatus === 'Declined'
+            ? 'Declined'
+            : 'Pending';
+
+      return {
+        ...guest,
+        normalizedRsvpStatus,
+        attendanceStatus,
+        isCheckedIn,
+      };
+    });
+  }, [event?.date, guests]);
+
+  const checkedInGuests = normalizedGuests.filter((guest) => guest.isCheckedIn).length;
+  const pendingGuests = normalizedGuests.filter((guest) => guest.attendanceStatus === 'Pending' || guest.attendanceStatus === 'Absent').length;
   const filteredGuests = useMemo(() => {
     const searchValue = guestSearch.trim().toLowerCase();
-    if (!searchValue) return guests;
+    if (!searchValue) return normalizedGuests;
 
-    return guests.filter((guest) => {
+    return normalizedGuests.filter((guest) => {
       const name = getGuestName(guest).toLowerCase();
       return name.includes(searchValue) || guest.email?.toLowerCase().includes(searchValue);
     });
-  }, [guestSearch, guests]);
+  }, [guestSearch, normalizedGuests]);
+
+  const GUESTS_PER_PAGE = 5;
+  const totalGuestPages = Math.max(1, Math.ceil(filteredGuests.length / GUESTS_PER_PAGE));
+  const paginatedGuests = useMemo(() => {
+    const startIndex = (guestPage - 1) * GUESTS_PER_PAGE;
+    return filteredGuests.slice(startIndex, startIndex + GUESTS_PER_PAGE);
+  }, [filteredGuests, guestPage]);
+
+  useEffect(() => {
+    setGuestPage(1);
+  }, [guestSearch]);
+
+  useEffect(() => {
+    if (guestPage > totalGuestPages) {
+      setGuestPage(totalGuestPages);
+    }
+  }, [guestPage, totalGuestPages]);
 
   const timelineItems = useMemo(() => {
     const sortedTasks = [...prodTasks].sort((first, second) => {
@@ -813,14 +931,24 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                               {task.assigneeNames.length > 0 ? (
                                 <>
                                   <div className="flex -space-x-2">
-                                    {task.assigneeNames.slice(0, 3).map((name, assigneeIndex) => (
-                                      <div
-                                        key={`${task._id}-${name}-${assigneeIndex}`}
-                                        className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-black shadow-sm ${task.live ? 'bg-[#d4a017]' : task.completed ? 'bg-emerald-500' : 'bg-gray-600'}`}
-                                      >
-                                        {getInitials(name)}
-                                      </div>
-                                    ))}
+                                    {task.assigneeNames.slice(0, 3).map((name, assigneeIndex) => {
+                                      const staffMember = staffOptions.find(s => s.name === name);
+                                      return staffMember?.avatarUrl ? (
+                                        <img
+                                          key={`${task._id}-${name}-${assigneeIndex}`}
+                                          src={staffMember.avatarUrl}
+                                          alt={name}
+                                          className="w-7 h-7 rounded-full border-2 border-white shadow-sm object-cover"
+                                        />
+                                      ) : (
+                                        <div
+                                          key={`${task._id}-${name}-${assigneeIndex}`}
+                                          className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-black shadow-sm ${task.live ? 'bg-[#d4a017]' : task.completed ? 'bg-emerald-500' : 'bg-gray-600'}`}
+                                        >
+                                          {getInitials(name)}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                   <span className="text-[10px] font-bold text-gray-400">{task.assigneeNames.join(', ')}</span>
                                 </>
@@ -858,8 +986,8 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Guest <span className="text-[#facc15] italic">Check-in</span></h2>
                 <p className="text-[12px] text-gray-500 font-medium mt-1">Real-time RSVP tracking and entry</p>
               </div>
-              <button className="bg-[#facc15] hover:bg-[#eab308] text-white text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg shadow-[#facc15]/20 flex items-center gap-2">
-                <Search size={14} />
+              <button className="bg-[#facc15] hover:bg-[#eab308] text-white text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg shadow-[#facc15]/20 flex items-center gap-2 transition-all">
+                <QrCode size={14} />
                 Launch Scanner
               </button>
             </div>
@@ -892,56 +1020,138 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
               />
             </div>
 
-            {/* Guest List Header */}
-            <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 pb-3 border-b border-gray-100 mb-4">
-              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Guest Details</div>
-              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Table</div>
-              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Action</div>
+            {/* Guest List Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr>
+                    <th className="px-6 py-4 text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest border-b border-gray-50">Guest</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest border-b border-gray-50">Status</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest border-b border-gray-50 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredGuests.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-10 text-center text-sm text-[#71717a]">
+                        No guests found matching your search.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedGuests.map((guest) => {
+                      const hasEmail = Boolean(guest.email?.trim());
+                      const statusTone = guest.attendanceStatus === 'Checked In'
+                        ? { text: 'text-emerald-700', dot: 'bg-emerald-500' }
+                        : guest.attendanceStatus === 'Absent'
+                          ? { text: 'text-rose-700', dot: 'bg-rose-500' }
+                          : guest.attendanceStatus === 'Declined'
+                            ? { text: 'text-rose-700', dot: 'bg-rose-500' }
+                          : { text: 'text-amber-700', dot: 'bg-amber-500' };
+
+                      return (
+                        <tr
+                          key={guest._id}
+                          className="group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0"
+                        >
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full bg-[#f4f4f5] border border-[#e4e4e7] flex items-center justify-center text-[#71717a] text-xs font-bold shadow-sm">
+                                {getInitials(getGuestName(guest))}
+                              </div>
+                              <div>
+                                <p className="text-[#1d1d1f] font-bold text-sm">{getGuestName(guest)}</p>
+                                <p className="text-[#71717a] text-[11px]">{guest.email || 'No email'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${statusTone.dot}`}></span>
+                              <span className={`text-xs font-semibold ${statusTone.text}`}>
+                                {guest.attendanceStatus === 'Pending' ? guest.normalizedRsvpStatus : guest.attendanceStatus}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-right">
+                            {guest.attendanceStatus === 'Checked In' ? (
+                              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-white shadow-sm shadow-emerald-500/20">
+                                <Check size={13} />
+                                <span className="text-[11px] font-black uppercase tracking-[0.1em]">Checked In</span>
+                              </div>
+                            ) : guest.attendanceStatus === 'Absent' ? (
+                              <div className="inline-flex items-center gap-2 rounded-full bg-gray-500 px-5 py-3 text-white shadow-sm shadow-gray-500/20">
+                                <X size={13} />
+                                <span className="text-[11px] font-black uppercase tracking-[0.1em]">Absent</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {hasEmail ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => sendGuestLink(guest).catch((err) => console.error(err))}
+                                    className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
+                                  >
+                                    <Link2 size={13} />
+                                    Send Link
+                                  </button>
+                                ) : (
+                                  <>
+                                    {guest.normalizedRsvpStatus === 'Pending' ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => confirmGuest(guest).catch((err) => console.error(err))}
+                                        className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
+                                      >
+                                        <Check size={13} />
+                                        Confirm
+                                      </button>
+                                    ) : guest.normalizedRsvpStatus === 'Confirmed' ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleGuestCheckIn(guest).catch((err) => console.error(err))}
+                                        className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
+                                      >
+                                        <UserCheck size={13} />
+                                        Check In
+                                      </button>
+                                    ) : null}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            {/* Guest List Items */}
-            <div className="space-y-3">
-              {filteredGuests.length === 0 ? (
-                <div className="py-10 text-center">
-                  <p className="text-[13px] font-black text-gray-900">No guests found</p>
-                  <p className="text-[11px] text-gray-500 font-medium mt-2">Try another name or email keyword.</p>
-                </div>
-              ) : (
-                filteredGuests.map((guest) => (
-                  <div key={guest._id} className="grid grid-cols-[2fr_1fr_1fr] gap-4 items-center py-3 hover:bg-gray-50 -mx-4 px-4 rounded-xl transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-black ${guest.checkedIn ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                        {getInitials(getGuestName(guest))}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-black text-gray-900 truncate">{getGuestName(guest)}</div>
-                        <div className={`text-[10px] font-bold ${guest.checkedIn ? 'text-[#facc15] uppercase tracking-wider' : 'text-gray-400'}`}>
-                          {guest.checkedIn ? 'Arrived' : guest.email || 'No email listed'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <span className="text-[13px] font-black text-gray-900">{guest.tableNo || 'TBD'}</span>
-                    </div>
-                    <div className="text-right">
-                      {guest.checkedIn ? (
-                        <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider border border-emerald-100">
-                          <CheckCircle2 size={12} />
-                          Arrived
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => toggleGuestCheckIn(guest).catch((err) => console.error(err))}
-                          className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider hover:bg-gray-200 transition-colors"
-                        >
-                          <UserPlus size={12} />
-                          Check In
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
+            {/* Pagination */}
+            <div className="mt-auto px-6 py-4 flex items-center justify-between border-t border-gray-50 bg-[#fafafa]/50 rounded-b-xl">
+              <span className="text-xs text-[#a1a1aa] font-medium">Showing {filteredGuests.length} of {filteredGuests.length} Guests</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={guestPage === 1}
+                  onClick={() => setGuestPage((current) => Math.max(1, current - 1))}
+                  className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#a1a1aa] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <button className="w-8 h-8 flex items-center justify-center rounded bg-[#eebf43] text-[#1d1d1f] font-bold text-xs shadow-sm shadow-[#eebf43]/20">
+                  {guestPage}
+                </button>
+                <button
+                  type="button"
+                  disabled={guestPage >= totalGuestPages}
+                  onClick={() => setGuestPage((current) => Math.min(totalGuestPages, current + 1))}
+                  className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#1d1d1f] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 19l7-7-7-7"></path></svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
