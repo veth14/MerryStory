@@ -941,7 +941,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
               >
                 <Calendar size={14} />
-                Edit Schedule
+                Add Schedule
               </button>
             </div>
 
