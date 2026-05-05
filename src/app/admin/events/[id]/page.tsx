@@ -77,20 +77,17 @@ const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   if (!timeLeft) return <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-100 animate-pulse">Production Live</span>;
 
   return (
-    <div className="flex gap-4 items-center bg-white/50 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-gray-100 shadow-sm">
+    <div className="flex gap-3 items-center">
       {[
         { label: 'DAYS', value: timeLeft.days },
         { label: 'HRS', value: timeLeft.hours },
         { label: 'MIN', value: timeLeft.minutes },
         { label: 'SEC', value: timeLeft.seconds }
-      ].map((item, i) => (
-        <React.Fragment key={item.label}>
-          <div className="text-center min-w-[32px]">
-            <div className="text-[18px] font-black text-gray-900 leading-none tabular-nums tracking-tighter">{String(item.value).padStart(2, '0')}</div>
-            <div className="text-[7px] font-black text-[#d4a017] uppercase tracking-[0.1em] mt-1">{item.label}</div>
-          </div>
-          {i < 3 && <div className="text-gray-200 font-light text-sm mb-3">:</div>}
-        </React.Fragment>
+      ].map((item) => (
+        <div key={item.label} className="bg-white/50 backdrop-blur-sm px-5 py-4 rounded-2xl border border-gray-100 shadow-sm text-center min-w-[56px]">
+          <div className="text-[28px] font-black text-gray-900 leading-none tabular-nums tracking-tighter">{String(item.value).padStart(2, '0')}</div>
+          <div className="text-[9px] font-black text-[#d4a017] uppercase tracking-[0.1em] mt-2">{item.label}</div>
+        </div>
       ))}
     </div>
   );
@@ -588,7 +585,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
     <>
       <div className="w-full space-y-6 animate-in fade-in duration-500 pb-20">
         {/* Header Area */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
             <Link href="/admin/events" className="inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest text-gray-400 hover:text-gray-600 uppercase transition-colors mb-4">
               <ArrowLeft size={12} strokeWidth={3} /> Return to Portfolio
@@ -619,14 +616,17 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-4">
+          <div className="flex flex-col items-end gap-6">
             <Link
               href={`/admin/events/${id}/edit`}
-              className="bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] px-10 py-4 rounded-xl shadow-xl shadow-[#facc15]/20 transition-all active:scale-95 flex items-center gap-2 group"
+              className="bg-[#facc15] hover:bg-[#eab308] text-white text-[11px] font-black uppercase tracking-[0.2em] px-8 py-3.5 rounded-xl shadow-xl shadow-[#facc15]/20 transition-all active:scale-95 flex items-center gap-2 group mt-8"
             >
               EDIT DETAILS
-              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
             </Link>
+            <div className="mt-auto mb-0">
+              <CountdownTimer targetDate={event.date} />
+            </div>
           </div>
         </div>
 
