@@ -371,168 +371,237 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   );
 
   const renderEventDay = () => {
-    const filteredGuests = guests.filter((g) => {
-      const guestName = String(g.name || g.guestName || '').toLowerCase();
-      const guestEmail = String(g.email || '').toLowerCase();
-      const searchTerm = String(guestSearch || '').toLowerCase();
-      return guestName.includes(searchTerm) || guestEmail.includes(searchTerm);
-    });
-
     return (
-      <div className="animate-in fade-in duration-500 py-10 space-y-16">
-        {/* Massive Countdown Header */}
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="mb-10 inline-flex items-center gap-3 bg-gray-50 px-6 py-2.5 rounded-full border border-gray-100 shadow-inner">
-            <div className="w-2 h-2 rounded-full bg-[#facc15] animate-pulse"></div>
-            <span className="text-[11px] font-black text-gray-900 uppercase tracking-[0.2em]">Countdown to Live Production</span>
+      <div className="animate-in fade-in duration-500 space-y-8">
+        {/* KPI Cards Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Tasks Complete */}
+          <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Tasks Complete</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">18</span>
+              <span className="text-[18px] font-bold text-gray-400">/25</span>
+            </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-[#facc15] rounded-full" style={{ width: '72%' }}></div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <BigCountdownItem targetDate={event!.date} />
+          {/* Timeline Progress */}
+          <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Timeline Progress</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">65</span>
+              <span className="text-[18px] font-bold text-gray-400">%</span>
+            </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-gray-900 rounded-full" style={{ width: '65%' }}></div>
+            </div>
           </div>
 
-          <div className="mt-20 p-10 bg-[#111827] rounded-[40px] text-white shadow-2xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[#facc15]/5 rounded-full -mr-32 -mt-32 blur-3xl transition-all group-hover:scale-125 duration-1000"></div>
-            <div className="relative z-10">
-              <h2 className="text-[32px] font-black tracking-tight mb-4 text-[#facc15] italic uppercase">Command Center Activation</h2>
-              <p className="text-white/60 max-w-xl mx-auto text-[15px] font-medium leading-relaxed">
-                Live controls for guest check-ins, vendor logistics, and real-time alerts will become active on <span className="text-white font-bold">{new Date(event!.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>. 
-              </p>
-              <div className="mt-10 flex justify-center gap-6">
-                <div className="w-16 h-1.5 w-full max-w-[160px] bg-white/10 rounded-full overflow-hidden">
-                   <div className="h-full bg-[#facc15] animate-shimmer" style={{ width: '40%' }}></div>
+          {/* Guests Checked In */}
+          <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Guests Checked In</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">142</span>
+              <span className="text-[18px] font-bold text-gray-400">/350</span>
+            </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-[#facc15] rounded-full" style={{ width: '40%' }}></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Program Timeline */}
+          <div className="bg-white rounded-2xl p-8 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Program <span className="text-[#facc15] italic">Timeline</span></h2>
+                <p className="text-[12px] text-gray-500 font-medium mt-1">Live stage cues and schedule</p>
+              </div>
+              <button className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-xl">
+                <Calendar size={14} />
+                Edit Schedule
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Timeline Item 1 */}
+              <div className="flex gap-4 pb-6 border-b border-gray-100">
+                <div className="flex flex-col items-center">
+                  <div className="w-3 h-3 rounded-full bg-gray-200 border-2 border-white shadow-sm"></div>
+                  <div className="w-0.5 h-full bg-gray-100 mt-2"></div>
+                </div>
+                <div className="flex-1 pt-0.5">
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">10:00 AM - 11:30 AM</div>
+                  <h3 className="text-[16px] font-black text-gray-900 mb-1">Pre-Show & Soundcheck</h3>
+                  <p className="text-[12px] text-gray-500 font-medium">Full run-through with lighting cues</p>
+                </div>
+              </div>
+
+              {/* Timeline Item 2 - Live Now */}
+              <div className="flex gap-4 pb-6 border-b border-gray-100 bg-[#facc15]/5 -mx-4 px-4 py-4 rounded-xl">
+                <div className="flex flex-col items-center">
+                  <div className="w-3 h-3 rounded-full bg-[#facc15] border-2 border-white shadow-lg shadow-[#facc15]/30 animate-pulse"></div>
+                  <div className="w-0.5 h-full bg-[#facc15]/20 mt-2"></div>
+                </div>
+                <div className="flex-1 pt-0.5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-black text-[#d4a017] uppercase tracking-widest">12:00 PM - 01:00 PM</span>
+                    <span className="bg-[#facc15] text-gray-900 text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-wider">Live Now</span>
+                  </div>
+                  <h3 className="text-[16px] font-black text-gray-900 mb-2">Opening Keynote</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                      <span className="font-bold">Cue:</span>
+                      <span className="font-medium">Video intro plays, lights dim to 20%</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px]">
+                      <div className="flex items-center gap-1.5">
+                        <User size={12} className="text-gray-400" />
+                        <span className="font-bold text-gray-600">Speaker: Mayor</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                        <span className="font-bold text-emerald-600">Mic 1 Active</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeline Item 3 */}
+              <div className="flex gap-4">
+                <div className="flex flex-col items-center">
+                  <div className="w-3 h-3 rounded-full bg-gray-200 border-2 border-white shadow-sm"></div>
+                </div>
+                <div className="flex-1 pt-0.5">
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">01:15 PM - 02:30 PM</div>
+                  <h3 className="text-[16px] font-black text-gray-900 mb-1">Lunch & Networking</h3>
+                  <p className="text-[12px] text-gray-500 font-medium">Buffet opens in Main Hall</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Guest Check-in */}
+          <div className="bg-white rounded-2xl p-8 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Guest <span className="text-[#facc15] italic">Check-in</span></h2>
+                <p className="text-[12px] text-gray-500 font-medium mt-1">Real-time RSVP tracking and entry</p>
+              </div>
+              <button className="bg-[#facc15] hover:bg-[#eab308] text-white text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg shadow-[#facc15]/20 flex items-center gap-2">
+                <Search size={14} />
+                Launch Scanner
+              </button>
+            </div>
+
+            {/* Guest Stats */}
+            <div className="grid grid-cols-3 gap-4 mb-8">
+              <div className="text-center">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected</div>
+                <div className="text-[32px] font-black text-gray-900 leading-none">350</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] font-black text-[#d4a017] uppercase tracking-widest mb-2">Checked In</div>
+                <div className="text-[32px] font-black text-[#facc15] leading-none">142</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Late/Pending</div>
+                <div className="text-[32px] font-black text-gray-400 leading-none">208</div>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative mb-6">
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder="Search guests by name or email..."
+                className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-[13px] font-bold text-gray-900 focus:border-[#facc15] transition-all outline-none"
+              />
+            </div>
+
+            {/* Guest List Header */}
+            <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 pb-3 border-b border-gray-100 mb-4">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Guest Details</div>
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Table</div>
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Action</div>
+            </div>
+
+            {/* Guest List Items */}
+            <div className="space-y-3">
+              {/* Guest 1 */}
+              <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 items-center py-3 hover:bg-gray-50 -mx-4 px-4 rounded-xl transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-[12px] font-black">
+                    MS
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-black text-gray-900">Mayor Santos</div>
+                    <div className="text-[10px] font-black text-[#facc15] uppercase tracking-wider">VIP Guest</div>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <span className="text-[13px] font-black text-gray-900">VIP-1</span>
+                </div>
+                <div className="text-right">
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider border border-emerald-100">
+                    <CheckCircle2 size={12} />
+                    Arrived
+                  </span>
+                </div>
+              </div>
+
+              {/* Guest 2 */}
+              <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 items-center py-3 hover:bg-gray-50 -mx-4 px-4 rounded-xl transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-[12px] font-black">
+                    JD
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-black text-gray-900">Jane Dela Cruz</div>
+                    <div className="text-[10px] font-bold text-gray-400">jane@email.com</div>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <span className="text-[13px] font-black text-gray-900">12</span>
+                </div>
+                <div className="text-right">
+                  <button className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider hover:bg-gray-200 transition-colors">
+                    <UserPlus size={12} />
+                    Check In
+                  </button>
+                </div>
+              </div>
+
+              {/* Guest 3 */}
+              <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 items-center py-3 hover:bg-gray-50 -mx-4 px-4 rounded-xl transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-[12px] font-black">
+                    MR
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-black text-gray-900">Maria Reyes</div>
+                    <div className="text-[10px] font-bold text-gray-400">maria@email.com</div>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <span className="text-[13px] font-black text-gray-900">8</span>
+                </div>
+                <div className="text-right">
+                  <button className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider hover:bg-gray-200 transition-colors">
+                    <UserPlus size={12} />
+                    Check In
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Guest Management Section */}
-        <div className="space-y-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <h2 className="text-[28px] font-black text-gray-900 tracking-tight">Guest <span className="text-[#facc15] italic">Manifest</span></h2>
-              <p className="text-[14px] text-gray-500 font-medium">Real-time RSVP tracking and check-in station</p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative">
-                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search guests..." 
-                  value={guestSearch}
-                  onChange={(e) => setGuestSearch(e.target.value)}
-                  className="pl-11 pr-4 py-3 bg-white border border-gray-100 rounded-xl text-[14px] font-bold text-gray-900 w-full sm:w-64 focus:border-[#facc15] transition-all outline-none"
-                />
-              </div>
-              <button 
-                onClick={() => setIsGuestModalOpen(true)}
-                className="bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] px-8 py-3 rounded-xl shadow-xl shadow-[#facc15]/10 flex items-center gap-2"
-              >
-                <Plus size={16} strokeWidth={3} />
-                Add Guest
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-gray-50/50 border-b border-gray-100">
-                    <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Guest Details</th>
-                    <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">RSVP Status</th>
-                    <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Table</th>
-                    <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Check-in</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filteredGuests.map((guest) => (
-                    <tr key={guest._id} className="group hover:bg-gray-50/50 transition-colors">
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-[14px] font-black text-gray-400">
-                            {String(guest.name || guest.guestName || '').charAt(0)}
-                          </div>
-                          <div>
-                            <div className="text-[15px] font-black text-gray-900">{guest.name} {guest.plusOne && <span className="text-[#facc15] text-[10px]">+1</span>}</div>
-                            <div className="text-[12px] font-bold text-gray-400">{guest.email || guest.phone || 'No contact info'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6 text-center">
-                        <span className={`inline-flex px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                          guest.status === 'Confirmed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                          guest.status === 'Declined' ? 'bg-red-50 text-red-600 border border-red-100' :
-                          'bg-amber-50 text-amber-600 border border-amber-100'
-                        }`}>
-                          {guest.status}
-                        </span>
-                      </td>
-                      <td className="px-8 py-6 text-center">
-                        <span className="text-[14px] font-black text-gray-900"># {guest.tableNo}</span>
-                      </td>
-                      <td className="px-8 py-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button 
-                            onClick={async () => {
-                              const newChecked = !guest.checkedIn;
-                              // Optimistic update
-                              setGuests(prev => prev.map(g => g._id === guest._id ? { ...g, checkedIn: newChecked } : g));
-                              
-                              const idToken = await user!.getIdToken();
-                              await fetch(`/api/events/${id}/guests/${guest._id}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-                                body: JSON.stringify({ checkedIn: newChecked }),
-                              });
-                              fetchEventDetails();
-                            }}
-                            className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
-                              guest.checkedIn 
-                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
-                              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                            }`}
-                          >
-                            <CheckCircle2 size={14} strokeWidth={3} />
-                            {guest.checkedIn ? 'Checked In' : 'Check In'}
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              if (confirm(`Delete guest ${guest.name}?`)) {
-                                const idToken = await user!.getIdToken();
-                                const res = await fetch(`/api/events/${id}/guests/${guest._id}`, {
-                                  method: 'DELETE',
-                                  headers: { Authorization: `Bearer ${idToken}` },
-                                });
-                                if (res.ok) {
-                                  setGuests(prev => prev.filter(g => g._id !== guest._id));
-                                  fetchEventDetails();
-                                }
-                              }
-                            }}
-                            className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
-                          >
-                            <X size={14} strokeWidth={3} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredGuests.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-8 py-20 text-center">
-                        <p className="text-[14px] font-bold text-gray-400 uppercase tracking-widest">No guests found in manifest</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
       </div>
     );
   };
