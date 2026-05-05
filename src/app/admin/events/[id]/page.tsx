@@ -858,7 +858,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
               </div>
               <button
                 onClick={() => setIsScheduleModalOpen(true)}
-                className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-xl"
+                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
               >
                 <Calendar size={14} />
                 Edit Schedule
@@ -882,7 +882,8 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 <p className="text-[12px] text-gray-500 font-medium mt-2">Use Edit Schedule to add event-day tasks into the live program timeline.</p>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="overflow-y-auto pr-2" style={{ maxHeight: '500px' }}>
+                <div className="space-y-6">
                 {timelineItems.map((task, index) => {
                   const accentClass = task.completed
                     ? 'bg-emerald-500'
@@ -962,10 +963,10 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                               console.error(err);
                               setEventDayError('Could not update the program timeline status.');
                             })}
-                            className={`shrink-0 text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border transition-colors ${
+                            className={`shrink-0 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
                               task.completed
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
-                                : 'border-gray-200 bg-white text-gray-500 hover:text-gray-700'
+                                ? 'bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-bold tracking-widest uppercase hover:bg-emerald-100'
+                                : 'bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase hover:bg-[#fff6d8]'
                             }`}
                           >
                             {task.completed ? 'Reopen' : 'Mark Done'}
@@ -975,6 +976,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>
@@ -1124,6 +1126,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                       );
                     })
                   )}
+                  {/* Empty rows to maintain fixed height */}
+                  {Array.from({ length: GUESTS_PER_PAGE - paginatedGuests.length }).map((_, index) => (
+                    <tr key={`empty-${index}`} style={{ height: '73px' }}>
+                      <td colSpan={3} className="border-b border-gray-50 last:border-b-0"></td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
