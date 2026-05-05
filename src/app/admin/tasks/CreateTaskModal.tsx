@@ -617,13 +617,13 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-visible animate-in zoom-in-95 duration-300">
-        <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+      <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-visible animate-in zoom-in-95 duration-300">
+        <div className="px-6 sm:px-8 py-5 sm:py-6 border-b border-gray-100 flex justify-between items-start">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Add New Task</h3>
-            <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mt-1">Assignment and schedule setup</p>
+            <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">Add New <span className="text-[#facc15] italic">Task</span></h2>
+            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Assignment and schedule setup</p>
           </div>
-          <button onClick={onClose} type="button" className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+          <button onClick={onClose} type="button" className="text-gray-400 hover:text-gray-600 transition-colors p-1 shrink-0">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -701,13 +701,13 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
           )}
 
           <div className="pt-5 mt-2 flex items-center justify-end gap-3 border-t border-gray-100">
-            <button type="button" onClick={onClose} className="px-6 py-3 text-[12px] font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-wider">
+            <button type="button" onClick={onClose} className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400">
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-8 py-3 bg-[#eebf43] hover:bg-[#dcae32] disabled:opacity-70 text-white text-[12px] font-extrabold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#eebf43]/20"
+              className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 hover:bg-[#eab308] disabled:opacity-70 transition-all"
             >
               {isSubmitting ? 'Creating...' : 'Create Task'}
             </button>

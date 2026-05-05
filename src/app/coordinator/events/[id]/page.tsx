@@ -1108,23 +1108,23 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
 
       <div className="w-full mt-10">
         <div className="w-full flex flex-col">
-          <div className="border-b-2 border-gray-100 flex overflow-x-auto scrollbar-hide mb-8">
+          <div className="border-b-2 border-gray-100 flex flex-wrap mb-8">
             <button
               onClick={() => handleTabChange('overview')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'overview' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'overview' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <Calendar size={16} /> Schedule & Info
             </button>
             <button
               onClick={() => handleTabChange('tasks')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'tasks' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'tasks' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <ClipboardCheck size={16} /> Assigned Tasks
               <span className={`ml-1.5 text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'tasks' ? 'bg-[#1d1d1f] text-white' : 'bg-gray-200 text-gray-500'}`}>{pendingTasks.length}</span>
             </button>
             <button
               onClick={() => handleTabChange('rsvp')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'rsvp' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'rsvp' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <Users size={16} /> Guest List
             </button>
