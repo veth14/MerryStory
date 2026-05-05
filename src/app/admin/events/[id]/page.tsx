@@ -1,10 +1,12 @@
 'use client';
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, use, useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ArrowLeft, Calendar, MapPin, Users, DollarSign, Briefcase, AlertTriangle, User, Tag, Loader2, CheckCircle2, Plus, Minus, Mail, Phone, X, Search, UserPlus, Check } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CustomSelect } from '@/components/ui/CustomInputs';
 import PostEventView from '@/components/admin/events/PostEventView';
+import EventDayScheduleModal from './EventDayScheduleModal';
+import type { StaffOption, VendorOption } from '@/app/admin/tasks/CreateTaskModal';
 
 interface EventData {
   _id: string;
@@ -42,6 +44,130 @@ interface GuestData {
   plusOne: boolean;
   checkedIn: boolean;
 }
+
+type OptionRecord = {
+  uid?: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+  appRole?: string;
+  avatarUrl?: string | null;
+  category?: string;
+  vendorName?: string;
+  company?: string;
+  businessName?: string;
+  title?: string;
+  serviceCategory?: string;
+  vendorCategory?: string;
+  serviceType?: string;
+  type?: string;
+};
+
+interface ProdTaskData {
+  _id: string;
+  taskId?: string;
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  due?: {
+    date?: string;
+    time?: string;
+  };
+  assignee?: {
+    name?: string;
+  };
+  assignees?: { name?: string }[];
+  vendor?: {
+    name?: string;
+  };
+}
+
+const extractStaff = (payload: any): StaffOption[] => {
+  const records = Array.isArray(payload) ? payload : Array.isArray(payload?.users) ? payload.users : [];
+
+  return records
+    .map((record: OptionRecord) => {
+      const name = record?.name?.trim() || `${record?.firstName || ''} ${record?.lastName || ''}`.trim();
+      if (!name) return null;
+
+      return {
+        uid: record.uid || name,
+        name,
+        role: record.role || 'PRODUCTION STAFF',
+        appRole: record.appRole || 'staff',
+        avatarUrl: record.avatarUrl || null,
+      };
+    })
+    .filter((record): record is StaffOption => Boolean(record));
+};
+
+const extractVendorOptions = (payload: any): VendorOption[] => {
+  const records = Array.isArray(payload) ? payload : Array.isArray(payload?.vendors) ? payload.vendors : [];
+
+  return records
+    .map((record: OptionRecord | string) => {
+      if (typeof record === 'string') {
+        const normalized = record.trim();
+        return normalized ? { name: normalized, category: '' } : null;
+      }
+
+      const name =
+        record?.name?.trim() ||
+        record?.vendorName?.trim() ||
+        record?.company?.trim() ||
+        record?.businessName?.trim() ||
+        record?.title?.trim() ||
+        `${record?.firstName || ''} ${record?.lastName || ''}`.trim();
+      if (!name) return null;
+
+      return {
+        name,
+        category:
+          record.category?.trim() ||
+          record.serviceCategory?.trim() ||
+          record.vendorCategory?.trim() ||
+          record.serviceType?.trim() ||
+          record.type?.trim() ||
+          '',
+      };
+    })
+    .filter((record): record is VendorOption => Boolean(record));
+};
+
+const toDateInputValue = (value: string | Date) => {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+};
+
+const formatTimeLabel = (value?: string) => {
+  if (!value) return 'Time TBD';
+
+  const [hoursValue, minutesValue] = value.split(':');
+  const hours = Number(hoursValue);
+  const minutes = Number(minutesValue);
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const normalizedHour = hours % 12 || 12;
+  return `${String(normalizedHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
+};
+
+const getGuestName = (guest: GuestData) => guest.guestName || guest.name || 'Unnamed Guest';
+
+const getInitials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('') || 'NA';
+
+const isCompletedTask = (status?: string) => ['DONE', 'COMPLETED'].includes(String(status || '').toUpperCase());
 
 const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, seconds: number } | null>(null);
@@ -104,6 +230,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true);
   
   const [guests, setGuests] = useState<GuestData[]>([]);
+  const [prodTasks, setProdTasks] = useState<ProdTaskData[]>([]);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
+  const [isEventDayLoading, setIsEventDayLoading] = useState(false);
+  const [eventDayError, setEventDayError] = useState('');
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [guestSearch, setGuestSearch] = useState('');
   const [newGuest, setNewGuest] = useState({
@@ -145,6 +277,133 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
     }
   };
 
+  const fetchEventDayResources = async () => {
+    try {
+      setIsEventDayLoading(true);
+      setEventDayError('');
+      const idToken = await user!.getIdToken();
+
+      const [taskResponse, staffResponse, vendorResponse] = await Promise.all([
+        fetch(`/api/admin/event-day?eventId=${id}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+        fetch('/api/staff', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+        fetch('/api/vendors', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+      ]);
+
+      if (!taskResponse.ok) {
+        throw new Error('Failed to fetch event-day timeline.');
+      }
+
+      const [tasksPayload, staffPayload, vendorPayload] = await Promise.all([
+        taskResponse.json(),
+        staffResponse.ok ? staffResponse.json() : Promise.resolve([]),
+        vendorResponse.ok ? vendorResponse.json() : Promise.resolve([]),
+      ]);
+
+      setProdTasks(Array.isArray(tasksPayload) ? tasksPayload : []);
+      setStaffOptions(extractStaff(staffPayload));
+      setVendorOptions(extractVendorOptions(vendorPayload));
+    } catch (err) {
+      console.error('Failed to fetch event-day resources', err);
+      setEventDayError('Could not load the program timeline.');
+    } finally {
+      setIsEventDayLoading(false);
+    }
+  };
+
+  const handleCreateProdTask = async (payload: {
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    dueDate: string;
+    dueTime: string;
+    assignees: string[];
+    vendor: string;
+  }) => {
+    const idToken = await user!.getIdToken();
+    const response = await fetch('/api/admin/event-day', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        eventId: id,
+        ...payload,
+      }),
+    });
+
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Failed to save schedule.');
+    }
+
+    setProdTasks((prev) =>
+      [...prev, body].sort((first, second) => {
+        const firstKey = `${first?.due?.date || ''} ${first?.due?.time || ''}`;
+        const secondKey = `${second?.due?.date || ''} ${second?.due?.time || ''}`;
+        return firstKey.localeCompare(secondKey);
+      })
+    );
+  };
+
+  const updateProdTaskStatus = async (task: ProdTaskData, nextStatus: string) => {
+    const idToken = await user!.getIdToken();
+    const response = await fetch('/api/admin/event-day', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        taskObjectId: task._id,
+        status: nextStatus,
+      }),
+    });
+
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Failed to update schedule.');
+    }
+
+    setProdTasks((prev) => prev.map((entry) => (entry._id === task._id ? body : entry)));
+  };
+
+  const toggleGuestCheckIn = async (guest: GuestData) => {
+    const idToken = await user!.getIdToken();
+    const response = await fetch(`/api/events/${id}/guests/${guest._id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ checkedIn: !guest.checkedIn }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update guest check-in.');
+    }
+
+    setGuests((prev) => prev.map((entry) => (entry._id === guest._id ? { ...entry, checkedIn: !guest.checkedIn } : entry)));
+    setEvent((prev) =>
+      prev
+        ? {
+            ...prev,
+            guests: {
+              ...prev.guests,
+              checkedIn: prev.guests.checkedIn + (guest.checkedIn ? -1 : 1),
+            },
+          }
+        : prev
+    );
+  };
+
   useEffect(() => {
     if (user && id) {
       fetchEventDetails();
@@ -154,10 +413,68 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
   // Real-time guest fetch on tab switch to event-day
   useEffect(() => {
-    if (activeTab === 'event-day') {
+    if (activeTab === 'event-day' && user && id) {
       fetchGuests();
+      fetchEventDayResources();
     }
-  }, [activeTab]);
+  }, [activeTab, user, id]);
+
+  const productionDate = event ? toDateInputValue(event.date) : '';
+  const todayDate = toDateInputValue(new Date());
+
+  const checkedInGuests = guests.filter((guest) => guest.checkedIn).length;
+  const pendingGuests = Math.max(guests.length - checkedInGuests, 0);
+  const filteredGuests = useMemo(() => {
+    const searchValue = guestSearch.trim().toLowerCase();
+    if (!searchValue) return guests;
+
+    return guests.filter((guest) => {
+      const name = getGuestName(guest).toLowerCase();
+      return name.includes(searchValue) || guest.email?.toLowerCase().includes(searchValue);
+    });
+  }, [guestSearch, guests]);
+
+  const timelineItems = useMemo(() => {
+    const sortedTasks = [...prodTasks].sort((first, second) => {
+      const firstKey = `${first?.due?.date || ''} ${first?.due?.time || ''}`;
+      const secondKey = `${second?.due?.date || ''} ${second?.due?.time || ''}`;
+      return firstKey.localeCompare(secondKey);
+    });
+
+    const now = new Date();
+    const isToday = productionDate === todayDate;
+
+    return sortedTasks.map((task, index) => {
+      const nextTask = sortedTasks[index + 1];
+      const dueDate = task?.due?.date || productionDate;
+      const dueTime = task?.due?.time || '';
+      const dueAt = dueTime ? new Date(`${dueDate}T${dueTime}:00`) : null;
+      const nextDueAt = nextTask?.due?.time ? new Date(`${nextTask?.due?.date || productionDate}T${nextTask.due.time}:00`) : null;
+      const completed = isCompletedTask(task.status);
+      const live =
+        !completed &&
+        isToday &&
+        !!dueAt &&
+        !Number.isNaN(dueAt.getTime()) &&
+        dueAt.getTime() <= now.getTime() &&
+        (!nextDueAt || Number.isNaN(nextDueAt.getTime()) || now.getTime() < nextDueAt.getTime());
+
+      return {
+        ...task,
+        dueDate,
+        dueTime,
+        completed,
+        live,
+        upcoming: !completed && !live,
+        assigneeNames:
+          task.assignees?.map((entry) => entry?.name).filter(Boolean) ||
+          (task.assignee?.name ? [task.assignee.name] : []),
+      };
+    });
+  }, [prodTasks, productionDate, todayDate]);
+
+  const completedTimelineCount = timelineItems.filter((task) => task.completed).length;
+  const timelineProgress = timelineItems.length ? Math.round((completedTimelineCount / timelineItems.length) * 100) : 0;
 
   if (loading) {
     return (
@@ -379,11 +696,11 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Tasks Complete</h3>
             <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">18</span>
-              <span className="text-[18px] font-bold text-gray-400">/25</span>
+              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">{completedTimelineCount}</span>
+              <span className="text-[18px] font-bold text-gray-400">/{timelineItems.length}</span>
             </div>
             <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-[#facc15] rounded-full" style={{ width: '72%' }}></div>
+              <div className="h-full bg-[#facc15] rounded-full" style={{ width: `${timelineProgress}%` }}></div>
             </div>
           </div>
 
@@ -391,11 +708,11 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Timeline Progress</h3>
             <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">65</span>
+              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">{timelineProgress}</span>
               <span className="text-[18px] font-bold text-gray-400">%</span>
             </div>
             <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-gray-900 rounded-full" style={{ width: '65%' }}></div>
+              <div className="h-full bg-gray-900 rounded-full" style={{ width: `${timelineProgress}%` }}></div>
             </div>
           </div>
 
@@ -403,11 +720,11 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Guests Checked In</h3>
             <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">142</span>
-              <span className="text-[18px] font-bold text-gray-400">/350</span>
+              <span className="text-[48px] font-black text-gray-900 tracking-tight leading-none">{checkedInGuests}</span>
+              <span className="text-[18px] font-bold text-gray-400">/{guests.length || event.guests.invited}</span>
             </div>
             <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-[#facc15] rounded-full" style={{ width: '40%' }}></div>
+              <div className="h-full bg-[#facc15] rounded-full" style={{ width: `${guests.length ? (checkedInGuests / guests.length) * 100 : 0}%` }}></div>
             </div>
           </div>
         </div>
@@ -421,69 +738,117 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Program <span className="text-[#facc15] italic">Timeline</span></h2>
                 <p className="text-[12px] text-gray-500 font-medium mt-1">Live stage cues and schedule</p>
               </div>
-              <button className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-xl">
+              <button
+                onClick={() => setIsScheduleModalOpen(true)}
+                className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-xl"
+              >
                 <Calendar size={14} />
                 Edit Schedule
               </button>
             </div>
 
-            <div className="space-y-6">
-              {/* Timeline Item 1 */}
-              <div className="flex gap-4 pb-6 border-b border-gray-100">
-                <div className="flex flex-col items-center">
-                  <div className="w-3 h-3 rounded-full bg-gray-200 border-2 border-white shadow-sm"></div>
-                  <div className="w-0.5 h-full bg-gray-100 mt-2"></div>
-                </div>
-                <div className="flex-1 pt-0.5">
-                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">10:00 AM - 11:30 AM</div>
-                  <h3 className="text-[16px] font-black text-gray-900 mb-1">Pre-Show & Soundcheck</h3>
-                  <p className="text-[12px] text-gray-500 font-medium">Full run-through with lighting cues</p>
-                </div>
+            {eventDayError && (
+              <div className="mb-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[12px] font-bold text-red-600">
+                {eventDayError}
               </div>
+            )}
 
-              {/* Timeline Item 2 - Live Now */}
-              <div className="flex gap-4 pb-6 border-b border-gray-100 bg-[#facc15]/5 -mx-4 px-4 py-4 rounded-xl">
-                <div className="flex flex-col items-center">
-                  <div className="w-3 h-3 rounded-full bg-[#facc15] border-2 border-white shadow-lg shadow-[#facc15]/30 animate-pulse"></div>
-                  <div className="w-0.5 h-full bg-[#facc15]/20 mt-2"></div>
-                </div>
-                <div className="flex-1 pt-0.5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-black text-[#d4a017] uppercase tracking-widest">12:00 PM - 01:00 PM</span>
-                    <span className="bg-[#facc15] text-gray-900 text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-wider">Live Now</span>
-                  </div>
-                  <h3 className="text-[16px] font-black text-gray-900 mb-2">Opening Keynote</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
-                      <span className="font-bold">Cue:</span>
-                      <span className="font-medium">Video intro plays, lights dim to 20%</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-[11px]">
-                      <div className="flex items-center gap-1.5">
-                        <User size={12} className="text-gray-400" />
-                        <span className="font-bold text-gray-600">Speaker: Mayor</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                        <span className="font-bold text-emerald-600">Mic 1 Active</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            {isEventDayLoading ? (
+              <div className="py-14 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-6 h-6 text-[#eebf43] animate-spin" />
+                <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Loading schedule</p>
               </div>
+            ) : timelineItems.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center">
+                <p className="text-[16px] font-black text-gray-900">No program timeline yet</p>
+                <p className="text-[12px] text-gray-500 font-medium mt-2">Use Edit Schedule to add event-day tasks into the live program timeline.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {timelineItems.map((task, index) => {
+                  const accentClass = task.completed
+                    ? 'bg-emerald-500'
+                    : task.live
+                      ? 'bg-[#facc15] shadow-lg shadow-[#facc15]/30 animate-pulse'
+                      : 'bg-gray-200';
+                  const wrapperClass = task.live
+                    ? 'bg-[#facc15]/5 -mx-4 px-4 py-4 rounded-xl'
+                    : '';
+                  const timeClass = task.live ? 'text-[#d4a017]' : 'text-gray-400';
+                  const connectorClass = task.live ? 'bg-[#facc15]/20' : 'bg-gray-100';
 
-              {/* Timeline Item 3 */}
-              <div className="flex gap-4">
-                <div className="flex flex-col items-center">
-                  <div className="w-3 h-3 rounded-full bg-gray-200 border-2 border-white shadow-sm"></div>
-                </div>
-                <div className="flex-1 pt-0.5">
-                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">01:15 PM - 02:30 PM</div>
-                  <h3 className="text-[16px] font-black text-gray-900 mb-1">Lunch & Networking</h3>
-                  <p className="text-[12px] text-gray-500 font-medium">Buffet opens in Main Hall</p>
-                </div>
+                  return (
+                    <div
+                      key={task._id || `${task.title}-${index}`}
+                      className={`flex gap-4 ${index !== timelineItems.length - 1 ? 'pb-6 border-b border-gray-100' : ''} ${wrapperClass}`}
+                    >
+                      <div className="flex flex-col items-center">
+                        <div className={`w-3 h-3 rounded-full border-2 border-white shadow-sm flex items-center justify-center ${accentClass}`}>
+                          {task.completed && <Check size={8} className="text-white" strokeWidth={4} />}
+                        </div>
+                        {index !== timelineItems.length - 1 && <div className={`w-0.5 h-full mt-2 ${connectorClass}`}></div>}
+                      </div>
+                      <div className="flex-1 pt-0.5 min-w-0">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${timeClass}`}>{formatTimeLabel(task.dueTime)}</span>
+                          {task.live && <span className="bg-[#facc15] text-gray-900 text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-wider">Live Now</span>}
+                          {task.completed && <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-wider border border-emerald-100">Completed</span>}
+                          {task.upcoming && <span className="bg-gray-100 text-gray-500 text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-wider">Upcoming</span>}
+                        </div>
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <h3 className="text-[16px] font-black text-gray-900 mb-1 break-words">{task.title}</h3>
+                            <p className="text-[12px] text-gray-500 font-medium mb-3 break-words">{task.description || 'No schedule notes added.'}</p>
+                            <div className="flex flex-wrap items-center gap-3 mb-3">
+                              <div className="flex items-center gap-1.5 text-[11px]">
+                                <User size={12} className="text-gray-400" />
+                                <span className="font-bold text-gray-600">{task.vendor?.name && task.vendor.name !== 'None' ? task.vendor.name : 'Internal team'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className={`w-1.5 h-1.5 rounded-full ${task.completed ? 'bg-emerald-500' : task.live ? 'bg-[#facc15]' : 'bg-gray-300'}`}></div>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{task.priority || 'MEDIUM'} Priority</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {task.assigneeNames.length > 0 ? (
+                                <>
+                                  <div className="flex -space-x-2">
+                                    {task.assigneeNames.slice(0, 3).map((name, assigneeIndex) => (
+                                      <div
+                                        key={`${task._id}-${name}-${assigneeIndex}`}
+                                        className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-black shadow-sm ${task.live ? 'bg-[#d4a017]' : task.completed ? 'bg-emerald-500' : 'bg-gray-600'}`}
+                                      >
+                                        {getInitials(name)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <span className="text-[10px] font-bold text-gray-400">{task.assigneeNames.join(', ')}</span>
+                                </>
+                              ) : (
+                                <span className="text-[10px] font-bold text-gray-400">Unassigned</span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => updateProdTaskStatus(task, task.completed ? 'TO DO' : 'DONE').catch((err) => {
+                              console.error(err);
+                              setEventDayError('Could not update the program timeline status.');
+                            })}
+                            className={`shrink-0 text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border transition-colors ${
+                              task.completed
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                : 'border-gray-200 bg-white text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            {task.completed ? 'Reopen' : 'Mark Done'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </div>
 
           {/* Guest Check-in */}
@@ -503,15 +868,15 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
             <div className="grid grid-cols-3 gap-4 mb-8">
               <div className="text-center">
                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected</div>
-                <div className="text-[32px] font-black text-gray-900 leading-none">350</div>
+                <div className="text-[32px] font-black text-gray-900 leading-none">{guests.length || event.guests.invited}</div>
               </div>
               <div className="text-center">
                 <div className="text-[10px] font-black text-[#d4a017] uppercase tracking-widest mb-2">Checked In</div>
-                <div className="text-[32px] font-black text-[#facc15] leading-none">142</div>
+                <div className="text-[32px] font-black text-[#facc15] leading-none">{checkedInGuests}</div>
               </div>
               <div className="text-center">
                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Late/Pending</div>
-                <div className="text-[32px] font-black text-gray-400 leading-none">208</div>
+                <div className="text-[32px] font-black text-gray-400 leading-none">{pendingGuests}</div>
               </div>
             </div>
 
@@ -521,6 +886,8 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
               <input 
                 type="text" 
                 placeholder="Search guests by name or email..."
+                value={guestSearch}
+                onChange={(event) => setGuestSearch(event.target.value)}
                 className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-[13px] font-bold text-gray-900 focus:border-[#facc15] transition-all outline-none"
               />
             </div>
@@ -534,71 +901,47 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
             {/* Guest List Items */}
             <div className="space-y-3">
-              {/* Guest 1 */}
-              <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 items-center py-3 hover:bg-gray-50 -mx-4 px-4 rounded-xl transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-[12px] font-black">
-                    MS
+              {filteredGuests.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-[13px] font-black text-gray-900">No guests found</p>
+                  <p className="text-[11px] text-gray-500 font-medium mt-2">Try another name or email keyword.</p>
+                </div>
+              ) : (
+                filteredGuests.map((guest) => (
+                  <div key={guest._id} className="grid grid-cols-[2fr_1fr_1fr] gap-4 items-center py-3 hover:bg-gray-50 -mx-4 px-4 rounded-xl transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-black ${guest.checkedIn ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                        {getInitials(getGuestName(guest))}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-black text-gray-900 truncate">{getGuestName(guest)}</div>
+                        <div className={`text-[10px] font-bold ${guest.checkedIn ? 'text-[#facc15] uppercase tracking-wider' : 'text-gray-400'}`}>
+                          {guest.checkedIn ? 'Arrived' : guest.email || 'No email listed'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <span className="text-[13px] font-black text-gray-900">{guest.tableNo || 'TBD'}</span>
+                    </div>
+                    <div className="text-right">
+                      {guest.checkedIn ? (
+                        <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider border border-emerald-100">
+                          <CheckCircle2 size={12} />
+                          Arrived
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => toggleGuestCheckIn(guest).catch((err) => console.error(err))}
+                          className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider hover:bg-gray-200 transition-colors"
+                        >
+                          <UserPlus size={12} />
+                          Check In
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-[13px] font-black text-gray-900">Mayor Santos</div>
-                    <div className="text-[10px] font-black text-[#facc15] uppercase tracking-wider">VIP Guest</div>
-                  </div>
-                </div>
-                <div className="text-center">
-                  <span className="text-[13px] font-black text-gray-900">VIP-1</span>
-                </div>
-                <div className="text-right">
-                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider border border-emerald-100">
-                    <CheckCircle2 size={12} />
-                    Arrived
-                  </span>
-                </div>
-              </div>
-
-              {/* Guest 2 */}
-              <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 items-center py-3 hover:bg-gray-50 -mx-4 px-4 rounded-xl transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-[12px] font-black">
-                    JD
-                  </div>
-                  <div>
-                    <div className="text-[13px] font-black text-gray-900">Jane Dela Cruz</div>
-                    <div className="text-[10px] font-bold text-gray-400">jane@email.com</div>
-                  </div>
-                </div>
-                <div className="text-center">
-                  <span className="text-[13px] font-black text-gray-900">12</span>
-                </div>
-                <div className="text-right">
-                  <button className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider hover:bg-gray-200 transition-colors">
-                    <UserPlus size={12} />
-                    Check In
-                  </button>
-                </div>
-              </div>
-
-              {/* Guest 3 */}
-              <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 items-center py-3 hover:bg-gray-50 -mx-4 px-4 rounded-xl transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-[12px] font-black">
-                    MR
-                  </div>
-                  <div>
-                    <div className="text-[13px] font-black text-gray-900">Maria Reyes</div>
-                    <div className="text-[10px] font-bold text-gray-400">maria@email.com</div>
-                  </div>
-                </div>
-                <div className="text-center">
-                  <span className="text-[13px] font-black text-gray-900">8</span>
-                </div>
-                <div className="text-right">
-                  <button className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-600 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider hover:bg-gray-200 transition-colors">
-                    <UserPlus size={12} />
-                    Check In
-                  </button>
-                </div>
-              </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -719,6 +1062,15 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           {activeTab === 'post-event' && renderPostEvent()}
         </div>
       </div>
+
+      <EventDayScheduleModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        onCreate={handleCreateProdTask}
+        staffOptions={staffOptions}
+        vendorOptions={vendorOptions}
+        productionDate={productionDate}
+      />
 
       {isGuestModalOpen && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
