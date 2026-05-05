@@ -21,9 +21,11 @@ import {
   FileText,
   Send,
   Paperclip,
+  ArrowLeft,
 } from 'lucide-react';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
 import { CustomDatePicker, CustomSelect } from '@/components/ui/CustomInputs';
+import Link from 'next/link';
 
 const PESO_SYMBOL = '\u20B1';
 
@@ -471,6 +473,16 @@ export default function FinancesAdminPage() {
 
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20">
+
+      <Link
+        href="/admin/events"
+        className="mb-4 inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-widest text-gray-400 transition-colors hover:text-gray-900"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        BACK TO EVENTS
+      </Link>
 
       {/* Breadcrumb / Top Navigation Area */}
       <div className="flex flex-col md:flex-row md:items-start justify-between mb-8 gap-4 pt-2">
