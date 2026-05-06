@@ -25,13 +25,17 @@ type CheckInPayload = {
 function AdminScanInner() {
   const searchParams = useSearchParams();
   const eventId = searchParams.get('eventId') || '';
+  const fromEventDay = searchParams.get('from') === 'event-day';
   const { user } = useAuth();
 
   const [scannedData, setScannedData] = useState<CheckInPayload | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const backHref = eventId ? `/admin/rsvp/${eventId}` : '/admin/events';
+  const backHref = eventId 
+    ? (fromEventDay ? `/admin/events/${eventId}?tab=event-day` : `/admin/rsvp/${eventId}`)
+    : '/admin/events';
+  const backLabel = fromEventDay ? 'Back to Event' : 'Back to Registry';
 
   const handleScan = async (result: unknown) => {
     if (isProcessing || !eventId) return;
@@ -98,7 +102,7 @@ function AdminScanInner() {
         className="group mb-4 inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-widest text-gray-400 transition-colors hover:text-gray-900"
       >
         <ChevronLeft size={14} strokeWidth={3} className="transition-transform group-hover:-translate-x-1" />
-        Back to Registry
+        {backLabel}
       </Link>
 
       {!eventId ? (
