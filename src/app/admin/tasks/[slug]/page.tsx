@@ -908,26 +908,27 @@ export default function TasksAdminPage({ params }: { params: Promise<{ slug: str
           </table>
         </div>
 
-        <div className="p-4 md:p-5 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50/30">
-          <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">
-            SHOWING {filteredTasks.length === 0 ? 0 : (currentPageSafe - 1) * tasksPerPage + 1}-{Math.min(currentPageSafe * tasksPerPage, filteredTasks.length)} OF {filteredTasks.length} TASKS
-          </div>
-          <div className="flex gap-2">
-            <button
+        <div className="p-4 md:p-5 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50/30 rounded-b-xl">
+          <span className="text-xs text-[#a1a1aa] font-medium">Showing {filteredTasks.length === 0 ? 0 : (currentPageSafe - 1) * tasksPerPage + 1}-{Math.min(currentPageSafe * tasksPerPage, filteredTasks.length)} of {filteredTasks.length} Tasks</span>
+          <div className="flex items-center gap-1">
+            <button 
               type="button"
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               disabled={currentPageSafe === 1}
-              className="px-4 py-2 border border-gray-200 bg-white rounded-lg text-[11px] font-extrabold text-gray-500 uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={() => setCurrentPage((current) => Math.max(1, current - 1))}
+              className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#a1a1aa] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              PREV
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7"></path></svg>
             </button>
-            <button
+            <button className="w-8 h-8 flex items-center justify-center rounded bg-[#eebf43] text-[#1d1d1f] font-bold text-xs shadow-sm shadow-[#eebf43]/20">
+              {currentPageSafe}
+            </button>
+            <button 
               type="button"
-              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-              disabled={currentPageSafe === totalPages || filteredTasks.length === 0}
-              className="px-4 py-2 bg-[#facc15] border border-[#eab308] rounded-lg text-[11px] font-extrabold text-gray-900 uppercase tracking-widest hover:bg-[#eab308] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={currentPageSafe >= totalPages || filteredTasks.length === 0}
+              onClick={() => setCurrentPage((current) => Math.min(totalPages, current + 1))}
+              className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#1d1d1f] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              NEXT
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5l7 7-7 7"></path></svg>
             </button>
           </div>
         </div>

@@ -2,23 +2,11 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowDown, ArrowUp, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, ShieldAlert, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Calendar, Check, ChevronDown, ShieldAlert, Users, X } from 'lucide-react';
 import { CustomTimePicker } from '@/components/ui/CustomInputs';
+import type { StaffOption, VendorOption } from '@/app/admin/tasks/CreateTaskModal';
 
-export type StaffOption = {
-  uid: string;
-  name: string;
-  role: string;
-  appRole: string;
-  avatarUrl?: string | null;
-};
-
-export type VendorOption = {
-  name: string;
-  category?: string;
-};
-
-type CreateTaskPayload = {
+type EventDaySchedulePayload = {
   title: string;
   description: string;
   status: string;
@@ -29,12 +17,14 @@ type CreateTaskPayload = {
   vendor: string;
 };
 
-type CreateTaskModalProps = {
+type EventDayScheduleModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (payload: CreateTaskPayload) => Promise<void>;
+  onSubmit: (payload: EventDaySchedulePayload) => Promise<void>;
   staffOptions: StaffOption[];
   vendorOptions: VendorOption[];
+  productionDate: string;
+  initialData?: Partial<EventDaySchedulePayload> | null;
 };
 
 const FORM_TRIGGER_CLASS =
@@ -46,7 +36,6 @@ const PRIORITY_OPTIONS = [
     label: 'Critical',
     icon: ShieldAlert,
     accent: 'text-red-700',
-    tone: 'border-red-200 bg-red-50 text-red-700',
     iconTone: 'bg-red-100 text-red-600',
     helper: 'Immediate escalation required',
   },
@@ -55,7 +44,6 @@ const PRIORITY_OPTIONS = [
     label: 'High',
     icon: AlertTriangle,
     accent: 'text-orange-700',
-    tone: 'border-orange-200 bg-orange-50 text-orange-700',
     iconTone: 'bg-orange-100 text-orange-600',
     helper: 'Needs action soon',
   },
@@ -64,7 +52,6 @@ const PRIORITY_OPTIONS = [
     label: 'Medium',
     icon: ArrowUp,
     accent: 'text-amber-700',
-    tone: 'border-amber-200 bg-amber-50 text-amber-700',
     iconTone: 'bg-amber-100 text-amber-600',
     helper: 'Standard production pace',
   },
@@ -73,16 +60,10 @@ const PRIORITY_OPTIONS = [
     label: 'Low',
     icon: ArrowDown,
     accent: 'text-emerald-700',
-    tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     iconTone: 'bg-emerald-100 text-emerald-600',
     helper: 'Flexible scheduling',
   },
 ];
-
-const getTodayDate = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
 
 const isPastDueSelection = (dueDate: string, dueTime: string) => {
   if (!dueDate || !dueTime) return false;
@@ -92,7 +73,7 @@ const isPastDueSelection = (dueDate: string, dueTime: string) => {
 };
 
 const formatDateLabel = (value: string) => {
-  if (!value) return 'Select date...';
+  if (!value) return 'Production date unavailable';
   return new Date(`${value}T00:00:00`).toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
@@ -299,13 +280,11 @@ function Avatar({ staff, small = false }: { staff: StaffOption; small?: boolean 
   );
 }
 
-function ProductionTypeDropdown({
-  label,
+function VendorDropdown({
   value,
   options,
   onChange,
 }: {
-  label: string;
   value: string;
   options: VendorOption[];
   onChange: (next: string) => void;
@@ -315,7 +294,7 @@ function ProductionTypeDropdown({
 
   return (
     <div className="space-y-2" ref={triggerRef}>
-      <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">{label}</label>
+      <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Vendor Partner</label>
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -357,13 +336,11 @@ function ProductionTypeDropdown({
   );
 }
 
-function AppointLeadMultiSelect({
-  label,
+function AssigneeMultiSelect({
   value,
   staffOptions,
   onChange,
 }: {
-  label: string;
   value: string[];
   staffOptions: StaffOption[];
   onChange: (next: string[]) => void;
@@ -375,7 +352,7 @@ function AppointLeadMultiSelect({
 
   return (
     <div className="space-y-2" ref={triggerRef}>
-      <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">{label}</label>
+      <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Assignee (Staff Pool)</label>
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -452,99 +429,22 @@ function AppointLeadMultiSelect({
   );
 }
 
-function ProductionDatePicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(() => new Date());
-  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
-  const today = getTodayDate();
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const totalDays = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
-  const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
-  const days = [...Array(firstDay).fill(null), ...Array.from({ length: totalDays }, (_, index) => index + 1)];
-
-  return (
-    <div className="space-y-2" ref={triggerRef}>
-      <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Due Date</label>
-      <button
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        className={`${FORM_TRIGGER_CLASS} flex items-center justify-between ${isOpen ? 'border-[#eebf43] bg-white' : 'hover:bg-white'}`}
-      >
-        <span className={`text-[14px] ${value ? 'font-medium text-gray-900' : 'font-medium text-gray-400'}`}>{formatDateLabel(value)}</span>
-        <Calendar className="w-4 h-4 text-[#71717a]" />
-      </button>
-
-      <FloatingDropdown
-        isOpen={isOpen}
-        anchorRef={triggerRef}
-        panelRef={panelRef}
-        matchAnchorWidth
-        preferredHeight={360}
-        className="bg-white border border-gray-100 rounded-2xl shadow-2xl p-6 animate-in fade-in slide-in-from-top-2 duration-200"
-      >
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400">
-              <ChevronLeft size={16} />
-            </button>
-            <div className="text-[14px] font-extrabold text-gray-900">
-              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-            </div>
-            <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400">
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          <div className="grid grid-cols-7 gap-1 text-center mb-2">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-              <div key={`${day}-${index}`} className="text-[10px] font-bold text-[#d4a017] uppercase">{day}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {days.map((day, index) => {
-              if (day === null) {
-                return <div key={`empty-${index}`} className="h-9 w-9" />;
-              }
-
-              const dateValue = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const isSelected = value === dateValue;
-              const isDisabled = dateValue < today;
-              const isToday = dateValue === today;
-
-              return (
-                <button
-                  key={dateValue}
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => {
-                    onChange(dateValue);
-                    setIsOpen(false);
-                  }}
-                  className={`h-9 w-9 flex items-center justify-center rounded-lg text-[12px] font-extrabold transition-all ${isSelected ? 'bg-[#facc15] text-gray-900' : isToday ? 'bg-gray-100 text-[#d4a017]' : 'text-gray-700 hover:bg-gray-50'} ${isDisabled ? 'opacity-30 cursor-not-allowed hover:bg-transparent' : 'cursor-pointer'}`}
-                >
-                  {day}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </FloatingDropdown>
-    </div>
-  );
-}
-
-export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOptions, vendorOptions }: CreateTaskModalProps) {
-  const [formData, setFormData] = useState<CreateTaskPayload>({
+export default function EventDayScheduleModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  staffOptions,
+  vendorOptions,
+  productionDate,
+  initialData,
+}: EventDayScheduleModalProps) {
+  const isEditing = Boolean(initialData);
+  const [formData, setFormData] = useState<EventDaySchedulePayload>({
     title: '',
     description: '',
     status: 'TO DO',
     priority: 'MEDIUM',
-    dueDate: '',
+    dueDate: productionDate,
     dueTime: '',
     assignees: [],
     vendor: 'None',
@@ -552,31 +452,39 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const normalizedVendorOptions = useMemo(
-    () => {
-      const options = vendorOptions.filter((option) => option?.name?.trim());
-      const deduped = Array.from(new Map(options.map((option) => [option.name, option])).values());
-      return [{ name: 'None', category: '' }, ...deduped.filter((option) => option.name !== 'None')];
-    },
-    [vendorOptions]
-  );
+  const normalizedVendorOptions = useMemo(() => {
+    const options = vendorOptions.filter((option) => option?.name?.trim());
+    const deduped = Array.from(new Map(options.map((option) => [option.name, option])).values());
+    return [{ name: 'None', category: '' }, ...deduped.filter((option) => option.name !== 'None')];
+  }, [vendorOptions]);
 
   useEffect(() => {
+    const nextState: EventDaySchedulePayload = {
+      title: initialData?.title || '',
+      description: initialData?.description || '',
+      status: initialData?.status || 'TO DO',
+      priority: initialData?.priority || 'MEDIUM',
+      dueDate: initialData?.dueDate || productionDate,
+      dueTime: initialData?.dueTime || '',
+      assignees: initialData?.assignees || [],
+      vendor: initialData?.vendor || 'None',
+    };
+
     if (!isOpen) {
-      setFormData({
-        title: '',
-        description: '',
-        status: 'TO DO',
-        priority: 'MEDIUM',
-        dueDate: '',
-        dueTime: '',
-        assignees: [],
-        vendor: 'None',
-      });
+      setFormData(nextState);
       setError('');
       setIsSubmitting(false);
+      return;
     }
-  }, [isOpen]);
+
+    setFormData(nextState);
+    setError('');
+    setIsSubmitting(false);
+  }, [initialData, isOpen, productionDate]);
+
+  useEffect(() => {
+    setFormData((prev) => ({ ...prev, dueDate: productionDate }));
+  }, [productionDate]);
 
   if (!isOpen) return null;
 
@@ -590,7 +498,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
     }
 
     if (!formData.dueDate || !formData.dueTime) {
-      setError('Due date and time are required.');
+      setError('Production date and due time are required.');
       return;
     }
 
@@ -607,10 +515,10 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
     setIsSubmitting(true);
 
     try {
-      await onCreate(formData);
+      await onSubmit(formData);
       onClose();
     } catch (submissionError: any) {
-      setError(submissionError?.message || 'Failed to create task.');
+      setError(submissionError?.message || `Failed to ${isEditing ? 'update' : 'create'} production schedule.`);
       setIsSubmitting(false);
     }
   };
@@ -620,8 +528,8 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-visible animate-in zoom-in-95 duration-300">
         <div className="px-6 sm:px-8 py-5 sm:py-6 border-b border-gray-100 flex justify-between items-start">
           <div>
-            <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">Add New <span className="text-[#facc15] italic">Task</span></h2>
-            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Assignment and schedule setup</p>
+            <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">{isEditing ? 'Edit' : 'New'} <span className="text-[#facc15] italic">Schedule</span></h2>
+            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Program timeline setup for event day</p>
           </div>
           <button onClick={onClose} type="button" className="text-gray-400 hover:text-gray-600 transition-colors p-1 shrink-0">
             <X className="w-6 h-6" />
@@ -643,7 +551,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
               value={formData.title}
               onChange={(event) => setFormData((prev) => ({ ...prev, title: event.target.value }))}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none"
-              placeholder="e.g., Finalize floral arrangements"
+              placeholder="e.g., Opening keynote prep"
             />
           </div>
 
@@ -655,14 +563,23 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
               value={formData.description}
               onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-[#eebf43] focus:ring-1 focus:ring-[#eebf43] focus:bg-white rounded-xl text-gray-900 text-[14px] font-medium transition-all outline-none resize-none"
-              placeholder="Include specific requirements, vendor contacts, or special instructions..."
+              placeholder="Include stage cues, team callouts, or program notes..."
             />
           </div>
 
           <PriorityDropdown value={formData.priority} onChange={(priority) => setFormData((prev) => ({ ...prev, priority }))} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ProductionDatePicker value={formData.dueDate} onChange={(dueDate) => setFormData((prev) => ({ ...prev, dueDate }))} />
+            <div className="space-y-2">
+              <label className="block text-[11px] font-extrabold text-[#71717a] uppercase tracking-widest mb-1.5">Production Date</label>
+              <div className="w-full min-h-[52px] px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl flex items-center justify-between">
+                <span className="text-[14px] font-medium text-gray-900">{formatDateLabel(formData.dueDate)}</span>
+                <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  <Calendar className="w-4 h-4" />
+                  Locked
+                </div>
+              </div>
+            </div>
             <CustomTimePicker
               label="Due Time"
               value={formData.dueTime}
@@ -680,14 +597,12 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <AppointLeadMultiSelect
-              label="Assignee (Staff Pool)"
+            <AssigneeMultiSelect
               value={formData.assignees}
               staffOptions={staffOptions}
               onChange={(assignees) => setFormData((prev) => ({ ...prev, assignees }))}
             />
-            <ProductionTypeDropdown
-              label="Vendor Partner"
+            <VendorDropdown
               value={formData.vendor}
               options={normalizedVendorOptions}
               onChange={(vendor) => setFormData((prev) => ({ ...prev, vendor }))}
@@ -709,7 +624,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreate, staffOption
               disabled={isSubmitting}
               className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 hover:bg-[#eab308] disabled:opacity-70 transition-all"
             >
-              {isSubmitting ? 'Creating...' : 'Create Task'}
+              {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Schedule'}
             </button>
           </div>
         </form>

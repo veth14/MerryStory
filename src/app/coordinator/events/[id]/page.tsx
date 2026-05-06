@@ -59,10 +59,15 @@ type TaskAssignee = {
 type TaskRecord = {
   _id: string;
   eventId?: string;
+  eventTitle?: string;
+  eventType?: string;
+  eventLocation?: string;
   title?: string;
   description?: string;
   status?: string;
   priority?: string;
+  taskType?: 'event' | 'production';
+  taskTypeLabel?: string;
   due?: {
     date?: string;
     time?: string;
@@ -127,6 +132,15 @@ const normalizeTaskStatus = (value?: string) => {
   return normalized;
 };
 
+const normalizeTaskPriority = (value?: string) => {
+  const normalized = (value || '').toUpperCase().replace(/[_-]/g, ' ').trim();
+  if (normalized === 'CRITICAL') return 'CRITICAL';
+  if (normalized === 'HIGH') return 'HIGH';
+  if (normalized === 'MEDIUM') return 'MEDIUM';
+  if (normalized === 'LOW') return 'LOW';
+  return '';
+};
+
 const getDisplayStatusLabel = (value?: string) => {
   const normalized = normalizeTaskStatus(value);
   if (normalized === 'COMPLETED') return 'Completed';
@@ -149,13 +163,20 @@ const normalizeAssigneeNames = (task: TaskRecord) => {
 };
 
 const getTaskBadge = (task: TaskRecord) => {
-  const priority = (task.priority || '').toUpperCase();
+  const priority = normalizeTaskPriority(task.priority);
   const status = normalizeTaskStatus(task.status);
 
   if (status === 'COMPLETED') {
     return {
       label: 'Completed',
       classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
+  if (priority === 'CRITICAL') {
+    return {
+      label: 'Critical Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg mb-2',
     };
   }
 
@@ -166,11 +187,39 @@ const getTaskBadge = (task: TaskRecord) => {
     };
   }
 
+  if (priority === 'MEDIUM') {
+    return {
+      label: 'Medium Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
+  if (priority === 'LOW') {
+    return {
+      label: 'Low Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-sky-700 bg-sky-50 px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
+  if (!priority) {
+    return {
+      label: 'No Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-[#71717a] bg-[#f4f4f5] px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
   const dueDate = task.due?.date ? new Date(`${task.due.date}T${task.due.time || '00:00'}:00`) : null;
   if (dueDate && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now()) {
     return {
       label: 'Overdue',
       classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-red-500 bg-red-50 px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
+  if (!priority) {
+    return {
+      label: 'No Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-[#71717a] bg-[#f4f4f5] px-2.5 py-1.5 rounded-lg mb-2',
     };
   }
 
@@ -269,6 +318,7 @@ const buildGuestCode = (guest: GuestRecord) => {
 };
 
 const GUESTS_PER_PAGE = 5;
+const TASKS_PER_PAGE = 5;
 
 function GuestModalSelect({
   label,
@@ -496,6 +546,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'rsvp'>(initialTab);
   const [event, setEvent] = useState<EventRecord | null>(null);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [productionTasks, setProductionTasks] = useState<TaskRecord[]>([]);
   const [directory, setDirectory] = useState<UserRecord[]>([]);
   const [guests, setGuests] = useState<GuestRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -513,6 +564,10 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const [selectedGuest, setSelectedGuest] = useState<GuestRecord | null>(null);
   const [guestPendingRemoval, setGuestPendingRemoval] = useState<GuestRecord | null>(null);
   const [guestPage, setGuestPage] = useState(1);
+  const [expandedTaskStaff, setExpandedTaskStaff] = useState<Set<string>>(new Set());
+  const [pendingTasksPage, setPendingTasksPage] = useState(1);
+  const [productionTasksPage, setProductionTasksPage] = useState(1);
+  const [finishedTasksPage, setFinishedTasksPage] = useState(1);
   const { id } = use(params);
 
   useEffect(() => {
@@ -530,11 +585,11 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
         const idToken = await user.getIdToken();
         const userName = user.displayName;
 
-        const [eventRes, tasksRes, staffRes] = await Promise.all([
+        const [eventRes, taskHubRes, staffRes] = await Promise.all([
           fetch(`/api/events/${id}`, {
             headers: { Authorization: `Bearer ${idToken}` },
           }),
-          fetch(`/api/tasks?eventId=${encodeURIComponent(id)}${userName ? `&assignee=${encodeURIComponent(userName)}` : ''}`, {
+          fetch(`/api/coordinator/task-hub?eventId=${encodeURIComponent(id)}`, {
             headers: { Authorization: `Bearer ${idToken}` },
           }),
           fetch('/api/staff', {
@@ -542,19 +597,21 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
           }),
         ]);
 
-        const [eventData, tasksData, staffData] = await Promise.all([
+        const [eventData, taskHubData, staffData] = await Promise.all([
           eventRes.ok ? eventRes.json() : null,
-          tasksRes.ok ? tasksRes.json() : [],
+          taskHubRes.ok ? taskHubRes.json() : { eventTasks: [], productionTasks: [] },
           staffRes.ok ? staffRes.json() : { users: [] },
         ]);
 
         setEvent(eventData);
-        setTasks(Array.isArray(tasksData) ? tasksData : []);
+        setTasks(Array.isArray(taskHubData?.eventTasks) ? taskHubData.eventTasks : []);
+        setProductionTasks(Array.isArray(taskHubData?.productionTasks) ? taskHubData.productionTasks : []);
         setDirectory(Array.isArray(staffData?.users) ? staffData.users : []);
       } catch (error) {
         console.error('Failed to fetch coordinator event details:', error);
         setEvent(null);
         setTasks([]);
+        setProductionTasks([]);
         setDirectory([]);
       } finally {
         setLoading(false);
@@ -606,7 +663,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   }, [directory]);
 
   const enrichedTasks = useMemo(() => {
-    return tasks.map((task) => {
+    return [...tasks, ...productionTasks].map((task) => {
       const assigneeNames = normalizeAssigneeNames(task);
       const assignees = assigneeNames.map((name) => {
         const profile = userLookup.get(name);
@@ -623,10 +680,15 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
         assigneesResolved: assignees,
       };
     });
-  }, [tasks, userLookup]);
+  }, [productionTasks, tasks, userLookup]);
 
-  const pendingTasks = useMemo(
-    () => enrichedTasks.filter((task) => normalizeTaskStatus(task.status) !== 'COMPLETED'),
+  const pendingEventTasks = useMemo(
+    () => enrichedTasks.filter((task) => task.taskType !== 'production' && normalizeTaskStatus(task.status) !== 'COMPLETED'),
+    [enrichedTasks]
+  );
+
+  const pendingProductionTasks = useMemo(
+    () => enrichedTasks.filter((task) => task.taskType === 'production' && normalizeTaskStatus(task.status) !== 'COMPLETED'),
     [enrichedTasks]
   );
 
@@ -636,7 +698,8 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   );
 
   const completedTasks = finishedTasks.length;
-  const taskCompletionPct = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+  const totalAssignedTasks = tasks.length + productionTasks.length;
+  const taskCompletionPct = totalAssignedTasks > 0 ? (completedTasks / totalAssignedTasks) * 100 : 0;
   const guestInvited = guests.length;
   const guestConfirmed = guests.filter((guest) => guest.status === 'Confirmed').length;
   const guestCodesUsed = guests.filter((guest) => Boolean(guest.usedAt)).length;
@@ -673,24 +736,29 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
     }
   }, [guestPage, totalGuestPages]);
 
-  const updateTaskLocally = (taskId: string, updater: (task: TaskRecord) => TaskRecord) => {
+  const updateTaskLocally = (taskId: string, taskType: TaskRecord['taskType'], updater: (task: TaskRecord) => TaskRecord) => {
+    if (taskType === 'production') {
+      setProductionTasks((prev) => prev.map((task) => (task._id === taskId ? updater(task) : task)));
+      return;
+    }
+
     setTasks((prev) => prev.map((task) => (task._id === taskId ? updater(task) : task)));
   };
 
-  const persistTaskPatch = async (taskId: string, payload: Record<string, unknown>) => {
+  const persistTaskPatch = async (task: TaskRecord, payload: Record<string, unknown>) => {
     if (!user) return false;
 
-    setUpdatingTaskId(taskId);
+    setUpdatingTaskId(task._id);
     try {
       const idToken = await user.getIdToken();
-      const response = await fetch('/api/tasks', {
+      const response = await fetch(task.taskType === 'production' ? '/api/admin/event-day' : '/api/tasks', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          taskObjectId: taskId,
+          taskObjectId: task._id,
           ...payload,
         }),
       });
@@ -700,7 +768,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
       }
 
       const updatedTask = await response.json();
-      updateTaskLocally(taskId, (currentTask) => ({
+      updateTaskLocally(task._id, task.taskType, (currentTask) => ({
         ...currentTask,
         ...updatedTask,
       }));
@@ -715,8 +783,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
 
   const handleConfirmTaskDone = async () => {
     if (!confirmTask) return;
-    const taskId = confirmTask._id;
-    const success = await persistTaskPatch(taskId, { status: 'COMPLETED' });
+    const success = await persistTaskPatch(confirmTask, { status: 'COMPLETED' });
     if (success) {
       setConfirmTask(null);
     }
@@ -726,7 +793,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
     const currentAssignees = normalizeAssigneeNames(task);
     if (currentAssignees.includes(staffName)) return;
 
-    const success = await persistTaskPatch(task._id, {
+    const success = await persistTaskPatch(task, {
       assignees: [...currentAssignees, staffName],
     });
 
@@ -738,7 +805,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const handleRemoveStaff = async (task: TaskRecord, staffName: string) => {
     const currentAssignees = normalizeAssigneeNames(task);
     const nextAssignees = currentAssignees.filter((name) => name !== staffName);
-    await persistTaskPatch(task._id, {
+    await persistTaskPatch(task, {
       assignees: nextAssignees,
     });
   };
@@ -920,8 +987,14 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
         role: string | null;
       }>;
     }>,
-    isFinishedSection: boolean
-  ) => (
+    isFinishedSection: boolean,
+    currentPage: number,
+    setCurrentPage: (page: number) => void
+  ) => {
+    const totalPages = Math.max(1, Math.ceil(sectionTasks.length / TASKS_PER_PAGE));
+    const paginatedTasks = sectionTasks.slice((currentPage - 1) * TASKS_PER_PAGE, currentPage * TASKS_PER_PAGE);
+
+    return (
     <div className="mb-10 last:mb-0">
       <div className="pb-5 border-b border-gray-100 flex items-center justify-between mb-4">
         <div>
@@ -942,7 +1015,8 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
-        {sectionTasks.map((task) => {
+        {paginatedTasks.map((task) => {
+          const isStaffExpanded = expandedTaskStaff.has(task._id);
           const isDone = normalizeTaskStatus(task.status) === 'COMPLETED';
           const badge = getTaskBadge(task);
           const availableStaff = directory.filter(
@@ -968,6 +1042,11 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div className="min-w-0">
+                      {task.taskType === 'production' && (
+                        <span className="inline-flex mb-2 items-center rounded-full border border-[#eebf43]/30 bg-[#fff9e6] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest text-[#d4a017]">
+                          Production
+                        </span>
+                      )}
                       <p className={`text-lg font-bold ${isDone ? 'text-[#a1a1aa] line-through decoration-gray-300' : 'text-[#1d1d1f]'}`}>
                         {task.title || 'Untitled Task'}
                       </p>
@@ -990,13 +1069,29 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
               </div>
 
               <div className="border-t border-gray-100 bg-[#fcfcfc] px-6 py-4">
-                <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpandedTaskStaff((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(task._id)) {
+                        next.delete(task._id);
+                      } else {
+                        next.add(task._id);
+                      }
+                      return next;
+                    });
+                  }}
+                  className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mb-3 hover:text-[#1d1d1f] transition-colors"
+                >
                   <Users size={12} />
                   Assigned Staff
                   <span className="text-[#d4a017]">{task.assigneesResolved.length}</span>
-                </div>
+                  <ChevronDown size={14} className={`transition-transform ${isStaffExpanded ? 'rotate-180' : ''}`} />
+                </button>
 
-                <div className="flex flex-wrap gap-3 mb-3">
+                {isStaffExpanded && (
+                  <div className="flex flex-wrap gap-3 mb-3">
                   {task.assigneesResolved.map((assignee) => {
                     const removable = assignee.appRole === 'staff' && !isDone;
                     return (
@@ -1028,9 +1123,10 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                       </div>
                     );
                   })}
-                </div>
+                  </div>
+                )}
 
-                {!isDone && (
+                {!isDone && isStaffExpanded && (
                   <div className="relative">
                     <button
                       type="button"
@@ -1077,8 +1173,33 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
           );
         })}
       </div>
+
+      {sectionTasks.length > TASKS_PER_PAGE && (
+        <div className="mt-6 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+            className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#a1a1aa] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7"></path></svg>
+          </button>
+          <span className="text-xs font-bold text-[#71717a]">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={currentPage >= totalPages}
+            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+            className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#1d1d1f] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 19l7-7-7-7"></path></svg>
+          </button>
+        </div>
+      )}
     </div>
   );
+  };
 
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative">
@@ -1108,23 +1229,23 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
 
       <div className="w-full mt-10">
         <div className="w-full flex flex-col">
-          <div className="border-b-2 border-gray-100 flex overflow-x-auto scrollbar-hide mb-8">
+          <div className="border-b-2 border-gray-100 flex flex-wrap mb-8">
             <button
               onClick={() => handleTabChange('overview')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'overview' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'overview' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <Calendar size={16} /> Schedule & Info
             </button>
             <button
               onClick={() => handleTabChange('tasks')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'tasks' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'tasks' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <ClipboardCheck size={16} /> Assigned Tasks
-              <span className={`ml-1.5 text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'tasks' ? 'bg-[#1d1d1f] text-white' : 'bg-gray-200 text-gray-500'}`}>{pendingTasks.length}</span>
+              <span className={`ml-1.5 text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'tasks' ? 'bg-[#1d1d1f] text-white' : 'bg-gray-200 text-gray-500'}`}>{pendingEventTasks.length + pendingProductionTasks.length}</span>
             </button>
             <button
               onClick={() => handleTabChange('rsvp')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'rsvp' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'rsvp' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <Users size={16} /> Guest List
             </button>
@@ -1177,7 +1298,7 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
                       <p className="text-[11px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mb-4">Tasks Completed</p>
                       <div className="flex items-baseline gap-2">
                         <span className="text-5xl font-black text-[#1d1d1f] tracking-tight">{completedTasks}</span>
-                        <span className="text-sm font-bold text-[#71717a]">/ {tasks.length}</span>
+                        <span className="text-sm font-bold text-[#71717a]">/ {totalAssignedTasks}</span>
                       </div>
                       <div className="w-full bg-gray-100 h-2 rounded-full mt-6 overflow-hidden">
                         <div className="bg-[#1d1d1f] h-full rounded-full transition-all" style={{ width: `${taskCompletionPct}%` }}></div>
@@ -1218,16 +1339,28 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
             ) : (
               <>
                 {renderTaskSection(
+                  'Production Directives',
+                  'Production directives come from the live event-day schedule and appear here whenever you are assigned to them for this event.',
+                  pendingProductionTasks,
+                  false,
+                  productionTasksPage,
+                  setProductionTasksPage
+                )}
+                {renderTaskSection(
                   'Pending Directives',
                   'Mark tasks as finished after reviewing the confirmation modal and coordinate staff support when needed.',
-                  pendingTasks,
-                  false
+                  pendingEventTasks,
+                  false,
+                  pendingTasksPage,
+                  setPendingTasksPage
                 )}
                 {renderTaskSection(
                   'Finished Directives',
                   'Completed tasks stay visible here so progress is clear and immediately reflected in your event KPIs.',
                   finishedTasks,
-                  true
+                  true,
+                  finishedTasksPage,
+                  setFinishedTasksPage
                 )}
               </>
             )}
