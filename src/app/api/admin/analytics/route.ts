@@ -14,35 +14,150 @@ export async function GET(request: NextRequest) {
     const events = await eventsCollection.find({}).toArray();
     const inquiries = await inquiriesCollection.find({}).toArray();
 
-    // Helper function to get month from date
+    // Helper functions to get month and year from date
     const getMonth = (date: Date | string | undefined): number => {
       if (!date) return 0;
       const d = new Date(date);
       return d.getMonth();
     };
 
-    // Group bookings (events) by month
-    const bookingsByMonth: { [key: number]: number } = {};
+    const getYear = (date: Date | string | undefined): number => {
+      if (!date) return new Date().getFullYear();
+      const d = new Date(date);
+      return d.getFullYear();
+    };
+
+    // Group bookings (events) by month and year
+    const bookingsByMonthYear: { [key: string]: number } = {};
+    const bookingsByYear: { [key: number]: number } = {};
     events.forEach(event => {
-      const monthIndex = getMonth(event.date);
-      bookingsByMonth[monthIndex] = (bookingsByMonth[monthIndex] || 0) + 1;
+      const month = getMonth(event.createdAt);
+      const year = getYear(event.createdAt);
+      const key = `${year}-${month}`;
+      bookingsByMonthYear[key] = (bookingsByMonthYear[key] || 0) + 1;
+      bookingsByYear[year] = (bookingsByYear[year] || 0) + 1;
     });
 
-    // Group inquiries by month
-    const inquiriesByMonth: { [key: number]: number } = {};
+    // Group inquiries by month and year
+    const inquiriesByMonthYear: { [key: string]: number } = {};
+    const inquiriesByYear: { [key: number]: number } = {};
     inquiries.forEach(inq => {
-      const monthIndex = getMonth(inq.submitted);
-      inquiriesByMonth[monthIndex] = (inquiriesByMonth[monthIndex] || 0) + 1;
+      const month = getMonth(inq.submitted);
+      const year = getYear(inq.submitted);
+      const key = `${year}-${month}`;
+      inquiriesByMonthYear[key] = (inquiriesByMonthYear[key] || 0) + 1;
+      inquiriesByYear[year] = (inquiriesByYear[year] || 0) + 1;
+    });
+
+    // Group events by type and frequency for current year
+    const eventTypeByFrequency: {
+      monthly: { [key: number]: { [type: string]: { bookings: number; inquiries: number } } };
+      quarterly: { [key: number]: { [type: string]: { bookings: number; inquiries: number } } };
+      halfYear: { [key: number]: { [type: string]: { bookings: number; inquiries: number } } };
+      annual: { [type: string]: { bookings: number; inquiries: number } };
+    } = {
+      monthly: {},
+      quarterly: {},
+      halfYear: {},
+      annual: {}
+    };
+
+    const currentYear = new Date().getFullYear();
+
+    // Helper to normalize type names
+    const typeMapping: { [key: string]: string } = {
+      'wedding': 'Weddings',
+      'weddings': 'Weddings',
+      'elegant wedding': 'Weddings',
+      'corporate': 'Corporate Galas',
+      'corporate gala': 'Corporate Galas',
+      'corporate galas': 'Corporate Galas',
+      'party': 'Private Parties',
+      'private party': 'Private Parties',
+      'private parties': 'Private Parties',
+      'birthday': 'Private Parties',
+      'birthday celebration': 'Private Parties',
+      'charity': 'Charity / Non-Profit',
+      'non-profit': 'Charity / Non-Profit',
+      'charity / non-profit': 'Charity / Non-Profit',
+      'consultation': 'Consultations',
+      'product launch': 'Product Launches',
+    };
+
+    const normalizeType = (type: string): string => {
+      return typeMapping[type.toLowerCase()] || type;
+    };
+
+    // Group bookings and inquiries by type and month for current year
+    events.forEach(event => {
+      const year = getYear(event.createdAt);
+      if (year !== currentYear) return;
+      
+      const month = getMonth(event.createdAt);
+      const type = normalizeType(event.type || 'Other');
+      const quarter = Math.floor(month / 3);
+      const half = Math.floor(month / 6);
+
+      // Monthly
+      if (!eventTypeByFrequency.monthly[month]) eventTypeByFrequency.monthly[month] = {};
+      if (!eventTypeByFrequency.monthly[month][type]) eventTypeByFrequency.monthly[month][type] = { bookings: 0, inquiries: 0 };
+      eventTypeByFrequency.monthly[month][type].bookings += 1;
+
+      // Quarterly
+      if (!eventTypeByFrequency.quarterly[quarter]) eventTypeByFrequency.quarterly[quarter] = {};
+      if (!eventTypeByFrequency.quarterly[quarter][type]) eventTypeByFrequency.quarterly[quarter][type] = { bookings: 0, inquiries: 0 };
+      eventTypeByFrequency.quarterly[quarter][type].bookings += 1;
+
+      // Half-Year
+      if (!eventTypeByFrequency.halfYear[half]) eventTypeByFrequency.halfYear[half] = {};
+      if (!eventTypeByFrequency.halfYear[half][type]) eventTypeByFrequency.halfYear[half][type] = { bookings: 0, inquiries: 0 };
+      eventTypeByFrequency.halfYear[half][type].bookings += 1;
+
+      // Annual
+      if (!eventTypeByFrequency.annual[type]) eventTypeByFrequency.annual[type] = { bookings: 0, inquiries: 0 };
+      eventTypeByFrequency.annual[type].bookings += 1;
+    });
+
+    inquiries.forEach(inq => {
+      const year = getYear(inq.submitted);
+      if (year !== currentYear) return;
+      
+      const month = getMonth(inq.submitted);
+      const type = normalizeType(inq.eventType || 'Other');
+      const quarter = Math.floor(month / 3);
+      const half = Math.floor(month / 6);
+
+      // Monthly
+      if (!eventTypeByFrequency.monthly[month]) eventTypeByFrequency.monthly[month] = {};
+      if (!eventTypeByFrequency.monthly[month][type]) eventTypeByFrequency.monthly[month][type] = { bookings: 0, inquiries: 0 };
+      eventTypeByFrequency.monthly[month][type].inquiries += 1;
+
+      // Quarterly
+      if (!eventTypeByFrequency.quarterly[quarter]) eventTypeByFrequency.quarterly[quarter] = {};
+      if (!eventTypeByFrequency.quarterly[quarter][type]) eventTypeByFrequency.quarterly[quarter][type] = { bookings: 0, inquiries: 0 };
+      eventTypeByFrequency.quarterly[quarter][type].inquiries += 1;
+
+      // Half-Year
+      if (!eventTypeByFrequency.halfYear[half]) eventTypeByFrequency.halfYear[half] = {};
+      if (!eventTypeByFrequency.halfYear[half][type]) eventTypeByFrequency.halfYear[half][type] = { bookings: 0, inquiries: 0 };
+      eventTypeByFrequency.halfYear[half][type].inquiries += 1;
+
+      // Annual
+      if (!eventTypeByFrequency.annual[type]) eventTypeByFrequency.annual[type] = { bookings: 0, inquiries: 0 };
+      eventTypeByFrequency.annual[type].inquiries += 1;
     });
 
     const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     const shortMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     // Generate monthly frequency data (normalized to 0-100 scale)
-    const monthlyValues = Array.from({ length: 12 }, (_, i) => ({
-      bookings: bookingsByMonth[i] || 0,
-      inquiries: inquiriesByMonth[i] || 0,
-    }));
+    const monthlyValues = Array.from({ length: 12 }, (_, i) => {
+      const key = `${currentYear}-${i}`;
+      return {
+        bookings: bookingsByMonthYear[key] || 0,
+        inquiries: inquiriesByMonthYear[key] || 0,
+      };
+    });
 
     // Find max value to normalize
     const maxValue = Math.max(...monthlyValues.map(m => Math.max(m.bookings, m.inquiries)), 1);
@@ -101,27 +216,48 @@ export async function GET(request: NextRequest) {
       },
     ];
 
-    // Find peak months for bookings and inquiries
+    // Generate annual (5 years) data with current year in middle
+    const yearRange = 5;
+    const middleIndex = Math.floor(yearRange / 2);
+    const annualFrequency = [];
+    for (let i = 0; i < yearRange; i++) {
+      const year = currentYear - middleIndex + i;
+      const yearBookings = bookingsByYear[year] || 0;
+      const yearInquiries = inquiriesByYear[year] || 0;
+      annualFrequency.push({
+        label: year.toString(),
+        bookings: 0,
+        inquiries: 0,
+        actualBookings: yearBookings,
+        actualInquiries: yearInquiries,
+      });
+    }
+
+    // Normalize annual data
+    const maxAnnualValue = Math.max(...annualFrequency.map(y => Math.max(y.actualBookings, y.actualInquiries)), 1);
+    annualFrequency.forEach(year => {
+      year.bookings = Math.round((year.actualBookings / maxAnnualValue) * 100);
+      year.inquiries = Math.round((year.actualInquiries / maxAnnualValue) * 100);
+    });
+
+    // Find peak months for bookings and inquiries (current year)
     let peakBookingMonth = 0;
     let maxBookings = 0;
     let peakInquiryMonth = 0;
     let maxInquiries = 0;
 
-    bookingsByMonth && Object.entries(bookingsByMonth).forEach(([monthStr, count]) => {
-      if (count > maxBookings) {
-        maxBookings = count;
-        peakBookingMonth = parseInt(monthStr);
+    monthlyValues.forEach((month, idx) => {
+      if (month.bookings > maxBookings) {
+        maxBookings = month.bookings;
+        peakBookingMonth = idx;
+      }
+      if (month.inquiries > maxInquiries) {
+        maxInquiries = month.inquiries;
+        peakInquiryMonth = idx;
       }
     });
 
-    inquiriesByMonth && Object.entries(inquiriesByMonth).forEach(([monthStr, count]) => {
-      if (count > maxInquiries) {
-        maxInquiries = count;
-        peakInquiryMonth = parseInt(monthStr);
-      }
-    });
-
-    // Count event types with bookings and inquiries
+    // Count event types - ALL DATA (not filtered by year)
     const eventTypeData: { [key: string]: { bookings: number; inquiries: number } } = {};
     
     events.forEach(event => {
@@ -144,29 +280,9 @@ export async function GET(request: NextRequest) {
     console.log('Total Inquiries:', inquiries.length);
     console.log('Total Events:', events.length);
 
-    // Map event types to standard names
-    const typeMapping: { [key: string]: string } = {
-      'wedding': 'Weddings',
-      'weddings': 'Weddings',
-      'elegant wedding': 'Weddings',
-      'corporate': 'Corporate Galas',
-      'corporate gala': 'Corporate Galas',
-      'corporate galas': 'Corporate Galas',
-      'party': 'Private Parties',
-      'private party': 'Private Parties',
-      'private parties': 'Private Parties',
-      'birthday': 'Private Parties',
-      'birthday celebration': 'Private Parties',
-      'charity': 'Charity / Non-Profit',
-      'non-profit': 'Charity / Non-Profit',
-      'charity / non-profit': 'Charity / Non-Profit',
-      'consultation': 'Consultations',
-      'product launch': 'Product Launches',
-    };
-
     const normalizedTypes: { [key: string]: { bookings: number; inquiries: number } } = {};
     Object.entries(eventTypeData).forEach(([type, counts]) => {
-      const normalizedType = typeMapping[type.toLowerCase()] || type;
+      const normalizedType = normalizeType(type);
       if (!normalizedTypes[normalizedType]) {
         normalizedTypes[normalizedType] = { bookings: 0, inquiries: 0 };
       }
@@ -204,13 +320,7 @@ export async function GET(request: NextRequest) {
         })),
         quarterlyFrequency,
         halfYearFrequency,
-        annualFrequency: {
-          label: '2026',
-          bookings: Math.round((normalized.reduce((sum, m) => sum + m.bookings, 0) / 12)),
-          inquiries: Math.round((normalized.reduce((sum, m) => sum + m.inquiries, 0) / 12)),
-          actualBookings: monthlyValues.reduce((sum, m) => sum + m.bookings, 0),
-          actualInquiries: monthlyValues.reduce((sum, m) => sum + m.inquiries, 0),
-        },
+        annualFrequency,
         peakMonths: {
           bookings: {
             month: months[peakBookingMonth],
@@ -222,6 +332,8 @@ export async function GET(request: NextRequest) {
           },
         },
         eventTypeBreakdown: eventTypeBreakdown.slice(0, 4),
+        eventTypeByFrequency,
+        currentYear,
       },
       { status: 200 }
     );

@@ -71,12 +71,12 @@ export default function AdminHeader() {
   };
 
   return (
-    <header className="bg-[#fafafa]/80 backdrop-blur-md h-20 flex items-center justify-between px-10 relative border-b border-gray-100/50">
+    <header className="bg-[#fafafa]/80 backdrop-blur-md h-20 flex items-center justify-between px-5 sm:px-8 md:px-10 border-b border-gray-100/50 fixed top-0 left-0 right-0 z-40 md:sticky md:top-0">
       <div className="flex items-center w-full max-w-md relative">
         
        
       </div>
-      <div className="flex items-center space-x-6 text-[#52525b]" ref={dropdownRef}>
+      <div className="flex items-center space-x-3 sm:space-x-6 text-[#52525b]" ref={dropdownRef}>
         
         {/* Notifications Dropdown */}
         <div className="relative">
@@ -91,7 +91,7 @@ export default function AdminHeader() {
           </button>
           
           {activeDropdown === 'notifications' && (
-            <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2">
+            <div className="absolute right-0 mt-3 w-80 max-w-[calc(100vw-20px)] sm:w-80 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2">
               <div className="p-4 border-b border-gray-50 flex justify-between items-center">
                 <h3 className="font-bold text-[#1d1d1f] text-sm">Notifications</h3>
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#eebf43] cursor-pointer hover:text-[#dcae32]">Mark all read</span>
@@ -137,7 +137,7 @@ export default function AdminHeader() {
           </div>
 
           {activeDropdown === 'profile' && (
-            <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2">
+            <div className="absolute right-0 mt-3 w-64 max-w-[calc(100vw-20px)] sm:w-64 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2">
               <div className="p-4 border-b border-gray-50 flex items-center gap-3">
                 <img src={profileData.avatarUrl || `https://ui-avatars.com/api/?name=${profileData.name || 'Admin'}&background=eebf43&color=fff`} alt="Admin avatar" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
                 <div className="overflow-hidden">

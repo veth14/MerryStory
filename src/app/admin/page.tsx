@@ -1,9 +1,34 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+
+// Helper function to get ISO week (moved outside component to avoid recreation)
+function getISOWeek(date: Date) {
+  const tmp = new Date(date.getTime());
+  tmp.setHours(0, 0, 0, 0);
+  tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
+  const week1 = new Date(tmp.getFullYear(), 0, 4);
+  return 1 + Math.round(((tmp.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+}
+
+// Constants moved outside component
+const MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December'
+];
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const ACTIVITY_TYPES_MAP = {
+  'INQUIRY_MANAGEMENT': 'Inquiry',
+  'TASK_MANAGEMENT': 'Task',
+  'EVENT_MANAGEMENT': 'Event',
+  'EXPENSE_MANAGEMENT': 'Expense',
+  'CONTRACT_MANAGEMENT': 'Contract',
+  'USER_MANAGEMENT': 'Staff',
+  'VENDOR_MANAGEMENT': 'Vendor',
+};
+
 // Real function to fetch activity logs - fetches all system activities
 async function fetchMemberActivity(memberId: string, idToken: string) {
   try {
-    // Fetch all activities from the system (not filtered by user)
     const res = await fetch(`/api/activities`, {
       headers: { Authorization: `Bearer ${idToken}` }
     });
@@ -13,34 +38,28 @@ async function fetchMemberActivity(memberId: string, idToken: string) {
     }
     const data = await res.json();
     
-    // Handle both array and object responses
     const activities = Array.isArray(data) ? data : (data.activities || data.logs || []);
     
     if (!Array.isArray(activities)) {
       console.warn('Activity data is not an array:', data);
       return [];
     }
-    
+
     return activities
       .sort((a: any, b: any) => new Date(b.time || b.createdAt).getTime() - new Date(a.time || a.createdAt).getTime())
-      .slice(0, 15) // Limit to 15 most recent activities system-wide
+      .slice(0, 15)
       .map((log: any) => {
-        // Determine activity type from category or action
-        let type = 'Update';
-        if (log.category === 'INQUIRY_MANAGEMENT' || log.action?.includes('INQUIRY') || log.action?.includes('STATUS')) {
-          type = 'Inquiry';
-        } else if (log.category === 'TASK_MANAGEMENT' || log.action?.includes('TASK')) {
-          type = 'Task';
-        } else if (log.category === 'EVENT_MANAGEMENT' || log.action?.includes('EVENT')) {
-          type = 'Event';
-        } else if (log.category === 'EXPENSE_MANAGEMENT' || log.action?.includes('EXPENSE')) {
-          type = 'Expense';
-        } else if (log.category === 'CONTRACT_MANAGEMENT' || log.action?.includes('CONTRACT')) {
-          type = 'Contract';
-        } else if (log.category === 'USER_MANAGEMENT' || log.action?.includes('USER')) {
-          type = 'Staff';
-        } else if (log.category === 'VENDOR_MANAGEMENT' || log.action?.includes('VENDOR')) {
-          type = 'Vendor';
+        let type = ACTIVITY_TYPES_MAP[log.category as keyof typeof ACTIVITY_TYPES_MAP] || 'Update';
+        
+        if (!type || type === 'Update') {
+          const action = log.action || '';
+          if (action.includes('INQUIRY') || action.includes('STATUS')) type = 'Inquiry';
+          else if (action.includes('TASK')) type = 'Task';
+          else if (action.includes('EVENT')) type = 'Event';
+          else if (action.includes('EXPENSE')) type = 'Expense';
+          else if (action.includes('CONTRACT')) type = 'Contract';
+          else if (action.includes('USER')) type = 'Staff';
+          else if (action.includes('VENDOR')) type = 'Vendor';
         }
         
         return {
@@ -61,6 +80,24 @@ async function fetchMemberActivity(memberId: string, idToken: string) {
   }
 }
 import { useAuth } from '@/components/auth/AuthProvider';
+
+// Helper to check if event is ongoing today (moved outside component)
+function isEventOngoingToday(event: any) {
+  if (!event.date) return false;
+  const today = new Date();
+  const eventDateStr = event.date;
+  if (eventDateStr.includes('to')) {
+    const [start, end] = eventDateStr.split('to').map((d: string) => new Date(d.trim()));
+    return today >= start && today <= end;
+  } else {
+    const eventDate = new Date(eventDateStr);
+    return (
+      eventDate.getFullYear() === today.getFullYear() &&
+      eventDate.getMonth() === today.getMonth() &&
+      eventDate.getDate() === today.getDate()
+    );
+  }
+}
 
 interface Event {
   _id: string;
@@ -109,24 +146,6 @@ export default function AdminDashboard() {
   const [tasksPercentChange, setTasksPercentChange] = useState<number>(0);
   const [activeEvents, setActiveEvents] = useState<any[]>([]);
   const [productionQuality, setProductionQuality] = useState<number>(0);
-  // Helper to check if event is ongoing today
-  function isEventOngoingToday(event: any) {
-    if (!event.date) return false;
-    // Support both single date and date ranges (e.g., '2026-04-28' or '2026-04-28 to 2026-04-30')
-    const today = new Date();
-    const eventDateStr = event.date;
-    if (eventDateStr.includes('to')) {
-      const [start, end] = eventDateStr.split('to').map((d: string) => new Date(d.trim()));
-      return today >= start && today <= end;
-    } else {
-      const eventDate = new Date(eventDateStr);
-      return (
-        eventDate.getFullYear() === today.getFullYear() &&
-        eventDate.getMonth() === today.getMonth() &&
-        eventDate.getDate() === today.getDate()
-      );
-    }
-  }
 
   const [staff, setStaff] = useState<StaffUser[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -143,72 +162,75 @@ export default function AdminDashboard() {
         setLoading(true);
         const idToken = await user.getIdToken();
 
-        const eventsRes = await fetch('/api/events', {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
+        // Parallelize all API calls
+        const [eventsRes, inquiriesRes, tasksRes] = await Promise.all([
+          fetch('/api/events', { headers: { Authorization: `Bearer ${idToken}` } }),
+          fetch('/api/inquiries', { headers: { Authorization: `Bearer ${idToken}` } }),
+          fetch('/api/tasks', { headers: { Authorization: `Bearer ${idToken}` } }),
+        ]);
+
         if (!eventsRes.ok) throw new Error('Failed to fetch events');
+        if (!inquiriesRes.ok) throw new Error('Failed to fetch inquiries');
+        if (!tasksRes.ok) throw new Error('Failed to fetch tasks');
+
         const events: any[] = await eventsRes.json();
+        const inquiriesData = await inquiriesRes.json();
+        const inquiries = inquiriesData.inquiries || [];
+        const tasks = await tasksRes.json();
 
         const now = new Date();
         const thisMonth = now.getMonth();
         const thisYear = now.getFullYear();
-        const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-        const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-
-        // Include ALL events sorted by updatedAt or createdAt (for real-time detection of changes)
-        // Include ALL events sorted by updatedAt or createdAt (for real-time detection of changes)
-        const allEventsSorted = events
-          .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-        setActiveEvents(allEventsSorted);
-        
-        // For active events count - include both active and pre-production
-        const allActiveAndPreProduction = events
-          .filter(event => event.status && (event.status.toLowerCase().includes('active') || event.status.toLowerCase().includes('pre-production')))
-          .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-        
-        let currentAndFutureMonthsActive = 0;
-        let previousMonthsActive = 0;
-        allActiveAndPreProduction.forEach(event => {
-          if (event.date) {
-            const eventDate = new Date(event.date);
-            const eventMonth = eventDate.getMonth();
-            const eventYear = eventDate.getFullYear();
-            // Count events from current month onwards
-            if ((eventYear > thisYear) || (eventYear === thisYear && eventMonth >= thisMonth)) {
-              currentAndFutureMonthsActive++;
-            }
-            // Count previous months for comparison
-            if ((eventYear < thisYear) || (eventYear === thisYear && eventMonth < thisMonth)) {
-              previousMonthsActive++;
-            }
-          } else {
-            currentAndFutureMonthsActive++;
-          }
-        });
-        setActiveEventsCount(currentAndFutureMonthsActive);
-        setActiveEventsPercentChange(
-          previousMonthsActive === 0 && currentAndFutureMonthsActive === 0 ? 0
-            : previousMonthsActive === 0 ? 100
-            : ((currentAndFutureMonthsActive - previousMonthsActive) / previousMonthsActive) * 100
-        );
-
-        const inquiriesRes = await fetch('/api/inquiries', {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-        if (!inquiriesRes.ok) throw new Error('Failed to fetch inquiries');
-        const inquiriesData = await inquiriesRes.json();
-        const inquiries = inquiriesData.inquiries || [];
-
-        function getISOWeek(date: Date) {
-          const tmp = new Date(date.getTime());
-          tmp.setHours(0, 0, 0, 0);
-          tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
-          const week1 = new Date(tmp.getFullYear(), 0, 4);
-          return 1 + Math.round(((tmp.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-        }
-
         const thisISOWeek = getISOWeek(now);
         const lastISOWeek = thisISOWeek - 1;
+
+        // Sort events once
+        const allEventsSorted = events.sort((a, b) => 
+          new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+        );
+        setActiveEvents(allEventsSorted);
+
+        // Pre-build month lookup maps for efficiency
+        const eventsByMonth = new Map<number, number>();
+        const inquiriesByMonth = new Map<number, number>();
+        const monthlyBreakdownData: MonthlyBreakdown[] = [];
+
+        // Single pass through events for monthly breakdown
+        events.forEach(e => {
+          if (e.createdAt) {
+            const d = new Date(e.createdAt);
+            if (d.getFullYear() === thisYear) {
+              const month = d.getMonth();
+              eventsByMonth.set(month, (eventsByMonth.get(month) || 0) + 1);
+            }
+          }
+        });
+
+        // Single pass through inquiries for monthly breakdown
+        inquiries.forEach((inq: any) => {
+          if (inq.submitted) {
+            const d = new Date(inq.submitted);
+            if (d.getFullYear() === thisYear) {
+              const month = d.getMonth();
+              inquiriesByMonth.set(month, (inquiriesByMonth.get(month) || 0) + 1);
+            }
+          }
+        });
+
+        // Build monthly breakdown
+        for (let i = 0; i < 12; i++) {
+          monthlyBreakdownData.push({
+            month: MONTHS[i],
+            shortMonth: SHORT_MONTHS[i],
+            bookings: eventsByMonth.get(i) || 0,
+            inquiries: inquiriesByMonth.get(i) || 0,
+            isCurrent: i === thisMonth,
+          });
+        }
+        setMonthlyBreakdown(monthlyBreakdownData);
+        setChartPage(thisMonth < 6 ? 0 : 1);
+
+        // Count weekly inquiries
         let currentWeekInquiries = 0;
         let prevWeekInquiries = 0;
         inquiries.forEach((inq: any) => {
@@ -221,36 +243,6 @@ export default function AdminDashboard() {
           }
         });
 
-        const months = [
-          'January','February','March','April','May','June',
-          'July','August','September','October','November','December'
-        ];
-        const shortMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-        const breakdown: MonthlyBreakdown[] = months.map((month, i) => {
-          const bookings = events.filter(e => {
-            if (!e.date) return false;
-            const d = new Date(e.date);
-            return d.getFullYear() === thisYear && d.getMonth() === i;
-          }).length;
-
-          const monthInquiries = inquiries.filter((inq: any) => {
-            if (!inq.submitted) return false;
-            const d = new Date(inq.submitted);
-            return d.getFullYear() === thisYear && d.getMonth() === i;
-          }).length;
-
-          return {
-            month,
-            shortMonth: shortMonths[i],
-            bookings,
-            inquiries: monthInquiries,
-            isCurrent: i === thisMonth,
-          };
-        });
-        setMonthlyBreakdown(breakdown);
-        setChartPage(thisMonth < 6 ? 0 : 1);
-
         setInquiriesCount(currentWeekInquiries);
         setInquiriesPercentChange(
           prevWeekInquiries === 0 && currentWeekInquiries === 0 ? 0
@@ -258,11 +250,7 @@ export default function AdminDashboard() {
             : ((currentWeekInquiries - prevWeekInquiries) / prevWeekInquiries) * 100
         );
 
-        const tasksRes = await fetch('/api/tasks', {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-        if (!tasksRes.ok) throw new Error('Failed to fetch tasks');
-        const tasks = await tasksRes.json();
+        // Count weekly tasks
         let currentWeekTasks = 0;
         let prevWeekTasks = 0;
         tasks.forEach((task: any) => {
@@ -281,19 +269,50 @@ export default function AdminDashboard() {
             : ((currentWeekTasks - prevWeekTasks) / prevWeekTasks) * 100
         );
 
-        // Calculate Production Quality based on active/pre-production events' health scores
-        const activeForQuality = allActiveAndPreProduction.filter(event => event.status && event.status.toLowerCase().includes('active'));
+        // Calculate active events with single pass
+        const allActiveAndPreProduction = events.filter(event => 
+          event.status && (event.status.toLowerCase().includes('active') || event.status.toLowerCase().includes('pre-production'))
+        );
+
+        let currentAndFutureMonthsActive = 0;
+        let previousMonthsActive = 0;
+        const activeForQuality = [];
+
+        allActiveAndPreProduction.forEach(event => {
+          if (event.status?.toLowerCase().includes('active')) {
+            activeForQuality.push(event);
+          }
+          
+          if (event.date) {
+            const eventDate = new Date(event.date);
+            const eventMonth = eventDate.getMonth();
+            const eventYear = eventDate.getFullYear();
+            
+            if (eventYear > thisYear || (eventYear === thisYear && eventMonth >= thisMonth)) {
+              currentAndFutureMonthsActive++;
+            } else if (eventYear < thisYear || (eventYear === thisYear && eventMonth < thisMonth)) {
+              previousMonthsActive++;
+            }
+          } else {
+            currentAndFutureMonthsActive++;
+          }
+        });
+
+        setActiveEventsCount(currentAndFutureMonthsActive);
+        setActiveEventsPercentChange(
+          previousMonthsActive === 0 && currentAndFutureMonthsActive === 0 ? 0
+            : previousMonthsActive === 0 ? 100
+            : ((currentAndFutureMonthsActive - previousMonthsActive) / previousMonthsActive) * 100
+        );
+
+        // Calculate production quality
         if (activeForQuality.length > 0) {
           const healthScores = activeForQuality
             .map((event: any) => event.health || 0)
             .filter((score: number) => score > 0);
-          
-          if (healthScores.length > 0) {
-            const averageQuality = healthScores.reduce((a: number, b: number) => a + b, 0) / healthScores.length;
-            setProductionQuality(Math.round(averageQuality));
-          } else {
-            setProductionQuality(0);
-          }
+          setProductionQuality(healthScores.length > 0 
+            ? Math.round(healthScores.reduce((a, b) => a + b, 0) / healthScores.length)
+            : 0);
         } else {
           setProductionQuality(0);
         }
@@ -400,31 +419,31 @@ export default function AdminDashboard() {
   }, [user, systemActivities]);
 
   return (
-    <div className="space-y-12 w-full max-w-none">
+    <div className="space-y-8 md:space-y-12 w-full max-w-none">
       {/* Top Banner Row */}
-      <div className="flex flex-col xl:flex-row gap-8 justify-between xl:items-end">
-        <div className="flex flex-col justify-center xl:w-1/2 pt-4">
+      <div className="flex flex-col lg:flex-row gap-6 md:gap-8 justify-between lg:items-end">
+        <div className="flex flex-col justify-center lg:w-1/2 pt-4 px-2 md:px-0">
           <p className="text-[10px] font-bold tracking-[0.2em] text-[#d4a017] uppercase mb-4">Admin Portal</p>
-          <h1 className="text-4xl md:text-5xl lg:text-[56px] font-extrabold text-gray-900 leading-[1.05] tracking-tight mb-6">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[56px] font-extrabold text-gray-900 leading-[1.05] tracking-tight mb-6">
             Merry Story<br />Productions
           </h1>
-          <p className="text-gray-500 text-[15px] leading-relaxed max-w-md">
+          <p className="text-gray-500 text-[14px] sm:text-[15px] leading-relaxed max-w-md">
             Curating extraordinary cinematic experiences and premium live productions globally.
           </p>
         </div>
 
-        <div className="flex flex-wrap lg:flex-nowrap gap-5 shrink-0 mt-6 xl:mt-0 xl:w-auto w-full">
+        <div className="flex flex-wrap gap-4 md:gap-5 shrink-0 mt-6 lg:mt-0 lg:w-auto w-full px-2 md:px-0">
           {/* Active Events */}
-          <div className="bg-white p-7 rounded-xl shadow-sm border border-gray-100 xl:w-56 w-[calc(50%-10px)] flex flex-col justify-between min-h-[180px] transform transition-transform hover:-translate-y-1">
-            <div className="flex gap-2 items-center text-[11px] font-bold tracking-wider text-gray-400 mb-8 uppercase">
-              <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <div className="bg-white p-6 md:p-7 rounded-xl shadow-sm border border-gray-100 flex-1 sm:flex-none sm:w-[calc(50%-8px)] lg:w-56 flex flex-col justify-between min-h-[160px] md:min-h-[180px] transform transition-transform hover:-translate-y-1">
+            <div className="flex gap-2 items-center text-[10px] md:text-[11px] font-bold tracking-wider text-gray-400 mb-6 md:mb-8 uppercase">
+              <svg className="w-4 md:w-5 h-4 md:h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               Active Events
             </div>
             <div>
-              {loading ? <p className="text-6xl font-bold text-gray-400 tracking-tight">...</p>
+              {loading ? <p className="text-5xl md:text-6xl font-bold text-gray-400 tracking-tight">...</p>
                 : error ? <p className="text-xs text-red-500 font-bold">Error</p>
-                : <p className="text-6xl font-bold text-gray-900 tracking-tight">{activeEventsCount}</p>}
-              <p className="text-[12px] text-gray-500 font-medium mt-4 flex items-center gap-1">
+                : <p className="text-5xl md:text-6xl font-bold text-gray-900 tracking-tight">{activeEventsCount}</p>}
+              <p className="text-[12px] text-gray-500 font-medium mt-3 md:mt-4 flex items-center gap-1">
                 <span className="text-gray-900 font-bold leading-none pb-0.5">
                   {activeEventsPercentChange !== null && !loading && !error && (
                     activeEventsPercentChange > 0 ? '↗' : activeEventsPercentChange < 0 ? '↘' : '→'
@@ -440,16 +459,16 @@ export default function AdminDashboard() {
           </div>
 
           {/* Inquiries */}
-          <div className="bg-[#1c1c1c] p-7 rounded-xl shadow-lg shadow-gray-200 xl:w-64 w-[calc(50%-10px)] flex flex-col justify-between text-white min-h-[180px] transform transition-transform hover:-translate-y-1">
-            <div className="flex gap-2 items-center text-[11px] font-bold tracking-wider text-gray-400 mb-8 uppercase">
-              <svg className="w-5 h-5 text-[#d4a017]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+          <div className="bg-[#1c1c1c] p-6 md:p-7 rounded-xl shadow-lg shadow-gray-200 flex-1 sm:flex-none sm:w-[calc(50%-8px)] lg:w-64 flex flex-col justify-between text-white min-h-[160px] md:min-h-[180px] transform transition-transform hover:-translate-y-1">
+            <div className="flex gap-2 items-center text-[10px] md:text-[11px] font-bold tracking-wider text-gray-400 mb-6 md:mb-8 uppercase">
+              <svg className="w-4 md:w-5 h-4 md:h-5 text-[#d4a017]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
               Inquiries
             </div>
             <div>
-              {loading ? <p className="text-6xl font-bold tracking-tight text-[#d4a017]/40">...</p>
+              {loading ? <p className="text-5xl md:text-6xl font-bold tracking-tight text-[#d4a017]/40">...</p>
                 : error ? <p className="text-xs text-red-500 font-bold">Error</p>
-                : <p className="text-6xl font-bold tracking-tight">{inquiriesCount}</p>}
-              <p className="text-[12px] text-[#d4a017] font-semibold mt-4 flex items-center gap-1">
+                : <p className="text-5xl md:text-6xl font-bold tracking-tight">{inquiriesCount}</p>}
+              <p className="text-[12px] text-[#d4a017] font-semibold mt-3 md:mt-4 flex items-center gap-1">
                 <span className="leading-none pb-0.5">
                   {inquiriesPercentChange !== null && !loading && !error && (
                     inquiriesPercentChange > 0 ? '↗' : inquiriesPercentChange < 0 ? '↘' : '→'
@@ -465,14 +484,14 @@ export default function AdminDashboard() {
           </div>
 
           {/* Tasks */}
-          <div className="bg-[#facc15] p-7 rounded-xl shadow-lg shadow-[#facc15]/20 xl:w-48 w-full flex flex-col justify-between min-h-[180px] transform transition-transform hover:-translate-y-1">
-            <div className="flex gap-2 items-center text-[11px] font-bold tracking-wider text-yellow-900 mb-8 uppercase">
-              <svg className="w-5 h-5 text-yellow-900" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <div className="bg-[#facc15] p-6 md:p-7 rounded-xl shadow-lg shadow-[#facc15]/20 w-full sm:w-[calc(50%-8px)] lg:w-48 flex flex-col justify-between min-h-[160px] md:min-h-[180px] transform transition-transform hover:-translate-y-1">
+            <div className="flex gap-2 items-center text-[10px] md:text-[11px] font-bold tracking-wider text-yellow-900 mb-6 md:mb-8 uppercase">
+              <svg className="w-4 md:w-5 h-4 md:h-5 text-yellow-900" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               Tasks
             </div>
             <div>
-              <p className="text-6xl font-extrabold tracking-tight text-gray-900">{tasksCount}</p>
-              <p className="text-[12px] text-yellow-900 font-semibold mt-4 flex items-center gap-1">
+              <p className="text-5xl md:text-6xl font-extrabold tracking-tight text-gray-900">{tasksCount}</p>
+              <p className="text-[12px] text-yellow-900 font-semibold mt-3 md:mt-4 flex items-center gap-1">
                 <span className="leading-none pb-0.5">
                   {tasksPercentChange !== null && !loading && !error && (
                     tasksPercentChange > 0 ? '↗' : tasksPercentChange < 0 ? '↘' : '→'
@@ -490,9 +509,9 @@ export default function AdminDashboard() {
       </div>
 
       {/* Middle Row */}
-      <div className="flex flex-col lg:flex-row gap-6 pt-4">
+      <div className="flex flex-col lg:flex-row gap-6 md:gap-8 pt-4">
         {/* Client Engagements */}
-        <div className="flex-1 bg-white p-8 md:p-10 rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[350px]">
+        <div className="flex-1 bg-white p-6 md:p-10 rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[300px] md:min-h-[350px]">
           <div className="flex flex-col sm:flex-row justify-between items-start mb-12 gap-4">
             <div>
               <h3 className="text-xl font-bold text-gray-900">Client Engagements</h3>
@@ -609,16 +628,16 @@ export default function AdminDashboard() {
         </div>
 
         {/* Production Quality */}
-        <div className="lg:w-80 bg-gray-100 p-8 md:p-10 rounded-xl flex flex-col justify-center min-h-[350px]">
-          <h3 className="text-[11px] font-bold tracking-wider text-gray-500 uppercase mb-6 flex items-center gap-2">
+        <div className="lg:w-80 bg-gray-100 p-6 md:p-10 rounded-xl flex flex-col justify-center min-h-[300px] md:min-h-[350px]">
+          <h3 className="text-[10px] md:text-[11px] font-bold tracking-wider text-gray-500 uppercase mb-4 md:mb-6 flex items-center gap-2">
             <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             Production Quality
           </h3>
-          <p className="text-5xl md:text-[56px] font-extrabold text-gray-900 leading-none tracking-tight">{loading ? '...' : productionQuality}%</p>
-          <p className="text-[14px] text-gray-600 mt-4 leading-relaxed font-medium">
+          <p className="text-4xl sm:text-5xl md:text-[56px] font-extrabold text-gray-900 leading-none tracking-tight">{loading ? '...' : productionQuality}%</p>
+          <p className="text-[13px] md:text-[14px] text-gray-600 mt-3 md:mt-4 leading-relaxed font-medium">
             Aggregate feedback across all active production sets.
           </p>
-          <a href="/admin/production-quality" className="text-[11px] font-bold tracking-widest uppercase text-gray-900 mt-10 flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all cursor-pointer">
+          <a href="/admin/production-quality" className="text-[10px] md:text-[11px] font-bold tracking-widest uppercase text-gray-900 mt-6 md:mt-10 flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all cursor-pointer">
             View full report
             <span className="transform group-hover:translate-x-1 transition-transform">→</span>
           </a>
@@ -626,15 +645,15 @@ export default function AdminDashboard() {
       </div>
 
       {/* In Production */}
-      <div className="space-y-8 pt-4">
+      <div className="space-y-6 md:space-y-8 pt-4">
         <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4">
-          <div>
-            <h2 className="text-2xl md:text-[28px] font-bold text-gray-900 tracking-tight">In Production</h2>
-            <p className="text-[15px] text-gray-500 mt-2 font-medium">Real-time status of current projects.</p>
+          <div className="px-2 md:px-0">
+            <h2 className="text-xl md:text-2xl lg:text-[28px] font-bold text-gray-900 tracking-tight">In Production</h2>
+            <p className="text-[14px] md:text-[15px] text-gray-500 mt-2 font-medium">Real-time status of current projects.</p>
           </div>
           <a
             href="/admin/events"
-            className="text-[13px] font-bold text-gray-700 bg-white border border-gray-200 px-6 py-2.5 rounded-lg shadow-sm hover:bg-gray-50 transition-colors flex items-center gap-2 group overflow-hidden relative"
+            className="text-[12px] md:text-[13px] font-bold text-gray-700 bg-white border border-gray-200 px-4 sm:px-6 py-2.5 rounded-lg shadow-sm hover:bg-gray-50 transition-colors flex items-center gap-2 group overflow-hidden relative whitespace-nowrap"
             style={{ position: 'relative' }}
             onClick={e => {
               e.currentTarget.classList.add('animate-slideOutLeft');
@@ -657,7 +676,7 @@ export default function AdminDashboard() {
           </a>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
           {(() => {
             // Prioritize ongoing event today, then most recently updated events
             const ongoing = activeEvents.find(isEventOngoingToday);
@@ -679,7 +698,7 @@ export default function AdminDashboard() {
                     window.location.href = `/admin/events/${event._id}`;
                   }}
                 >
-                  <div className="h-52 bg-gray-200 relative overflow-hidden flex items-center justify-center">
+                  <div className="h-40 sm:h-48 md:h-52 bg-gray-200 relative overflow-hidden flex items-center justify-center">
                     {event.coverImageUrl ? (
                       <img src={event.coverImageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
@@ -687,33 +706,33 @@ export default function AdminDashboard() {
                     )}
                     <div className={`absolute top-5 right-5 px-3 py-1.5 rounded-md text-[10px] font-bold tracking-widest uppercase shadow-sm ${isOngoing ? 'bg-green-600 text-white animate-pulse' : 'bg-[#d4a017] text-white'}`}>{isOngoing ? 'Ongoing' : event.status}</div>
                   </div>
-                  <div className="p-8 flex flex-col flex-grow">
-                    <h3 className="text-xl font-bold text-gray-900 mb-3 tracking-tight">
+                  <div className="p-6 md:p-8 flex flex-col flex-grow">
+                    <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-3 tracking-tight">
                       {event.title}
                     </h3>
-                    <p className="text-[14px] text-gray-500 leading-relaxed mb-8 flex-grow">
+                    <p className="text-[13px] md:text-[14px] text-gray-500 leading-relaxed mb-6 md:mb-8 flex-grow">
                       {event.type || '—'} | {event.date ? new Date(event.date).toLocaleDateString() : 'No Date'}
                     </p>
-                    <div className="flex justify-between text-[11px] font-bold tracking-wider text-gray-400 uppercase mb-3">
+                    <div className="flex justify-between text-[10px] md:text-[11px] font-bold tracking-wider text-gray-400 uppercase mb-3">
                       <span>{progressLabel}</span><span className="text-gray-900">{progress}%</span>
                     </div>
-                    <div className="w-full bg-gray-100 h-1.5 rounded-full mb-8 overflow-hidden">
+                    <div className="w-full bg-gray-100 h-1.5 rounded-full mb-6 md:mb-8 overflow-hidden">
                       <div className={`${progressColor} h-full rounded-full`} style={{ width: `${progress}%` }}></div>
                     </div>
-                    <div className="flex justify-between items-center pt-5 border-t border-gray-100">
+                    <div className="flex justify-between items-center pt-4 md:pt-5 border-t border-gray-100">
                       <div className="flex -space-x-3">
                         {event.team && Array.isArray(event.team) && event.team.slice(0, 3).map((member: any, i: number) => (
                           member.avatarUrl ? (
-                            <img key={i} className="w-8 h-8 rounded-full border-2 border-white object-cover" src={member.avatarUrl} alt={member.name} />
+                            <img key={i} className="w-7 sm:w-8 h-7 sm:h-8 rounded-full border-2 border-white object-cover" src={member.avatarUrl} alt={member.name} />
                           ) : (
-                            <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-200 text-[10px] font-bold flex items-center justify-center text-gray-400 z-10">{member.name?.charAt(0).toUpperCase()}</div>
+                            <div key={i} className="w-7 sm:w-8 h-7 sm:h-8 rounded-full border-2 border-white bg-gray-200 text-[9px] sm:text-[10px] font-bold flex items-center justify-center text-gray-400 z-10">{member.name?.charAt(0).toUpperCase()}</div>
                           )
                         ))}
                         {event.team && event.team.length > 3 && (
-                          <div className="w-8 h-8 rounded-full border-2 border-white bg-[#facc15] text-[10px] font-bold flex items-center justify-center text-yellow-900 z-10">+{event.team.length - 3}</div>
+                          <div className="w-7 sm:w-8 h-7 sm:h-8 rounded-full border-2 border-white bg-[#facc15] text-[9px] sm:text-[10px] font-bold flex items-center justify-center text-yellow-900 z-10">+{event.team.length - 3}</div>
                         )}
                       </div>
-                      <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">{event.date ? new Date(event.date).toLocaleDateString() : ''}</span>
+                      <span className="text-[10px] md:text-[11px] font-bold text-gray-400 tracking-wider uppercase">{event.date ? new Date(event.date).toLocaleDateString() : ''}</span>
                     </div>
                   </div>
                 </div>
@@ -791,19 +810,19 @@ export default function AdminDashboard() {
       </div>
 
       {/* Staff Section with Activities */}
-      <div className="pb-12 border-t border-gray-200 pt-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="pb-12 border-t border-gray-200 pt-8 md:pt-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
           {/* Left: Staff List */}
           <div>
-            <div className="mb-8">
-              <h2 className="text-xl md:text-[22px] font-bold text-gray-900 mb-3">Core Production Team</h2>
-              <p className="text-[14px] text-gray-500 leading-relaxed">
+            <div className="mb-6 md:mb-8">
+              <h2 className="text-lg md:text-xl lg:text-[22px] font-bold text-gray-900 mb-2 md:mb-3">Core Production Team</h2>
+              <p className="text-[13px] md:text-[14px] text-gray-500 leading-relaxed">
                 Our specialized leads and their current deployment status across regional territories.
               </p>
             </div>
 
             <div className="flex gap-3 mb-6">
-              <a href="/admin/users" className="text-[11px] font-bold tracking-widest uppercase text-[#d4a017] flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all cursor-pointer flex-1">
+              <a href="/admin/users" className="text-[10px] md:text-[11px] font-bold tracking-widest uppercase text-[#d4a017] flex items-center gap-2 group decoration-2 hover:underline underline-offset-4 transition-all cursor-pointer flex-1">
                 Staff Directory
                 <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -811,7 +830,7 @@ export default function AdminDashboard() {
               </a>
             </div>
             {!staffLoading && !staffError && (
-              <p className="text-[11px] text-gray-400 mb-6">{staff.length} member{staff.length !== 1 ? 's' : ''}</p>
+              <p className="text-[10px] md:text-[11px] text-gray-400 mb-6">{staff.length} member{staff.length !== 1 ? 's' : ''}</p>
             )}
 
             {/* Staff List - Single Column */}
@@ -825,8 +844,8 @@ export default function AdminDashboard() {
             >
               {/* Skeletons */}
               {staffLoading && [...Array(4)].map((_, i) => (
-                <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4 animate-pulse">
-                  <div className="w-10 h-10 rounded bg-gray-100 shrink-0" />
+                <div key={i} className="bg-white p-3 md:p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3 md:gap-4 animate-pulse">
+                  <div className="w-9 md:w-10 h-9 md:h-10 rounded bg-gray-100 shrink-0" />
                   <div className="flex-1 space-y-2 min-w-0">
                     <div className="h-3 bg-gray-100 rounded w-1/2" />
                     <div className="h-2.5 bg-gray-100 rounded w-1/3" />
@@ -836,14 +855,14 @@ export default function AdminDashboard() {
 
               {/* Error */}
               {staffError && (
-                <div className="bg-red-50 border border-red-100 text-red-500 text-[13px] font-medium p-4 rounded-xl">
+                <div className="bg-red-50 border border-red-100 text-red-500 text-[12px] md:text-[13px] font-medium p-3 md:p-4 rounded-xl">
                   {staffError}
                 </div>
               )}
 
               {/* Empty */}
               {!staffLoading && !staffError && staff.length === 0 && (
-                <div className="text-[13px] text-gray-400 p-4">No staff members found.</div>
+                <div className="text-[12px] md:text-[13px] text-gray-400 p-3 md:p-4">No staff members found.</div>
               )}
 
               {/* Staff rows — merged from users + staff collections */}
@@ -855,27 +874,27 @@ export default function AdminDashboard() {
                 return (
                   <div
                     key={memberId}
-                    className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4 hover:border-gray-200 transition-colors ${isUnavailable ? 'opacity-70 hover:opacity-100' : ''}`}
+                    className={`bg-white p-3 md:p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3 md:gap-4 hover:border-gray-200 transition-colors ${isUnavailable ? 'opacity-70 hover:opacity-100' : ''}`}
                   >
                     {member.avatarUrl ? (
                       <img
-                        className={`w-10 h-10 rounded bg-gray-100 object-cover shadow-sm shrink-0 ${isUnavailable ? 'grayscale' : ''}`}
+                        className={`w-9 md:w-10 h-9 md:h-10 rounded bg-gray-100 object-cover shadow-sm shrink-0 ${isUnavailable ? 'grayscale' : ''}`}
                         src={member.avatarUrl}
                         alt={member.name}
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded bg-gray-100 shadow-sm flex items-center justify-center text-gray-400 font-bold text-sm shrink-0">
+                      <div className="w-9 md:w-10 h-9 md:h-10 rounded bg-gray-100 shadow-sm flex items-center justify-center text-gray-400 font-bold text-xs md:text-sm shrink-0">
                         {member.name?.charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">{member.name}</p>
+                      <p className="text-xs md:text-sm font-bold text-gray-900 truncate">{member.name}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <p className="text-[11px] font-bold tracking-wider text-gray-400 uppercase truncate">
+                        <p className="text-[10px] md:text-[11px] font-bold tracking-wider text-gray-400 uppercase truncate">
                           {member.role || '—'}
                         </p>
                         <span className={`w-2 h-2 rounded-full ${dot} shrink-0`} />
-                        <p className={`text-[11px] ${textClass} truncate`}>
+                        <p className={`text-[10px] md:text-[11px] ${textClass} truncate`}>
                           {label}
                         </p>
                       </div>
@@ -888,9 +907,9 @@ export default function AdminDashboard() {
 
           {/* Right: Recent Activities */}
           <div>
-            <div className="mb-8">
-              <p className="text-[11px] font-bold tracking-widest text-gray-400 uppercase mb-2">System Activity</p>
-              <h2 className="text-xl md:text-[22px] font-bold text-gray-900">Recent activities</h2>
+            <div className="mb-6 md:mb-8">
+              <p className="text-[10px] md:text-[11px] font-bold tracking-widest text-gray-400 uppercase mb-2">System Activity</p>
+              <h2 className="text-lg md:text-xl lg:text-[22px] font-bold text-gray-900">Recent activities</h2>
             </div>
 
             <div
@@ -908,21 +927,21 @@ export default function AdminDashboard() {
                 </div>
               ) : (systemActivities || []).length > 0 ? (
                 systemActivities.map((log: any, idx: number) => (
-                  <div key={idx} className="rounded-xl border border-gray-100 bg-gray-50 hover:bg-gray-100 p-4 transition-colors">
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#d4a017] bg-[#facc15]/10 px-2.5 py-1 rounded-full shrink-0">
+                  <div key={idx} className="rounded-xl border border-gray-100 bg-gray-50 hover:bg-gray-100 p-3 md:p-4 transition-colors">
+                    <div className="flex items-start justify-between gap-2 md:gap-3 mb-2">
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.15em] text-[#d4a017] bg-[#facc15]/10 px-2.5 py-1 rounded-full shrink-0">
                         {log.type || 'Update'}
                       </span>
-                      <span className="text-[10px] text-gray-500 whitespace-nowrap shrink-0">{log.time}</span>
+                      <span className="text-[9px] md:text-[10px] text-gray-500 whitespace-nowrap shrink-0">{log.time}</span>
                     </div>
-                    <p className="text-sm text-gray-700 font-medium mb-1.5">{log.action}</p>
+                    <p className="text-xs md:text-sm text-gray-700 font-medium mb-1.5">{log.action}</p>
                     {log.actor && (
-                      <p className="text-[11px] text-gray-400 font-medium">by {log.actor}</p>
+                      <p className="text-[10px] md:text-[11px] text-gray-400 font-medium">by {log.actor}</p>
                     )}
                   </div>
                 ))
               ) : (
-                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 md:p-8 text-center">
                   <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>

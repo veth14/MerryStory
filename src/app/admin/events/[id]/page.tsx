@@ -402,7 +402,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 Live controls for guest check-ins, vendor logistics, and real-time alerts will become active on <span className="text-white font-bold">{new Date(event!.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>. 
               </p>
               <div className="mt-10 flex justify-center gap-6">
-                <div className="w-16 h-1.5 w-full max-w-[160px] bg-white/10 rounded-full overflow-hidden">
+                <div className="h-1.5 w-full max-w-[160px] bg-white/10 rounded-full overflow-hidden">
                    <div className="h-full bg-[#facc15] animate-shimmer" style={{ width: '40%' }}></div>
                 </div>
               </div>

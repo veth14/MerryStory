@@ -37,7 +37,7 @@ export default function InquiriesAdminPage() {
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 5;
 
   const [alert, setAlert] = useState<{ message: string, type: 'success'|'error' } | null>(null);
   const [modal, setModal] = useState<{ isOpen: boolean, title: string, desc: string, action: (() => void) | null, type: 'info'|'danger' }>({ isOpen: false, title: '', desc: '', action: null, type: 'info' });
@@ -190,15 +190,17 @@ export default function InquiriesAdminPage() {
     }
   };
 
-  const filteredInquiries = inquiries.filter(inq => {
-    const matchesArchive = activeTab === 'archived' ? inq.isArchived : !inq.isArchived;
-    const matchesClassification = classificationFilter === 'All Classifications' || inq.eventType === classificationFilter;
-    const matchesSearch = !searchQuery || 
-      inq.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inq.eventType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inq.needs.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesArchive && matchesClassification && matchesSearch;
-  });
+  const filteredInquiries = inquiries
+    .filter(inq => {
+      const matchesArchive = activeTab === 'archived' ? inq.isArchived : !inq.isArchived;
+      const matchesClassification = classificationFilter === 'All Classifications' || inq.eventType === classificationFilter;
+      const matchesSearch = !searchQuery || 
+        inq.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        inq.eventType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        inq.needs.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesArchive && matchesClassification && matchesSearch;
+    })
+    .sort((a, b) => new Date(b.submitted).getTime() - new Date(a.submitted).getTime());
 
   // Pagination Logic
   const totalPages = Math.ceil(filteredInquiries.length / itemsPerPage);
@@ -292,7 +294,7 @@ export default function InquiriesAdminPage() {
         </div>
 
         {/* Data Grid */}
-        <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden flex flex-col">
           <div className="overflow-x-auto overflow-y-visible">
             <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
@@ -386,46 +388,43 @@ export default function InquiriesAdminPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer Inside Table */}
+          {!isLoading && totalPages > 1 && (
+            <div className="px-6 py-4 flex items-center justify-between border-t border-gray-50 bg-[#fafafa]/50">
+              <span className="text-xs text-[#a1a1aa] font-medium">Showing {Math.min(filteredInquiries.length, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(filteredInquiries.length, currentPage * itemsPerPage)} of {filteredInquiries.length} Inquiries</span>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#a1a1aa] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronDown size={14} className="rotate-90" />
+                </button>
+                <div className="flex items-center gap-1">
+                  {[...Array(totalPages)].map((_, i) => (
+                    <button
+                      key={i + 1}
+                      onClick={() => handlePageChange(i + 1)}
+                      className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold transition-all ${currentPage === i + 1 ? 'bg-[#eebf43] text-[#1d1d1f] shadow-sm shadow-[#eebf43]/20' : 'bg-white border border-gray-200 text-[#1d1d1f] hover:bg-gray-50'}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#a1a1aa] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronDown size={14} className="-rotate-90" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Pagination Controls */}
-        {!isLoading && totalPages > 1 && (
-          <div className="mt-8 flex items-center justify-between px-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-              Showing <span className="text-gray-900">{Math.min(filteredInquiries.length, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(filteredInquiries.length, currentPage * itemsPerPage)}</span> of {filteredInquiries.length} Entries
-            </p>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-6 py-3 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-900 disabled:opacity-40 hover:bg-gray-50 transition-all shadow-sm"
-              >
-                Previous
-              </button>
-              <div className="flex gap-1">
-                {[...Array(totalPages)].map((_, i) => (
-                  <button
-                    key={i + 1}
-                    onClick={() => handlePageChange(i + 1)}
-                    className={`w-10 h-10 rounded-xl text-[10px] font-black transition-all ${currentPage === i + 1 ? 'bg-[#facc15] text-gray-900 shadow-lg shadow-[#facc15]/20' : 'bg-white border border-gray-100 text-gray-400 hover:bg-gray-50'}`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-              </div>
-              <button 
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-6 py-3 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-900 disabled:opacity-40 hover:bg-gray-50 transition-all shadow-sm"
-              >
-                Next Page
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Modal - Details Inspector */}
+        {/* Modal - Details Inspector */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
           <div className="bg-white rounded-[40px] shadow-2xl border border-gray-100 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300">
@@ -600,6 +599,7 @@ export default function InquiriesAdminPage() {
           ))}
         </div>
       )}
+      </div>
     </>
   );
 }

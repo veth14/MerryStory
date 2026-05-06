@@ -25,12 +25,19 @@ interface AnalyticsData {
   monthlyFrequency: Array<{ label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number }>;
   quarterlyFrequency: Array<{ label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number }>;
   halfYearFrequency: Array<{ label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number }>;
-  annualFrequency: { label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number };
+  annualFrequency: Array<{ label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number }>;
   peakMonths: {
     bookings: { month: string; count: number };
     inquiries: { month: string; count: number };
   };
   eventTypeBreakdown: Array<{ type: string; count: number; bookings: number; inquiries: number; percentage: number }>;
+  eventTypeByFrequency?: {
+    monthly: { [key: number]: { [type: string]: { bookings: number; inquiries: number } } };
+    quarterly: { [key: number]: { [type: string]: { bookings: number; inquiries: number } } };
+    halfYear: { [key: number]: { [type: string]: { bookings: number; inquiries: number } } };
+    annual: { [type: string]: { bookings: number; inquiries: number } };
+  };
+  currentYear?: number;
 }
 
 interface Recommendation {
@@ -62,7 +69,7 @@ export default function AnalyticsAdminPage() {
           const analyticsData = await response.json();
           console.log('Analytics Data Received:', analyticsData);
           setData(analyticsData);
-          generateRecommendations(analyticsData);
+          generateRecommendations(analyticsData, 'Monthly', true);
         }
       } catch (err) {
         console.error('Error fetching analytics:', err);
@@ -72,6 +79,13 @@ export default function AnalyticsAdminPage() {
     };
     fetchData();
   }, [user]);
+
+  // Regenerate recommendations when frequency changes (but don't show toast)
+  useEffect(() => {
+    if (data) {
+      generateRecommendations(data, frequency, false);
+    }
+  }, [frequency, data]);
 
   // Handle auto-close toast after 10 seconds
   useEffect(() => {
@@ -84,13 +98,28 @@ export default function AnalyticsAdminPage() {
     return () => clearTimeout(timer);
   }, [showToast]);
 
-  const generateRecommendations = (analyticsData: AnalyticsData) => {
+  const generateRecommendations = (analyticsData: AnalyticsData, selectedFrequency: string = 'Monthly', showToastNotification: boolean = false) => {
     const recs: Recommendation[] = [];
 
-    // Get actual totals from the API data
-    const monthlyData = analyticsData.monthlyFrequency || [];
-    const totalInquiries = monthlyData.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0);
-    const totalBookings = monthlyData.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0);
+    // Get data for the selected frequency
+    let frequencyData: Array<{ label: string; bookings: number; inquiries: number; actualBookings?: number; actualInquiries?: number }>;
+    switch (selectedFrequency) {
+      case 'Quarterly':
+        frequencyData = analyticsData.quarterlyFrequency || [];
+        break;
+      case 'Half-Year':
+        frequencyData = analyticsData.halfYearFrequency || [];
+        break;
+      case 'Annual':
+        frequencyData = analyticsData.annualFrequency || [];
+        break;
+      case 'Monthly':
+      default:
+        frequencyData = analyticsData.monthlyFrequency || [];
+    }
+
+    const totalInquiries = frequencyData.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0);
+    const totalBookings = frequencyData.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0);
     const conversionRate = totalBookings > 0 && totalInquiries > 0 ? (totalBookings / totalInquiries) * 100 : 0;
 
     // 1. Conversion Rate Analysis
@@ -164,19 +193,20 @@ export default function AnalyticsAdminPage() {
     }
 
     // 4. Month-over-Month Growth Analysis
-    if (monthlyData.length >= 2) {
-      // Get last 3 months average vs previous 3 months
-      const recentMonths = monthlyData.slice(-3);
-      const previousMonths = monthlyData.slice(-6, -3);
+    if (frequencyData.length >= 2) {
+      // Get last half vs previous half
+      const midPoint = Math.ceil(frequencyData.length / 2);
+      const recentHalf = frequencyData.slice(midPoint);
+      const previousHalf = frequencyData.slice(0, midPoint);
       
-      const recentBookings = recentMonths.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0) / recentMonths.length;
-      const previousBookings = previousMonths.length > 0 
-        ? previousMonths.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0) / previousMonths.length 
+      const recentBookings = recentHalf.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0) / recentHalf.length;
+      const previousBookings = previousHalf.length > 0 
+        ? previousHalf.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0) / previousHalf.length 
         : 0;
 
       const bookingGrowth = previousBookings > 0 ? ((recentBookings - previousBookings) / previousBookings) * 100 : 0;
 
-      if (recentMonths.length > 0 && previousBookings > 0) {
+      if (recentHalf.length > 0 && previousBookings > 0) {
         if (bookingGrowth > 25) {
           recs.push({
             type: 'success',
@@ -199,13 +229,13 @@ export default function AnalyticsAdminPage() {
 
     // 5. Inquiry Volume Analysis
     const peakInquiryCount = analyticsData.peakMonths.inquiries.count;
-    const avgMonthlyInquiries = totalInquiries / 12;
+    const avgInquiries = totalInquiries / Math.max(frequencyData.length, 1);
 
-    if (peakInquiryCount > avgMonthlyInquiries * 2.5) {
+    if (peakInquiryCount > avgInquiries * 2.5) {
       recs.push({
         type: 'opportunity',
         title: 'Leverage Seasonal Demand',
-        description: `Peak inquiry months show ${Math.round((peakInquiryCount / avgMonthlyInquiries - 1) * 100)}% above average volume. Optimize your follow-up process to convert more leads during these periods.`,
+        description: `Peak periods show ${Math.round((peakInquiryCount / avgInquiries - 1) * 100)}% above average volume. Optimize your follow-up process to convert more leads during these periods.`,
         metric: `${peakInquiryCount} peak inquiries`,
         action: 'Implement inquiry tracking system'
       });
@@ -225,8 +255,8 @@ export default function AnalyticsAdminPage() {
     // Limit to 4 recommendations
     setRecommendations(recs.slice(0, 4));
     
-    // Show toast notification
-    if (recs.length > 0) {
+    // Only show toast notification on initial load, not on filter changes
+    if (showToastNotification && recs.length > 0) {
       setShowToast(true);
       setToastIndex(0);
     }
@@ -240,12 +270,37 @@ export default function AnalyticsAdminPage() {
       case 'Half-Year':
         return data.halfYearFrequency;
       case 'Annual':
-        return [data.annualFrequency];
+        return data.annualFrequency;
       case 'Monthly':
       default:
         return data.monthlyFrequency;
     }
   };
+
+  // Calculate stats based on frequency
+  const calculateStats = () => {
+    const data_source = getChartData();
+    const totalInquiries = data_source.reduce((sum, d) => sum + (d.actualInquiries || d.inquiries), 0);
+    const totalBookings = data_source.reduce((sum, d) => sum + (d.actualBookings || d.bookings), 0);
+    const conversionRate = totalInquiries > 0 ? (totalBookings / totalInquiries) * 100 : 0;
+    
+    // Find peak months in the frequency data
+    let peakBookingData = data_source.reduce((max, d) => (d.actualBookings || d.bookings) > (max.actualBookings || max.bookings) ? d : max, data_source[0] || { label: '', actualBookings: 0, bookings: 0, actualInquiries: 0, inquiries: 0 });
+    let peakInquiryData = data_source.reduce((max, d) => (d.actualInquiries || d.inquiries) > (max.actualInquiries || max.inquiries) ? d : max, data_source[0] || { label: '', actualBookings: 0, bookings: 0, actualInquiries: 0, inquiries: 0 });
+    
+    return {
+      totalInquiries,
+      totalBookings,
+      conversionRate,
+      peakBookingLabel: peakBookingData.label,
+      peakBookingCount: peakBookingData.actualBookings || peakBookingData.bookings,
+      peakInquiryLabel: peakInquiryData.label,
+      peakInquiryCount: peakInquiryData.actualInquiries || peakInquiryData.inquiries,
+      inquiryToBookingRatio: totalBookings > 0 ? Math.round(totalInquiries / totalBookings) : 0
+    };
+  };
+
+  const stats = calculateStats();
 
   const chartData = getChartData();
 
@@ -351,9 +406,9 @@ export default function AnalyticsAdminPage() {
             <div>
               <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Peak Performance (Bookings)</p>
               <h2 className="text-2xl font-black text-[#1d1d1f] flex items-center gap-2">
-                {data?.peakMonths.bookings.month || 'Loading'} <Award className="text-[#eebf43]" size={20} />
+                {stats.peakBookingLabel || 'Loading'} <Award className="text-[#eebf43]" size={20} />
               </h2>
-              <p className="text-xs text-[#71717a] mt-1 font-medium">{data?.peakMonths.bookings.count || 0} bookings - Highest conversion month</p>
+              <p className="text-xs text-[#71717a] mt-1 font-medium">{stats.peakBookingCount || 0} bookings - Highest conversion {frequency.toLowerCase()}</p>
             </div>
             <div className="w-14 h-14 rounded-full bg-[#f9f1d8] flex items-center justify-center border border-[#f4d98a]/50 group-hover:scale-110 transition-transform">
               <TrendingUp className="text-[#dcae32]" size={24} />
@@ -364,9 +419,9 @@ export default function AnalyticsAdminPage() {
             <div>
               <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Peak Performance (Inquiries)</p>
               <h2 className="text-2xl font-black text-[#1d1d1f] flex items-center gap-2">
-                {data?.peakMonths.inquiries.month || 'Loading'} <BarChart3 className="text-blue-500" size={20} />
+                {stats.peakInquiryLabel || 'Loading'} <BarChart3 className="text-blue-500" size={20} />
               </h2>
-              <p className="text-xs text-[#71717a] mt-1 font-medium">{data?.peakMonths.inquiries.count || 0} inquiries - Highest volume month</p>
+              <p className="text-xs text-[#71717a] mt-1 font-medium">{stats.peakInquiryCount || 0} inquiries - Highest volume {frequency.toLowerCase()}</p>
             </div>
             <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 group-hover:scale-110 transition-transform">
               <Calendar className="text-blue-500" size={24} />
@@ -384,7 +439,7 @@ export default function AnalyticsAdminPage() {
                   <Target size={16} className="text-[#eebf43]" />
                 </div>
                 <p className="text-2xl font-black text-[#1d1d1f]">
-                  {data.monthlyFrequency.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0)}
+                  {stats.totalInquiries}
                 </p>
               </div>
               <div className="bg-white p-5 rounded-xl border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all">
@@ -393,7 +448,7 @@ export default function AnalyticsAdminPage() {
                   <CheckCircle2 size={16} className="text-emerald-500" />
                 </div>
                 <p className="text-2xl font-black text-[#1d1d1f]">
-                  {data.monthlyFrequency.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0)}
+                  {stats.totalBookings}
                 </p>
               </div>
               <div className="bg-white p-5 rounded-xl border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all">
@@ -402,11 +457,7 @@ export default function AnalyticsAdminPage() {
                   <ArrowUpRight size={16} className="text-blue-500" />
                 </div>
                 <p className="text-2xl font-black text-[#1d1d1f]">
-                  {(() => {
-                    const totalBookings = data.monthlyFrequency.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0);
-                    const totalInquiries = data.monthlyFrequency.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0);
-                    return totalInquiries > 0 ? ((totalBookings / totalInquiries) * 100).toFixed(1) : '0.0';
-                  })()}%
+                  {stats.conversionRate.toFixed(1)}%
                 </p>
               </div>
               <div className="bg-white p-5 rounded-xl border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all">
@@ -546,13 +597,13 @@ export default function AnalyticsAdminPage() {
                   <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Inquiry to Booking Ratio</p>
                   <div className="flex items-baseline gap-2 mb-3">
                     <p className="text-2xl font-black text-[#1d1d1f]">
-                      1 : {Math.round((data.monthlyFrequency.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0)) / (data.monthlyFrequency.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0) || 1))}
+                      1 : {stats.inquiryToBookingRatio}
                     </p>
                     <span className="text-xs text-[#71717a]">conversion ratio</span>
                   </div>
                   <p className="text-xs text-[#71717a] leading-relaxed">
-                    For every {Math.round((data.monthlyFrequency.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0)) / (data.monthlyFrequency.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0) || 1))} inquiries, you convert 1 booking. {
-                      ((data.monthlyFrequency.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0) / (data.monthlyFrequency.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0) || 1)) * 100) > 30 
+                    For every {stats.inquiryToBookingRatio} inquiries, you convert 1 booking. {
+                      stats.conversionRate > 30 
                         ? 'Excellent conversion rate!' 
                         : 'Consider improving follow-up strategies.'
                     }
@@ -563,25 +614,25 @@ export default function AnalyticsAdminPage() {
                   <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Total Activity</p>
                   <div className="flex items-baseline gap-2 mb-3">
                     <p className="text-2xl font-black text-[#1d1d1f]">
-                      {data.monthlyFrequency.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0)}
+                      {stats.totalBookings}
                     </p>
                     <span className="text-xs text-[#71717a]">
-                      / {data.monthlyFrequency.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0)} inquiries
+                      / {stats.totalInquiries} inquiries
                     </span>
                   </div>
                   <p className="text-xs text-[#71717a] leading-relaxed">
-                    You have successfully booked {data.monthlyFrequency.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0)} events from {data.monthlyFrequency.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0)} total inquiries in the tracked period.
+                    You have successfully booked {stats.totalBookings} events from {stats.totalInquiries} total inquiries in this {frequency.toLowerCase()} period.
                   </p>
                 </div>
 
                 <div className="bg-white rounded-xl p-4 border border-gray-100/50 hover:border-gray-200 transition-colors">
-                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Peak Booking Month</p>
+                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Peak Booking Period</p>
                   <div className="flex items-baseline gap-2 mb-3">
-                    <p className="text-2xl font-black text-[#1d1d1f]">{data.peakMonths.bookings.month}</p>
-                    <span className="text-xs text-[#71717a]">{data.peakMonths.bookings.count} bookings</span>
+                    <p className="text-2xl font-black text-[#1d1d1f]">{stats.peakBookingLabel}</p>
+                    <span className="text-xs text-[#71717a]">{stats.peakBookingCount} bookings</span>
                   </div>
                   <p className="text-xs text-[#71717a] leading-relaxed">
-                    Your strongest month. Ensure adequate resources during this period. Average monthly bookings: {Math.round(data.monthlyFrequency.reduce((sum, m) => sum + (m.actualBookings || m.bookings), 0) / 12)}.
+                    Your strongest {frequency.toLowerCase()} period. Ensure adequate resources during this time. Average per period: {Math.round(stats.totalBookings / Math.max(getChartData().length, 1))}.
                   </p>
                 </div>
 
@@ -634,13 +685,13 @@ export default function AnalyticsAdminPage() {
                 </div>
 
                 <div className="bg-white rounded-xl p-4 border border-gray-100/50 hover:border-gray-200 transition-colors">
-                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Peak Inquiry Month</p>
+                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Peak Inquiry Period</p>
                   <div className="flex items-baseline gap-2 mb-3">
-                    <p className="text-2xl font-black text-[#1d1d1f]">{data.peakMonths.inquiries.month}</p>
-                    <span className="text-xs text-[#71717a]">{data.peakMonths.inquiries.count} inquiries</span>
+                    <p className="text-2xl font-black text-[#1d1d1f]">{stats.peakInquiryLabel}</p>
+                    <span className="text-xs text-[#71717a]">{stats.peakInquiryCount} inquiries</span>
                   </div>
                   <p className="text-xs text-[#71717a] leading-relaxed">
-                    Highest volume inquiry month. Prepare your sales team for this surge. Average monthly inquiries: {Math.round(data.monthlyFrequency.reduce((sum, m) => sum + (m.actualInquiries || m.inquiries), 0) / 12)}.
+                    Highest volume {frequency.toLowerCase()} period. Prepare your sales team for this surge. Average per period: {Math.round(stats.totalInquiries / Math.max(getChartData().length, 1))}.
                   </p>
                 </div>
               </>
