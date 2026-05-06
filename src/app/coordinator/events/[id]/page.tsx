@@ -132,6 +132,15 @@ const normalizeTaskStatus = (value?: string) => {
   return normalized;
 };
 
+const normalizeTaskPriority = (value?: string) => {
+  const normalized = (value || '').toUpperCase().replace(/[_-]/g, ' ').trim();
+  if (normalized === 'CRITICAL') return 'CRITICAL';
+  if (normalized === 'HIGH') return 'HIGH';
+  if (normalized === 'MEDIUM') return 'MEDIUM';
+  if (normalized === 'LOW') return 'LOW';
+  return '';
+};
+
 const getDisplayStatusLabel = (value?: string) => {
   const normalized = normalizeTaskStatus(value);
   if (normalized === 'COMPLETED') return 'Completed';
@@ -154,13 +163,20 @@ const normalizeAssigneeNames = (task: TaskRecord) => {
 };
 
 const getTaskBadge = (task: TaskRecord) => {
-  const priority = (task.priority || '').toUpperCase();
+  const priority = normalizeTaskPriority(task.priority);
   const status = normalizeTaskStatus(task.status);
 
   if (status === 'COMPLETED') {
     return {
       label: 'Completed',
       classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
+  if (priority === 'CRITICAL') {
+    return {
+      label: 'Critical Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg mb-2',
     };
   }
 
@@ -171,11 +187,39 @@ const getTaskBadge = (task: TaskRecord) => {
     };
   }
 
+  if (priority === 'MEDIUM') {
+    return {
+      label: 'Medium Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
+  if (priority === 'LOW') {
+    return {
+      label: 'Low Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-sky-700 bg-sky-50 px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
+  if (!priority) {
+    return {
+      label: 'No Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-[#71717a] bg-[#f4f4f5] px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
   const dueDate = task.due?.date ? new Date(`${task.due.date}T${task.due.time || '00:00'}:00`) : null;
   if (dueDate && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now()) {
     return {
       label: 'Overdue',
       classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-red-500 bg-red-50 px-2.5 py-1.5 rounded-lg mb-2',
+    };
+  }
+
+  if (!priority) {
+    return {
+      label: 'No Priority',
+      classes: 'inline-flex items-center text-[10px] font-extrabold uppercase tracking-widest text-[#71717a] bg-[#f4f4f5] px-2.5 py-1.5 rounded-lg mb-2',
     };
   }
 
@@ -1295,20 +1339,20 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
             ) : (
               <>
                 {renderTaskSection(
-                  'Pending Directives',
-                  'Mark tasks as finished after reviewing the confirmation modal and coordinate staff support when needed.',
-                  pendingEventTasks,
-                  false,
-                  pendingTasksPage,
-                  setPendingTasksPage
-                )}
-                {renderTaskSection(
                   'Production Directives',
                   'Production directives come from the live event-day schedule and appear here whenever you are assigned to them for this event.',
                   pendingProductionTasks,
                   false,
                   productionTasksPage,
                   setProductionTasksPage
+                )}
+                {renderTaskSection(
+                  'Pending Directives',
+                  'Mark tasks as finished after reviewing the confirmation modal and coordinate staff support when needed.',
+                  pendingEventTasks,
+                  false,
+                  pendingTasksPage,
+                  setPendingTasksPage
                 )}
                 {renderTaskSection(
                   'Finished Directives',
