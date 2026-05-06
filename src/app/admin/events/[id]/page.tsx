@@ -203,7 +203,7 @@ const isEventDatePassed = (eventDate?: string): boolean => {
   }
 };
 
-const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
+const CountdownTimer = ({ targetDate, status }: { targetDate: string; status: string }) => {
   const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, seconds: number } | null>(null);
 
   useEffect(() => {
@@ -234,8 +234,55 @@ const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
     return () => clearInterval(timer);
   }, [targetDate]);
 
-  if (!timeLeft) return <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-100 animate-pulse">Production Live</span>;
+  // DEBUG - Log the actual values
+  console.log('CountdownTimer DEBUG:', { status, timeLeft, targetDate });
 
+  const statusLower = (status || '').toLowerCase().trim();
+  const datePassed = timeLeft === null;
+  
+  console.log('Status check:', { statusLower, datePassed });
+  
+  // On Hold - show regardless of time
+  if (statusLower === 'on hold') {
+    console.log('Showing On Hold');
+    return <span className="bg-amber-50 text-amber-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-amber-100">On Hold</span>;
+  }
+  
+  // Date has passed
+  if (datePassed) {
+    console.log('Date has passed, checking status:', statusLower);
+    // If Completed, show Production Ended
+    if (statusLower === 'completed') {
+      console.log('Showing Production Ended');
+      return <span className="bg-gray-100 text-gray-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-gray-200">Production Ended</span>;
+    }
+    // Otherwise show Production Live
+    console.log('Showing Production Live');
+    return <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-100 animate-pulse">Production Live</span>;
+  }
+  
+  // At Risk with time remaining - show red countdown
+  if (statusLower === 'at risk') {
+    console.log('Showing At Risk countdown');
+    return (
+      <div className="flex gap-3 items-center">
+        {[
+          { label: 'DAYS', value: timeLeft.days },
+          { label: 'HRS', value: timeLeft.hours },
+          { label: 'MIN', value: timeLeft.minutes },
+          { label: 'SEC', value: timeLeft.seconds }
+        ].map((item) => (
+          <div key={item.label} className="bg-red-50 backdrop-blur-sm px-5 py-4 rounded-2xl border border-red-100 shadow-sm text-center min-w-[56px]">
+            <div className="text-[28px] font-black text-red-600 leading-none tabular-nums tracking-tighter">{String(item.value).padStart(2, '0')}</div>
+            <div className="text-[9px] font-black text-red-500 uppercase tracking-[0.1em] mt-2">{item.label}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Normal countdown for Active status
+  console.log('Showing normal countdown');
   return (
     <div className="flex gap-3 items-center">
       {[
@@ -1346,7 +1393,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
               <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
             </Link>
             <div className="mt-auto mb-0">
-              <CountdownTimer targetDate={event.date} />
+              <CountdownTimer targetDate={event.date} status={event.status} />
             </div>
           </div>
         </div>
