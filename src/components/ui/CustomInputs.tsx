@@ -22,10 +22,38 @@ export const CustomSelect = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+
+  const updatePosition = () => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  };
+
+  useEffect(() => {
+    updatePosition();
+    if (isOpen) {
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
+    }
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current && !containerRef.current.contains(event.target as Node) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(event.target as Node))
+      ) {
         setIsOpen(false);
       }
     };
@@ -34,6 +62,42 @@ export const CustomSelect = ({
   }, []);
 
   const selectedOption = options.find(opt => opt.value === value);
+
+  const dropdownMenu = isOpen && typeof document !== 'undefined' ? createPortal(
+    <div 
+      ref={dropdownRef}
+      style={{ ...dropdownStyle, zIndex: 9999 }}
+      className="fixed bg-white border border-gray-100 rounded-2xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200 max-h-[300px] overflow-y-auto"
+    >
+      {options.map((opt) => (
+        <div 
+          key={opt.value}
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange(opt.value);
+            setIsOpen(false);
+          }}
+          className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-3">
+            {opt.avatar ? (
+              <img src={opt.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-100" />
+            ) : (
+             <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-[12px] font-black text-gray-400 uppercase">
+                {String(opt.label || '').charAt(0)}
+             </div>
+            )}
+            <div>
+              <div className="text-[13px] font-extrabold text-gray-900">{opt.label}</div>
+              {opt.sublabel && <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{opt.sublabel}</div>}
+            </div>
+          </div>
+          {value === opt.value && <Check size={18} strokeWidth={3} className="text-[#facc15]" />}
+        </div>
+      ))}
+    </div>,
+    document.body
+  ) : null;
 
   return (
     <div className={`space-y-2 relative ${className}`} ref={containerRef}>
@@ -44,52 +108,23 @@ export const CustomSelect = ({
       )}
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-4 py-3.5 bg-gray-50 border-2 rounded-2xl flex items-center justify-between cursor-pointer transition-all ${isOpen ? 'border-[#facc15] bg-white ring-4 ring-[#facc15]/10' : 'border-gray-100 hover:border-gray-200'}`}
+        className={`w-full px-5 py-4 bg-gray-50 border-2 rounded-2xl flex items-center justify-between cursor-pointer transition-all ${isOpen ? 'border-[#facc15] bg-white ring-4 ring-[#facc15]/10' : 'border-gray-100 hover:border-gray-200'}`}
       >
         <div className="flex items-center gap-3">
           {selectedOption?.avatar ? (
             <img src={selectedOption.avatar} alt="" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
           ) : selectedOption ? (
              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-black text-gray-400 uppercase border border-gray-200/50">
-                {selectedOption.label.charAt(0)}
+                {String(selectedOption.label || '').charAt(0)}
              </div>
           ) : null}
-          <span className={`text-[14px] font-extrabold ${selectedOption ? 'text-gray-900' : 'text-gray-400 font-medium'}`}>
+          <span className={`text-[14px] font-bold ${selectedOption ? 'text-gray-900' : 'text-gray-400'}`}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </div>
-        <ChevronDown size={16} className={`text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
       </div>
-
-      {isOpen && (
-        <div className="absolute z-[100] top-full left-0 w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl py-2 animate-in fade-in slide-in-from-top-2 duration-200 max-h-[300px] overflow-y-auto">
-          {options.map((opt) => (
-            <div 
-              key={opt.value}
-              onClick={() => {
-                onChange(opt.value);
-                setIsOpen(false);
-              }}
-              className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center justify-between group"
-            >
-              <div className="flex items-center gap-3">
-                {opt.avatar ? (
-                  <img src={opt.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-100" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-[12px] font-bold text-gray-400 uppercase">
-                    {opt.label.charAt(0)}
-                  </div>
-                )}
-                <div>
-                  <div className="text-[13px] font-extrabold text-gray-900">{opt.label}</div>
-                  {opt.sublabel && <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{opt.sublabel}</div>}
-                </div>
-              </div>
-              {value === opt.value && <Check size={16} className="text-[#facc15]" />}
-            </div>
-          ))}
-        </div>
-      )}
+      {dropdownMenu}
     </div>
   );
 };

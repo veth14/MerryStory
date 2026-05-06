@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import {
+  AlertTriangle,
+  CheckCircle2,
   Download,
   Info,
   X,
@@ -19,9 +21,11 @@ import {
   FileText,
   Send,
   Paperclip,
+  ArrowLeft,
 } from 'lucide-react';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
 import { CustomDatePicker, CustomSelect } from '@/components/ui/CustomInputs';
+import Link from 'next/link';
 
 const PESO_SYMBOL = '\u20B1';
 
@@ -35,6 +39,13 @@ interface FinancialData {
   totalInvoiced: string;
   totalReceived: string;
   outstanding: string;
+  totalBudgetValue: number;
+  totalExpensesValue: number;
+  remainingValue: number;
+  totalInvoicedValue: number;
+  totalReceivedValue: number;
+  outstandingValue: number;
+  budgetStatus: 'within-limit' | 'exceeded';
   upcomingPayments: Array<{ entity: string; type: string; amount: string; due: string; days: string; dueDateIso?: string }>;
   recentExpenses: Array<{ id: string; date: string; desc: string; subtitle: string; category: string; amount: string; status: string; attachmentUrl?: string | null; attachmentName?: string | null }>;
   invoices: Array<{ id: string; invoiceNumber: string; client: string; issue: string; due: string; amount: string; status: string }>;
@@ -125,6 +136,27 @@ function openBlobPreview(objectUrl: string) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
+function getBudgetStatusMeta(financialData: FinancialData) {
+  const isExceeded = financialData.budgetStatus === 'exceeded' || financialData.remainingValue < 0;
+  return isExceeded
+    ? {
+        label: 'Budget Exceeded',
+        detail: `Expenses are over budget by ${PESO_SYMBOL}${Math.abs(financialData.remainingValue).toLocaleString()}.`,
+        chipClass: 'bg-red-50 text-red-600 border-red-100',
+        panelClass: 'bg-red-50 text-red-900 border-red-100/70',
+        iconClass: 'text-red-500',
+        progressClass: 'from-red-300 to-red-500',
+      }
+    : {
+        label: 'Within Budget',
+        detail: `Remaining balance is ${PESO_SYMBOL}${financialData.remainingValue.toLocaleString()}.`,
+        chipClass: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+        panelClass: 'bg-emerald-50 text-emerald-900 border-emerald-100/70',
+        iconClass: 'text-emerald-500',
+        progressClass: 'from-[#f4d98a] to-[#eebf43]',
+      };
+}
+
 export default function FinancesAdminPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'invoices'>('overview');
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '' });
@@ -138,11 +170,13 @@ export default function FinancesAdminPage() {
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [expenseForm, setExpenseForm] = useState<ExpenseFormState>(createEmptyExpenseForm());
   const [expenseLoading, setExpenseLoading] = useState(false);
+  const [expenseErrors, setExpenseErrors] = useState<Partial<Record<keyof ExpenseFormState, string>>>({});
 
   // Generate Invoice Modal State
   const [showGenerateInvoiceModal, setShowGenerateInvoiceModal] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState<InvoiceFormState>(createEmptyInvoiceForm());
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [budgetStatusModalShown, setBudgetStatusModalShown] = useState(false);
 
   const params = useParams();
   const id = (params?.id as string) || '';
@@ -150,6 +184,10 @@ export default function FinancesAdminPage() {
   useEffect(() => {
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    setBudgetStatusModalShown(false);
+  }, [id]);
 
   const loadFinancialData = async (tokenOverride?: string) => {
     try {
@@ -194,9 +232,57 @@ export default function FinancesAdminPage() {
     void loadFinancialData();
   }, [id, hydrated]);
 
+  useEffect(() => {
+    if (!hydrated || !eventData || budgetStatusModalShown || activeTab !== 'overview') return;
+    const budgetMeta = getBudgetStatusMeta(eventData);
+    if (budgetMeta.label !== 'Budget Exceeded') return;
+    triggerModal(budgetMeta.label, budgetMeta.detail);
+    setBudgetStatusModalShown(true);
+  }, [activeTab, budgetStatusModalShown, eventData, hydrated]);
+
   const triggerModal = (title: string, message: string) => {
     setModal({ isOpen: true, title, message });
   };
+
+  const updateExpenseField = <K extends keyof ExpenseFormState>(field: K, value: ExpenseFormState[K]) => {
+    setExpenseForm((current) => ({ ...current, [field]: value }));
+    setExpenseErrors((current) => {
+      if (!current[field]) return current;
+      const nextErrors = { ...current };
+      delete nextErrors[field];
+      return nextErrors;
+    });
+  };
+
+  const validateExpenseForm = () => {
+    const nextErrors: Partial<Record<keyof ExpenseFormState, string>> = {};
+    if (!expenseForm.title.trim()) nextErrors.title = 'Expense title is required.';
+    if (!expenseForm.vendor.trim()) nextErrors.vendor = 'Vendor is required.';
+    if (!expenseForm.amount.trim()) {
+      nextErrors.amount = 'Amount is required.';
+    } else if (!Number.isFinite(Number(expenseForm.amount)) || Number(expenseForm.amount) <= 0) {
+      nextErrors.amount = 'Amount must be greater than zero.';
+    }
+    if (!expenseForm.dueDate.trim()) nextErrors.dueDate = 'Due date is required.';
+    if (!expenseForm.category.trim()) nextErrors.category = 'Expense category is required.';
+    if (!expenseForm.status.trim()) nextErrors.status = 'Payment status is required.';
+    return nextErrors;
+  };
+
+  const isExpenseFormComplete = Object.keys(validateExpenseForm()).length === 0;
+
+  const validateInvoiceForm = () => {
+    const trimmedAmount = invoiceForm.amount.trim();
+    if (!invoiceForm.invoiceNumber.trim()) return false;
+    if (!invoiceForm.clientName.trim()) return false;
+    if (!trimmedAmount || !Number.isFinite(Number(trimmedAmount)) || Number(trimmedAmount) <= 0) return false;
+    if (!invoiceForm.issueDate.trim()) return false;
+    if (!invoiceForm.dueDate.trim()) return false;
+    if (!invoiceForm.status.trim()) return false;
+    return true;
+  };
+
+  const isInvoiceFormComplete = validateInvoiceForm();
 
   const handleInvoicePdf = async (invoiceId: string, download = false) => {
     try {
@@ -256,6 +342,13 @@ export default function FinancesAdminPage() {
   // Handle Add Expense
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validationErrors = validateExpenseForm();
+    setExpenseErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) {
+      triggerModal('Incomplete Expense Form', 'Complete the required expense details before saving this record.');
+      return;
+    }
+
     try {
       setExpenseLoading(true);
       const auth = getFirebaseClientAuth();
@@ -289,6 +382,7 @@ export default function FinancesAdminPage() {
       // Close modal and refresh data
       setShowAddExpenseModal(false);
       setExpenseForm(createEmptyExpenseForm());
+      setExpenseErrors({});
 
       await loadFinancialData(token);
 
@@ -304,6 +398,10 @@ export default function FinancesAdminPage() {
   // Handle Generate Invoice
   const handleGenerateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isInvoiceFormComplete) {
+      triggerModal('Incomplete Invoice Form', 'Complete all required invoice details before creating this record.');
+      return;
+    }
     try {
       setInvoiceLoading(true);
       const auth = getFirebaseClientAuth();
@@ -370,8 +468,21 @@ export default function FinancesAdminPage() {
     );
   }
 
+  const budgetStatusMeta = getBudgetStatusMeta(eventData);
+  const BudgetStatusIcon = eventData.budgetStatus === 'exceeded' || eventData.remainingValue < 0 ? AlertTriangle : CheckCircle2;
+
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20">
+
+      <Link
+        href="/admin/events"
+        className="mb-4 inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-widest text-gray-400 transition-colors hover:text-gray-900"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        BACK TO EVENTS
+      </Link>
 
       {/* Breadcrumb / Top Navigation Area */}
       <div className="flex flex-col md:flex-row md:items-start justify-between mb-8 gap-4 pt-2">
@@ -427,8 +538,14 @@ export default function FinancesAdminPage() {
 
             {/* Total Budget Card */}
             <div className="bg-white rounded-[24px] p-8 border border-gray-100 shadow-sm flex flex-col justify-between">
-              <div className="w-10 h-10 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100 mb-6">
-                <TrendingUp size={16} className="text-[#eebf43]" />
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div className="w-10 h-10 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
+                  <TrendingUp size={16} className="text-[#eebf43]" />
+                </div>
+                <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${budgetStatusMeta.chipClass}`}>
+                  <BudgetStatusIcon size={14} className={budgetStatusMeta.iconClass} />
+                  {budgetStatusMeta.label}
+                </span>
               </div>
               <div>
                 <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-2">Total Budget</p>
@@ -441,8 +558,14 @@ export default function FinancesAdminPage() {
 
             {/* Total Expenses Card */}
             <div className="bg-white rounded-[24px] p-8 border border-gray-100 shadow-sm flex flex-col justify-between">
-              <div className="w-10 h-10 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100 mb-6">
-                <Wallet size={16} className="text-[#71717a]" />
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div className="w-10 h-10 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
+                  <Wallet size={16} className="text-[#71717a]" />
+                </div>
+                <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${budgetStatusMeta.chipClass}`}>
+                  <BudgetStatusIcon size={14} className={budgetStatusMeta.iconClass} />
+                  {eventData.budgetStatus === 'exceeded' ? 'Needs Review' : 'Healthy Spend'}
+                </span>
               </div>
               <div>
                 <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-2">Total Expenses</p>
@@ -455,6 +578,33 @@ export default function FinancesAdminPage() {
 
           </div>
 
+          <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
+              <div>
+                <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Payment & Invoice Snapshot</h3>
+                <p className="text-[10px] font-bold text-[#a1a1aa] mt-1 tracking-wider">CONNECTED TO THE SELECTED EVENT FINANCIALS</p>
+              </div>
+              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${budgetStatusMeta.chipClass}`}>
+                <BudgetStatusIcon size={14} className={budgetStatusMeta.iconClass} />
+                {budgetStatusMeta.label}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl bg-[#fafafa] border border-gray-100 p-5">
+                <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-2">Total Invoiced</p>
+                <p className="text-2xl font-black text-[#1d1d1f]">{eventData.totalInvoiced}</p>
+              </div>
+              <div className="rounded-2xl bg-[#fafafa] border border-gray-100 p-5">
+                <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-2">Total Received</p>
+                <p className="text-2xl font-black text-emerald-600">{eventData.totalReceived}</p>
+              </div>
+              <div className="rounded-2xl bg-[#fafafa] border border-gray-100 p-5">
+                <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-2">Outstanding</p>
+                <p className={`text-2xl font-black ${eventData.outstandingValue > 0 ? 'text-red-600' : 'text-[#1d1d1f]'}`}>{eventData.outstanding}</p>
+              </div>
+            </div>
+          </div>
+
           {/* Additional Overview Content */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -465,21 +615,27 @@ export default function FinancesAdminPage() {
                 <div className="absolute top-0 right-0 p-8 opacity-5 transform group-hover:scale-110 transition-transform duration-500">
                   <TrendingUp size={120} className="text-[#eebf43]" />
                 </div>
-                <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase mb-8 relative z-10">Budget Utilization</h3>
+                <div className="flex items-start justify-between gap-4 mb-8 relative z-10">
+                  <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Budget Utilization</h3>
+                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${budgetStatusMeta.chipClass}`}>
+                    <BudgetStatusIcon size={14} className={budgetStatusMeta.iconClass} />
+                    {budgetStatusMeta.label}
+                  </span>
+                </div>
                 <div className="flex-1 flex flex-col justify-center relative z-10">
                   <div className="flex justify-between items-end mb-4">
                     <span className="text-4xl font-black text-[#1d1d1f] tracking-tighter">{eventData.utilization}</span>
                     <span className="text-[10px] font-extrabold text-[#71717a] uppercase tracking-widest px-3 py-1 bg-gray-50 rounded-full border border-gray-100">Spent</span>
                   </div>
                   <div className="w-full h-8 bg-gray-50 rounded-full overflow-hidden mb-5 border border-gray-100/50 shadow-inner">
-                    <div className="h-full bg-gradient-to-r from-[#f4d98a] to-[#eebf43] rounded-full relative" style={{ width: eventData.utilization }}>
+                    <div className={`h-full bg-gradient-to-r ${budgetStatusMeta.progressClass} rounded-full relative`} style={{ width: eventData.utilization }}>
                       <div className="absolute inset-0 bg-white/20 w-full h-full skew-x-12 transform origin-bottom -translate-x-full animate-[shimmer_2s_infinite]"></div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 bg-red-50 text-red-900 px-4 py-3 rounded-2xl border border-red-100/50">
-                    <Wallet size={16} className="text-red-500" />
+                  <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${budgetStatusMeta.panelClass}`}>
+                    <BudgetStatusIcon size={16} className={budgetStatusMeta.iconClass} />
                     <p className="text-xs font-bold leading-relaxed">
-                      Remaining Balance: <span className="font-black text-red-600">{eventData.remaining}</span>
+                      Remaining Balance: <span className="font-black">{eventData.remaining}</span>
                     </p>
                   </div>
                 </div>
@@ -585,7 +741,7 @@ export default function FinancesAdminPage() {
         <div className="animate-in fade-in duration-500 w-full space-y-6">
 
           {/* KPI Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Total Expenses Card */}
             <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
@@ -605,6 +761,26 @@ export default function FinancesAdminPage() {
               </div>
               <div className="w-12 h-12 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
                 <Receipt size={20} className="text-[#a1a1aa]" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Total Invoiced</p>
+                <h2 className="text-[32px] font-black text-[#1d1d1f] leading-none tracking-tight">{eventData.totalInvoiced}</h2>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-[#fafafa] flex items-center justify-center border border-gray-100">
+                <FileText size={20} className="text-[#a1a1aa]" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Total Received</p>
+                <h2 className="text-[32px] font-black text-emerald-600 leading-none tracking-tight">{eventData.totalReceived}</h2>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                <CheckCircle2 size={20} className="text-emerald-500" />
               </div>
             </div>
           </div>
@@ -673,7 +849,10 @@ export default function FinancesAdminPage() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                 <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Detailed Records</h3>
                 <button
-                  onClick={() => setShowAddExpenseModal(true)}
+                  onClick={() => {
+                    setExpenseErrors({});
+                    setShowAddExpenseModal(true);
+                  }}
                   className="bg-[#eebf43] text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors shadow-sm flex items-center gap-2 shrink-0"
                 >
                   <Plus size={14} strokeWidth={3} />
@@ -754,7 +933,7 @@ export default function FinancesAdminPage() {
         <div className="animate-in fade-in duration-500 w-full space-y-8">
 
           {/* KPI Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Total Invoiced */}
             <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
@@ -785,6 +964,16 @@ export default function FinancesAdminPage() {
               </div>
               <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center border border-red-100">
                 <Wallet size={20} className="text-red-500" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">Remaining Budget</p>
+                <h2 className={`text-[32px] font-black leading-none tracking-tight ${eventData.remainingValue < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{eventData.remaining}</h2>
+              </div>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center border ${eventData.remainingValue < 0 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                <BudgetStatusIcon size={20} className={budgetStatusMeta.iconClass} />
               </div>
             </div>
           </div>
@@ -896,7 +1085,7 @@ export default function FinancesAdminPage() {
       {showAddExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[28px] p-5 lg:p-6 max-w-4xl w-full max-h-[88vh] overflow-y-auto shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100">
-            <button onClick={() => setShowAddExpenseModal(false)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-2xl text-gray-400 hover:text-[#1d1d1f] transition-colors">
+            <button onClick={() => { setShowAddExpenseModal(false); setExpenseErrors({}); }} className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-2xl text-gray-400 hover:text-[#1d1d1f] transition-colors">
               <X size={20} strokeWidth={2} />
             </button>
 
@@ -923,27 +1112,33 @@ export default function FinancesAdminPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="md:col-span-2 space-y-2">
                         <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Expense Title</label>
-                        <input required type="text" placeholder="e.g. Florist deposit" value={expenseForm.title} onChange={(e) => setExpenseForm({ ...expenseForm, title: e.target.value })} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none" />
+                        <input type="text" placeholder="e.g. Florist deposit" value={expenseForm.title} onChange={(e) => updateExpenseField('title', e.target.value)} className={`w-full px-5 py-4 bg-gray-50 border-2 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none ${expenseErrors.title ? 'border-red-300 focus:border-red-400' : 'border-gray-100 focus:border-[#facc15]'}`} />
+                        {expenseErrors.title ? <p className="text-[11px] font-bold text-red-500 ml-1">{expenseErrors.title}</p> : null}
                       </div>
                       <div className="md:col-span-2 space-y-2">
                         <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Vendor</label>
-                        <input required type="text" placeholder="e.g. Grand Ballroom C" value={expenseForm.vendor} onChange={(e) => setExpenseForm({ ...expenseForm, vendor: e.target.value })} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none" />
+                        <input type="text" placeholder="e.g. Grand Ballroom C" value={expenseForm.vendor} onChange={(e) => updateExpenseField('vendor', e.target.value)} className={`w-full px-5 py-4 bg-gray-50 border-2 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none ${expenseErrors.vendor ? 'border-red-300 focus:border-red-400' : 'border-gray-100 focus:border-[#facc15]'}`} />
+                        {expenseErrors.vendor ? <p className="text-[11px] font-bold text-red-500 ml-1">{expenseErrors.vendor}</p> : null}
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Amount ({PESO_SYMBOL})</label>
                         <div className="relative">
                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-black text-[#d4a017]">{PESO_SYMBOL}</span>
-                          <input required type="number" placeholder="0.00" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} step="0.01" className="w-full pl-10 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+                          <input type="number" placeholder="0.00" value={expenseForm.amount} onChange={(e) => updateExpenseField('amount', e.target.value)} step="0.01" className={`w-full pl-10 pr-4 py-3.5 bg-gray-50 border rounded-xl text-[14px] font-extrabold text-gray-900 focus:bg-white transition-all outline-none ${expenseErrors.amount ? 'border-red-300 focus:border-red-400' : 'border-gray-100 focus:border-[#facc15]'}`} />
                         </div>
+                        {expenseErrors.amount ? <p className="text-[11px] font-bold text-red-500 ml-1">{expenseErrors.amount}</p> : null}
                       </div>
-                      <CustomDatePicker label="Due Date" value={expenseForm.dueDate} onChange={(val) => setExpenseForm({ ...expenseForm, dueDate: val })} />
+                      <div className="space-y-2">
+                        <CustomDatePicker label="Due Date" value={expenseForm.dueDate} onChange={(val) => updateExpenseField('dueDate', val)} />
+                        {expenseErrors.dueDate ? <p className="text-[11px] font-bold text-red-500 ml-1">{expenseErrors.dueDate}</p> : null}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-4 pt-4 border-t border-gray-100">
-                    <button type="button" onClick={() => setShowAddExpenseModal(false)} className="px-7 py-3.5 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all">
+                    <button type="button" onClick={() => { setShowAddExpenseModal(false); setExpenseErrors({}); }} className="px-7 py-3.5 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all">
                       Cancel
                     </button>
-                    <button type="submit" disabled={expenseLoading} className="flex-1 py-3.5 text-white bg-[#eebf43] hover:bg-[#dcae32] text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50">
+                    <button type="submit" disabled={expenseLoading || !isExpenseFormComplete} className="flex-1 py-3.5 text-white bg-[#eebf43] hover:bg-[#dcae32] text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                       {expenseLoading ? <Loader size={18} className="animate-spin" /> : <Receipt size={18} />}
                       {expenseLoading ? 'Saving Expense...' : 'Save Expense Record'}
                     </button>
@@ -958,8 +1153,14 @@ export default function FinancesAdminPage() {
                       <Target className="text-[#facc15]" size={20} /> Tracking Setup
                     </h4>
                     <div className="space-y-4">
-                      <CustomSelect label="Expense Category" value={expenseForm.category} onChange={(val) => setExpenseForm({ ...expenseForm, category: val })} options={EXPENSE_CATEGORY_OPTIONS} icon={Target} />
-                      <CustomSelect label="Payment Status" value={expenseForm.status} onChange={(val) => setExpenseForm({ ...expenseForm, status: val })} options={EXPENSE_STATUS_OPTIONS} icon={FileText} />
+                      <div>
+                        <CustomSelect label="Expense Category" value={expenseForm.category} onChange={(val) => updateExpenseField('category', val)} options={EXPENSE_CATEGORY_OPTIONS} icon={Target} />
+                        {expenseErrors.category ? <p className="text-[11px] font-bold text-red-500 ml-1 mt-2">{expenseErrors.category}</p> : null}
+                      </div>
+                      <div>
+                        <CustomSelect label="Payment Status" value={expenseForm.status} onChange={(val) => updateExpenseField('status', val)} options={EXPENSE_STATUS_OPTIONS} icon={FileText} />
+                        {expenseErrors.status ? <p className="text-[11px] font-bold text-red-500 ml-1 mt-2">{expenseErrors.status}</p> : null}
+                      </div>
                     </div>
                   </div>
                   <div className="bg-white rounded-[26px] p-5 border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
@@ -1063,7 +1264,7 @@ export default function FinancesAdminPage() {
                 <button type="button" onClick={() => setShowGenerateInvoiceModal(false)} className="px-7 py-3.5 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all">
                   Cancel
                 </button>
-                <button type="submit" disabled={invoiceLoading} className="flex-1 py-3.5 text-white bg-[#eebf43] hover:bg-[#dcae32] text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50">
+                <button type="submit" disabled={invoiceLoading || !isInvoiceFormComplete} className="flex-1 py-3.5 text-white bg-[#eebf43] hover:bg-[#dcae32] text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                   {invoiceLoading ? <Loader size={18} className="animate-spin" /> : <Send size={18} />}
                   {invoiceLoading ? 'Generating Invoice...' : 'Create Invoice Record'}
                 </button>

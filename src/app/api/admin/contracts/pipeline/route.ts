@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     await requireAuthenticatedUser(request);
 
     const db = await getMongoDb();
-    const contracts = await db.collection('contracts').find({}).toArray();
+    const contracts = await db.collection('contracts').find({}).sort({ lastUpdated: -1, createdAt: -1 }).toArray();
 
     // Group by status
     const pipeline = {
