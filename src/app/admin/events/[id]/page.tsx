@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, use, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, ArrowLeft, Calendar, MapPin, Users, DollarSign, Briefcase, AlertTriangle, User, Tag, Loader2, CheckCircle2, Plus, Minus, Mail, Phone, X, Search, UserPlus, Check, QrCode, Link2, UserCheck } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CustomSelect } from '@/components/ui/CustomInputs';
@@ -304,7 +304,9 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const router = useRouter();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('pre-event');
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabParam || 'pre-event');
   const [error, setError] = useState('');
   const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
   const [newMilestone, setNewMilestone] = useState({ title: '', category: 'Project Start' });
@@ -1124,7 +1126,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
               </div>
               <button
                 type="button"
-                onClick={() => router.push(`/admin/rsvp/scan?eventId=${encodeURIComponent(id)}`)}
+                onClick={() => router.push(`/admin/rsvp/scan?eventId=${encodeURIComponent(id)}&from=event-day`)}
                 className="bg-[#facc15] hover:bg-[#eab308] text-white text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg shadow-[#facc15]/20 flex items-center gap-2 transition-all"
               >
                 <QrCode size={14} />
