@@ -304,6 +304,20 @@ export default function AnalyticsAdminPage() {
 
   const chartData = getChartData();
 
+  const handleRecommendationAction = (rec: Recommendation) => {
+    setShowToast(false);
+
+    const targetId = rec.type === 'warning'
+      ? 'smart-insights-section'
+      : rec.action?.toLowerCase().includes('tracking') || rec.action?.toLowerCase().includes('follow')
+        ? 'event-types-section'
+        : 'frequency-analysis-section';
+
+    window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  };
+
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20">
       {/* Header Section */}
@@ -340,19 +354,24 @@ export default function AnalyticsAdminPage() {
 
       <div className="space-y-6 animate-in fade-in duration-500">
         {/* Toast Notifications */}
-        <div className="fixed top-6 right-6 z-50 max-w-sm">
+        <div className="fixed bottom-8 right-8 z-50 max-w-[340px] flex flex-col items-end pointer-events-none">
           {showToast && recommendations.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-3 pointer-events-auto w-full">
               {recommendations.map((rec, idx) => {
                 const bgColors = {
-                  opportunity: 'bg-blue-50 border-blue-200',
-                  warning: 'bg-amber-50 border-amber-200',
-                  success: 'bg-emerald-50 border-emerald-200'
+                  opportunity: 'bg-white border-blue-100',
+                  warning: 'bg-white border-amber-100',
+                  success: 'bg-white border-emerald-100'
                 };
                 const iconColors = {
-                  opportunity: 'text-blue-600 bg-blue-100',
-                  warning: 'text-amber-600 bg-amber-100',
-                  success: 'text-emerald-600 bg-emerald-100'
+                  opportunity: 'text-blue-500 bg-blue-50',
+                  warning: 'text-amber-500 bg-amber-50',
+                  success: 'text-emerald-500 bg-emerald-50'
+                };
+                const tagColors = {
+                  opportunity: 'bg-blue-50 text-blue-600 border-blue-100',
+                  warning: 'bg-amber-50 text-amber-600 border-amber-100',
+                  success: 'bg-emerald-50 text-emerald-600 border-emerald-100'
                 };
                 const icons = {
                   opportunity: Lightbulb,
@@ -364,34 +383,50 @@ export default function AnalyticsAdminPage() {
                 return (
                   <div 
                     key={idx}
-                    className={`border rounded-2xl p-5 group animate-in slide-in-from-right-full duration-300 shadow-lg ${showToast ? '' : 'animate-out fade-out duration-300'} ${bgColors[rec.type]}`}
+                    className={`border rounded-[20px] p-4 group animate-in slide-in-from-bottom-5 duration-500 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ${showToast ? '' : 'animate-out fade-out slide-out-to-bottom-5 duration-300'} ${bgColors[rec.type]} relative overflow-hidden`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconColors[rec.type]}`}>
-                        <IconComponent size={18} />
+                    {/* Decorative accent line */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                      rec.type === 'opportunity' ? 'bg-blue-400' :
+                      rec.type === 'warning' ? 'bg-amber-400' :
+                      'bg-emerald-400'
+                    }`} />
+                    
+                    <div className="flex items-start gap-4 ml-1">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconColors[rec.type]}`}>
+                        <IconComponent size={20} strokeWidth={2.5} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-bold text-[#1d1d1f] mb-1">{rec.title}</h4>
-                        <p className="text-xs text-[#71717a] leading-relaxed mb-3">{rec.description}</p>
-                        {rec.metric && (
-                          <div className="flex items-center gap-2 mb-3 p-2 bg-white/50 rounded-lg border border-white/80">
-                            <Zap size={14} className={iconColors[rec.type]} />
-                            <span className="text-xs font-bold text-[#1d1d1f]">{rec.metric}</span>
-                          </div>
-                        )}
-                        {rec.action && (
-                          <button className="text-xs font-bold text-[#1d1d1f] hover:underline flex items-center gap-1 group/btn">
-                            {rec.action} 
-                            <ArrowRight size={12} className="group-hover/btn:translate-x-1 transition-transform" />
+                      <div className="flex-1 min-w-0 pt-0.5">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h4 className="text-[13px] font-bold text-[#1d1d1f] leading-snug">{rec.title}</h4>
+                          <button
+                            onClick={() => setShowToast(false)}
+                            className="flex-shrink-0 p-1.5 -me-1.5 -mt-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-700"
+                          >
+                            <X size={14} strokeWidth={3} />
                           </button>
-                        )}
+                        </div>
+                        <p className="text-[11px] text-[#71717a] leading-relaxed mb-3 pr-2">{rec.description}</p>
+                        
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {rec.metric && (
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${tagColors[rec.type]}`}>
+                              <Zap size={10} strokeWidth={2.5} />
+                              <span>{rec.metric}</span>
+                            </div>
+                          )}
+                          {rec.action && (
+                            <button
+                              type="button"
+                              onClick={() => handleRecommendationAction(rec)}
+                              className="text-[10px] font-bold text-[#1d1d1f] hover:text-black hover:underline flex items-center gap-1 group/btn ml-auto mt-1"
+                            >
+                              {rec.action} 
+                              <ArrowRight size={10} className="group-hover/btn:translate-x-0.5 transition-transform" strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <button
-                        onClick={() => setShowToast(false)}
-                        className="flex-shrink-0 p-1 hover:bg-white/50 rounded-lg transition-colors"
-                      >
-                        <X size={18} className="text-[#a1a1aa] hover:text-[#1d1d1f]" />
-                      </button>
                     </div>
                   </div>
                 );
@@ -433,39 +468,59 @@ export default function AnalyticsAdminPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {data && (
             <>
-              <div className="bg-white p-5 rounded-xl border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[9px] font-bold text-[#a1a1aa] uppercase tracking-wider">Total Inquiries</span>
-                  <Target size={16} className="text-[#eebf43]" />
+              <div className="bg-white p-6 rounded-[20px] border border-gray-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 hover:border-gray-200 transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 pointer-events-none">
+                  <Target size={64} />
                 </div>
-                <p className="text-2xl font-black text-[#1d1d1f]">
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                  <span className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-wider">Total Inquiries</span>
+                  <div className="w-8 h-8 rounded-full bg-[#f9f1d8] flex items-center justify-center">
+                    <Target size={14} className="text-[#dcae32]" />
+                  </div>
+                </div>
+                <p className="text-3xl font-black text-[#1d1d1f] relative z-10">
                   {stats.totalInquiries}
                 </p>
               </div>
-              <div className="bg-white p-5 rounded-xl border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[9px] font-bold text-[#a1a1aa] uppercase tracking-wider">Total Bookings</span>
-                  <CheckCircle2 size={16} className="text-emerald-500" />
+              <div className="bg-white p-6 rounded-[20px] border border-gray-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 hover:border-gray-200 transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 pointer-events-none">
+                  <CheckCircle2 size={64} />
                 </div>
-                <p className="text-2xl font-black text-[#1d1d1f]">
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                  <span className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-wider">Total Bookings</span>
+                  <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
+                    <CheckCircle2 size={14} className="text-emerald-500" />
+                  </div>
+                </div>
+                <p className="text-3xl font-black text-[#1d1d1f] relative z-10">
                   {stats.totalBookings}
                 </p>
               </div>
-              <div className="bg-white p-5 rounded-xl border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[9px] font-bold text-[#a1a1aa] uppercase tracking-wider">Conversion Rate</span>
-                  <ArrowUpRight size={16} className="text-blue-500" />
+              <div className="bg-white p-6 rounded-[20px] border border-gray-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 hover:border-gray-200 transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 pointer-events-none">
+                  <ArrowUpRight size={64} />
                 </div>
-                <p className="text-2xl font-black text-[#1d1d1f]">
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                  <span className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-wider">Conversion Rate</span>
+                  <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+                    <ArrowUpRight size={14} className="text-blue-500" />
+                  </div>
+                </div>
+                <p className="text-3xl font-black text-[#1d1d1f] relative z-10">
                   {stats.conversionRate.toFixed(1)}%
                 </p>
               </div>
-              <div className="bg-white p-5 rounded-xl border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[9px] font-bold text-[#a1a1aa] uppercase tracking-wider">Event Types</span>
-                  <PieChart size={16} className="text-purple-500" />
+              <div className="bg-white p-6 rounded-[20px] border border-gray-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 hover:border-gray-200 transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 pointer-events-none">
+                  <PieChart size={64} />
                 </div>
-                <p className="text-2xl font-black text-[#1d1d1f]">
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                  <span className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-wider">Event Types</span>
+                  <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center">
+                    <PieChart size={14} className="text-purple-500" />
+                  </div>
+                </div>
+                <p className="text-3xl font-black text-[#1d1d1f] relative z-10">
                   {data.eventTypeBreakdown.length}
                 </p>
               </div>
@@ -475,7 +530,7 @@ export default function AnalyticsAdminPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Chart Card (Frequency Analysis) - Span 2 */}
-          <div className="bg-white p-8 rounded-[24px] border border-gray-100 shadow-sm lg:col-span-2 flex flex-col h-[450px] hover:shadow-lg hover:border-gray-200 transition-all">
+          <div id="frequency-analysis-section" className="bg-white p-8 rounded-[24px] border border-gray-100 shadow-sm lg:col-span-2 flex flex-col h-[450px] hover:shadow-lg hover:border-gray-200 transition-all">
             <div className="flex justify-between items-start mb-8">
               <div>
                 <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Frequency Analysis</h3>
@@ -526,7 +581,7 @@ export default function AnalyticsAdminPage() {
           </div>
 
           {/* Event Types Breakdown - Span 1 */}
-          <div className="bg-white p-8 rounded-[24px] border border-gray-100 shadow-sm flex flex-col h-[450px] hover:shadow-lg hover:border-gray-200 transition-all">
+          <div id="event-types-section" className="bg-white p-8 rounded-[24px] border border-gray-100 shadow-sm flex flex-col h-[450px] hover:shadow-lg hover:border-gray-200 transition-all">
             <div className="flex justify-between items-start mb-8 pb-4 border-b border-gray-100/60">
               <div>
                 <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Types of Events</h3>
@@ -579,30 +634,29 @@ export default function AnalyticsAdminPage() {
         </div>
 
         {/* Insights Section */}
-        <div className="bg-gradient-to-br from-[#fafafa] to-white border border-gray-100 rounded-2xl p-8 hover:shadow-lg hover:border-gray-200 transition-all">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-full bg-[#f9f1d8] flex items-center justify-center">
-              <Lightbulb size={20} className="text-[#dcae32]" />
+        <div id="smart-insights-section" className="bg-gradient-to-br from-white to-[#fbf8ef] border border-[#efe8d6] rounded-[28px] p-8 shadow-[0_12px_40px_rgb(0,0,0,0.04)] mt-8">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-12 h-12 rounded-2xl bg-[#f9f1d8] flex items-center justify-center border border-[#f4d98a]/50 shadow-sm">
+              <Lightbulb size={22} className="text-[#dcae32]" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Smart Insights</h3>
-              <p className="text-[10px] font-bold text-[#a1a1aa] mt-1">Real data from your business</p>
+              <h3 className="text-base font-black text-[#1d1d1f] tracking-widest uppercase">Smart Insights</h3>
+              <p className="text-[11px] font-medium text-[#8f8f98] mt-1 uppercase tracking-wider">Automated business intelligence</p>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {data && (
               <>
-                <div className="bg-white rounded-xl p-4 border border-gray-100/50 hover:border-gray-200 transition-colors">
-                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Inquiry to Booking Ratio</p>
+                <div className="bg-white rounded-[22px] p-6 border border-[#f0f0f0] hover:border-[#e7dfc7] hover:shadow-[0_8px_25px_rgb(0,0,0,0.04)] transition-all duration-300">
+                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-3">Conversion Ratio</p>
                   <div className="flex items-baseline gap-2 mb-3">
-                    <p className="text-2xl font-black text-[#1d1d1f]">
+                    <p className="text-3xl font-black text-[#1d1d1f]">
                       1 : {stats.inquiryToBookingRatio}
                     </p>
-                    <span className="text-xs text-[#71717a]">conversion ratio</span>
                   </div>
-                  <p className="text-xs text-[#71717a] leading-relaxed">
-                    For every {stats.inquiryToBookingRatio} inquiries, you convert 1 booking. {
+                  <p className="text-xs text-[#71717a] leading-relaxed font-medium">
+                    For every <strong className="text-[#1d1d1f]">{stats.inquiryToBookingRatio} inquiries</strong>, you convert <strong className="text-[#1d1d1f]">1 booking</strong>. {
                       stats.conversionRate > 30 
                         ? 'Excellent conversion rate!' 
                         : 'Consider improving follow-up strategies.'
@@ -610,88 +664,88 @@ export default function AnalyticsAdminPage() {
                   </p>
                 </div>
 
-                <div className="bg-white rounded-xl p-4 border border-gray-100/50 hover:border-gray-200 transition-colors">
-                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Total Activity</p>
+                <div className="bg-white rounded-[22px] p-6 border border-[#f0f0f0] hover:border-[#e7dfc7] hover:shadow-[0_8px_25px_rgb(0,0,0,0.04)] transition-all duration-300">
+                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-3">Total Activity Volume</p>
                   <div className="flex items-baseline gap-2 mb-3">
-                    <p className="text-2xl font-black text-[#1d1d1f]">
+                    <p className="text-3xl font-black text-[#1d1d1f]">
                       {stats.totalBookings}
                     </p>
-                    <span className="text-xs text-[#71717a]">
-                      / {stats.totalInquiries} inquiries
+                    <span className="text-xs font-bold text-[#8f8f98] uppercase tracking-wider">
+                      / {stats.totalInquiries} inq
                     </span>
                   </div>
-                  <p className="text-xs text-[#71717a] leading-relaxed">
-                    You have successfully booked {stats.totalBookings} events from {stats.totalInquiries} total inquiries in this {frequency.toLowerCase()} period.
+                  <p className="text-xs text-[#71717a] leading-relaxed font-medium">
+                    You have successfully booked <strong className="text-[#1d1d1f]">{stats.totalBookings} events</strong> from <strong className="text-[#1d1d1f]">{stats.totalInquiries} total inquiries</strong> in this {frequency.toLowerCase()} period.
                   </p>
                 </div>
 
-                <div className="bg-white rounded-xl p-4 border border-gray-100/50 hover:border-gray-200 transition-colors">
-                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Peak Booking Period</p>
+                <div className="bg-white rounded-[22px] p-6 border border-[#f0f0f0] hover:border-[#e7dfc7] hover:shadow-[0_8px_25px_rgb(0,0,0,0.04)] transition-all duration-300">
+                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-3">Peak Booking Period</p>
                   <div className="flex items-baseline gap-2 mb-3">
-                    <p className="text-2xl font-black text-[#1d1d1f]">{stats.peakBookingLabel}</p>
-                    <span className="text-xs text-[#71717a]">{stats.peakBookingCount} bookings</span>
+                    <p className="text-3xl font-black text-[#1d1d1f]">{stats.peakBookingLabel}</p>
+                    <span className="text-xs font-bold text-[#dcae32] uppercase tracking-wider px-2 py-0.5 bg-[#f9f1d8] rounded-full border border-[#f4d98a]/50">{stats.peakBookingCount} bookings</span>
                   </div>
-                  <p className="text-xs text-[#71717a] leading-relaxed">
-                    Your strongest {frequency.toLowerCase()} period. Ensure adequate resources during this time. Average per period: {Math.round(stats.totalBookings / Math.max(getChartData().length, 1))}.
+                  <p className="text-xs text-[#71717a] leading-relaxed font-medium">
+                    Your strongest {frequency.toLowerCase()} period. Ensure adequate resources. Average: <strong className="text-[#1d1d1f]">{Math.round(stats.totalBookings / Math.max(getChartData().length, 1))}</strong>/period.
                   </p>
                 </div>
 
-                <div className="bg-white rounded-xl p-4 border border-gray-100/50 hover:border-gray-200 transition-colors">
-                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Top Revenue Driver</p>
+                <div className="bg-white rounded-[22px] p-6 border border-[#f0f0f0] hover:border-[#e7dfc7] hover:shadow-[0_8px_25px_rgb(0,0,0,0.04)] transition-all duration-300">
+                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-3">Top Revenue Driver</p>
                   <div className="flex items-baseline gap-2 mb-3">
-                    <p className="text-2xl font-black text-[#1d1d1f]">
+                    <p className="text-3xl font-black text-[#1d1d1f]">
                       {data.eventTypeBreakdown.length > 0 
                         ? data.eventTypeBreakdown[0].type
                         : 'N/A'
                       }
                     </p>
-                    <span className="text-xs text-[#71717a]">
+                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider px-2 py-0.5 bg-emerald-50 rounded-full border border-emerald-100">
                       {data.eventTypeBreakdown.length > 0 
                         ? `${data.eventTypeBreakdown[0].percentage}%`
                         : '0%'
                       }
                     </span>
                   </div>
-                  <p className="text-xs text-[#71717a] leading-relaxed">
+                  <p className="text-xs text-[#71717a] leading-relaxed font-medium">
                     {data.eventTypeBreakdown.length > 0 
-                      ? `${data.eventTypeBreakdown[0].bookings} bookings. Focus on quality and growth in this category.`
+                      ? <><strong className="text-[#1d1d1f]">{data.eventTypeBreakdown[0].bookings} bookings</strong>. This is your primary service. Focus on quality and growth.</>
                       : 'No event type data available.'
                     }
                   </p>
                 </div>
 
-                <div className="bg-white rounded-xl p-4 border border-gray-100/50 hover:border-gray-200 transition-colors">
-                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Growth Opportunity</p>
+                <div className="bg-white rounded-[22px] p-6 border border-[#f0f0f0] hover:border-[#e7dfc7] hover:shadow-[0_8px_25px_rgb(0,0,0,0.04)] transition-all duration-300">
+                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-3">Growth Opportunity</p>
                   <div className="flex items-baseline gap-2 mb-3">
-                    <p className="text-2xl font-black text-[#1d1d1f]">
+                    <p className="text-3xl font-black text-[#1d1d1f] truncate max-w-[200px]" title={data.eventTypeBreakdown.length > 0 ? data.eventTypeBreakdown[data.eventTypeBreakdown.length - 1].type : ''}>
                       {data.eventTypeBreakdown.length > 0
                         ? data.eventTypeBreakdown[data.eventTypeBreakdown.length - 1].type
                         : 'N/A'
                       }
                     </p>
-                    <span className="text-xs text-[#71717a]">
+                    <span className="text-xs font-bold text-blue-600 uppercase tracking-wider px-2 py-0.5 bg-blue-50 rounded-full border border-blue-100 shrink-0">
                       {data.eventTypeBreakdown.length > 0 
                         ? `${data.eventTypeBreakdown[data.eventTypeBreakdown.length - 1].count} events`
                         : '0'
                       }
                     </span>
                   </div>
-                  <p className="text-xs text-[#71717a] leading-relaxed">
+                  <p className="text-xs text-[#71717a] leading-relaxed font-medium">
                     {data.eventTypeBreakdown.length > 0 
-                      ? `Underperforming category with ${data.eventTypeBreakdown[data.eventTypeBreakdown.length - 1].inquiries} inquiries. Explore marketing opportunities.`
+                      ? <>Underperforming category with <strong className="text-[#1d1d1f]">{data.eventTypeBreakdown[data.eventTypeBreakdown.length - 1].inquiries} inquiries</strong>. Explore marketing campaigns.</>
                       : 'No event type data available.'
                     }
                   </p>
                 </div>
 
-                <div className="bg-white rounded-xl p-4 border border-gray-100/50 hover:border-gray-200 transition-colors">
-                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-wider mb-2">Peak Inquiry Period</p>
+                <div className="bg-white rounded-[22px] p-6 border border-[#f0f0f0] hover:border-[#e7dfc7] hover:shadow-[0_8px_25px_rgb(0,0,0,0.04)] transition-all duration-300">
+                  <p className="text-[11px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-3">Peak Inquiry Period</p>
                   <div className="flex items-baseline gap-2 mb-3">
-                    <p className="text-2xl font-black text-[#1d1d1f]">{stats.peakInquiryLabel}</p>
-                    <span className="text-xs text-[#71717a]">{stats.peakInquiryCount} inquiries</span>
+                    <p className="text-3xl font-black text-[#1d1d1f]">{stats.peakInquiryLabel}</p>
+                    <span className="text-xs font-bold text-purple-600 uppercase tracking-wider px-2 py-0.5 bg-purple-50 rounded-full border border-purple-100">{stats.peakInquiryCount} inquiries</span>
                   </div>
-                  <p className="text-xs text-[#71717a] leading-relaxed">
-                    Highest volume {frequency.toLowerCase()} period. Prepare your sales team for this surge. Average per period: {Math.round(stats.totalInquiries / Math.max(getChartData().length, 1))}.
+                  <p className="text-xs text-[#71717a] leading-relaxed font-medium">
+                    Highest volume {frequency.toLowerCase()} period. Prepare your sales team for this surge. Average: <strong className="text-[#1d1d1f]">{Math.round(stats.totalInquiries / Math.max(getChartData().length, 1))}</strong>/period.
                   </p>
                 </div>
               </>
