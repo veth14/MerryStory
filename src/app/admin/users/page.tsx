@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronDown,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useRouter } from 'next/navigation';
@@ -116,6 +117,26 @@ function toRelativeTime(isoString: string | null): string {
   return date.toLocaleDateString();
 }
 
+function toFullDateTime(isoString: string | null): string {
+  if (!isoString) {
+    return 'Not available';
+  }
+
+  const date = new Date(isoString);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Invalid date';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
 export default function UsersAdministrationPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -131,6 +152,7 @@ export default function UsersAdministrationPage() {
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
   const [alert, setAlert] = useState<AlertState | null>(null);
   const [recentAuditLogs, setRecentAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
   const [formData, setFormData] = useState<UserFormState>(DEFAULT_FORM);
 
@@ -542,7 +564,11 @@ export default function UsersAdministrationPage() {
                     </tr>
                   ) : (
                     users.map((entry) => (
-                      <tr key={entry.uid} className="group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0">
+                      <tr
+                        key={entry.uid}
+                        onClick={() => setSelectedUser(entry)}
+                        className="group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0 cursor-pointer"
+                      >
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-4">
                             {entry.avatarUrl ? (
@@ -579,14 +605,20 @@ export default function UsersAdministrationPage() {
                         <td className="px-6 py-5 text-right">
                           <div className="inline-flex items-center gap-2">
                             <button
-                              onClick={() => handleEdit(entry)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(entry);
+                              }}
                               className="text-[#a1a1aa] hover:text-[#1d1d1f] transition-colors outline-none focus:outline-none"
                               title="Edit user"
                             >
                               <MoreVertical size={16} />
                             </button>
                             <button
-                              onClick={() => confirmDeactivate(entry.uid)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                confirmDeactivate(entry.uid);
+                              }}
                               className="text-[#f87171] hover:text-[#dc2626] transition-colors outline-none focus:outline-none"
                               title="Deactivate user"
                               disabled={deletingUid === entry.uid}
@@ -716,6 +748,128 @@ export default function UsersAdministrationPage() {
           </div>
         </div>
       </div>
+
+      {selectedUser && (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300 my-auto">
+            <div className="bg-[#fafafa] px-10 py-8 border-b border-gray-100 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                {selectedUser.avatarUrl ? (
+                  <img src={selectedUser.avatarUrl} alt={selectedUser.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm bg-gray-100" />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-[#f4f4f5] border border-[#e4e4e7] flex items-center justify-center text-[#71717a] text-sm font-black shadow-sm">
+                    {selectedUser.name
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((part) => part[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-1">User Directory Profile</p>
+                  <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">{selectedUser.name}</h3>
+                  <p className="text-xs font-semibold text-[#71717a] mt-1">{selectedUser.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUser(null)}
+                className="p-3 hover:bg-gray-100 rounded-2xl transition-colors"
+                title="Close profile"
+              >
+                <X size={20} className="text-[#a1a1aa]" />
+              </button>
+            </div>
+
+            <div className="p-10 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Access Role</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100">
+                    <span className="inline-flex py-1.5 px-3 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase">
+                      {selectedUser.role}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Current Status</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${STATUS_COLOR_MAP[selectedUser.status] || 'bg-gray-400'}`}></span>
+                    <span className="text-sm font-bold text-[#1d1d1f]">{selectedUser.status}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Last Active</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 space-y-1">
+                    <span className="text-sm font-bold text-[#1d1d1f] block">{toRelativeTime(selectedUser.lastActiveAt)}</span>
+                    <span className="text-[11px] font-medium text-[#71717a]">{toFullDateTime(selectedUser.lastActiveAt)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Joined</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 space-y-1">
+                    <span className="text-sm font-bold text-[#1d1d1f] block">{toRelativeTime(selectedUser.createdAt)}</span>
+                    <span className="text-[11px] font-medium text-[#71717a]">{toFullDateTime(selectedUser.createdAt)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Profile ID</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100">
+                    <span className="text-[12px] font-bold text-[#1d1d1f] break-all">{selectedUser.uid}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Last Updated</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100">
+                    <span className="text-sm font-bold text-[#1d1d1f]">{toFullDateTime(selectedUser.updatedAt)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#fafafa] border border-gray-100 rounded-2xl p-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-3">Directory Summary</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#1d1d1f]">
+                    {selectedUser.status}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#1d1d1f]">
+                    {selectedUser.role}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#1d1d1f]">
+                    {selectedUser.avatarUrl ? 'Avatar set' : 'No avatar'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-10 py-8 bg-[#fafafa] border-t border-gray-100 flex gap-4">
+              <button
+                type="button"
+                onClick={() => setSelectedUser(null)}
+                className="flex-1 py-4 bg-white border border-gray-200 hover:bg-gray-50 text-gray-500 text-[12px] font-black uppercase tracking-widest rounded-2xl transition-all"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedUser(null);
+                  handleEdit(selectedUser);
+                }}
+                className="flex-1 py-4 bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-lg shadow-[#facc15]/20"
+              >
+                Edit User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isAddingUser && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto">

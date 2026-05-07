@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Loader2, RefreshCw, Search, ShieldCheck, Users, UserCog } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Loader2, RefreshCw, Search, ShieldCheck, Users, UserCog } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { CustomSelect } from '@/components/ui/CustomInputs';
 
 type AuditCategory = 'USER_MANAGEMENT' | 'PROFILE' | 'SECURITY' | 'AUTH' | 'SYSTEM';
 
@@ -75,6 +76,8 @@ export default function AuditLogsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const fetchLogs = async (isManualRefresh = false) => {
     if (!user) {
@@ -118,6 +121,7 @@ export default function AuditLogsPage() {
       }
 
       setLogs(payload.logs || []);
+      setCurrentPage(1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Failed to fetch audit logs.');
     } finally {
@@ -140,6 +144,42 @@ export default function AuditLogsPage() {
       security: logs.filter((entry) => entry.category === 'SECURITY').length,
     };
   }, [logs]);
+
+  const totalPages = Math.max(1, Math.ceil(logs.length / itemsPerPage));
+  const paginatedLogs = logs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const showingStart = logs.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const showingEnd = Math.min(currentPage * itemsPerPage, logs.length);
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, idx) => idx + 1) as Array<number | 'ellipsis-left' | 'ellipsis-right'>;
+    }
+
+    const items: Array<number | 'ellipsis-left' | 'ellipsis-right'> = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    if (start > 2) {
+      items.push('ellipsis-left');
+    }
+
+    for (let page = start; page <= end; page += 1) {
+      items.push(page);
+    }
+
+    if (end < totalPages - 1) {
+      items.push('ellipsis-right');
+    }
+
+    items.push(totalPages);
+    return items;
+  }, [currentPage, totalPages]);
+
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages) {
+      return;
+    }
+    setCurrentPage(page);
+  };
 
   const handleSearchSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -164,7 +204,7 @@ export default function AuditLogsPage() {
         <div className="flex gap-3">
           <button
             onClick={() => void fetchLogs(true)}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-gray-50 transition-colors disabled:opacity-60"
+            className="inline-flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm disabled:opacity-60"
             disabled={isRefreshing}
           >
             {isRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -172,7 +212,7 @@ export default function AuditLogsPage() {
           </button>
           <button
             onClick={() => router.push('/admin/users')}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-[#1d1d1f] text-white rounded-xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-[#3f3f46] transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-3 bg-[#eebf43] text-white rounded-xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-[#dcae32] transition-all shadow-lg shadow-[#eebf43]/20"
           >
             Back to Users
           </button>
@@ -180,68 +220,82 @@ export default function AuditLogsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-7">
-        <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1aa]">Total Events</p>
-          <p className="text-3xl font-black mt-2">{categoryCounts.total}</p>
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 relative overflow-hidden group">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#eebf43]"></div>
+          <div className="flex justify-between items-start mb-4">
+            <Users className="text-[#eebf43] w-5 h-5" />
+            <span className="text-[#a88231] text-xs font-semibold">{categoryCounts.total} captured</span>
+          </div>
+          <h2 className="text-4xl font-black text-[#1d1d1f] mb-1">{categoryCounts.total}</h2>
+          <p className="text-[#a1a1aa] text-[10px] font-bold tracking-widest uppercase">Total Events</p>
         </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1aa]">User Management</p>
-          <p className="text-3xl font-black mt-2">{categoryCounts.userManagement}</p>
+
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 relative overflow-hidden group">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#3f3f46]"></div>
+          <div className="flex justify-between items-start mb-4">
+            <UserCog className="text-[#71717a] w-5 h-5" />
+            <span className="text-[#71717a] text-xs font-semibold">Access changes</span>
+          </div>
+          <h2 className="text-4xl font-black text-[#1d1d1f] mb-1">{categoryCounts.userManagement}</h2>
+          <p className="text-[#a1a1aa] text-[10px] font-bold tracking-widest uppercase">User Management</p>
         </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1aa]">Profile Events</p>
-          <p className="text-3xl font-black mt-2">{categoryCounts.profile}</p>
+
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 relative overflow-hidden group">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+          <div className="flex justify-between items-start mb-4">
+            <ShieldCheck className="text-emerald-500 w-5 h-5" />
+            <span className="text-emerald-600 text-xs font-semibold">Identity logs</span>
+          </div>
+          <h2 className="text-4xl font-black text-[#1d1d1f] mb-1">{categoryCounts.profile}</h2>
+          <p className="text-[#a1a1aa] text-[10px] font-bold tracking-widest uppercase">Profile Events</p>
         </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#a1a1aa]">Security Events</p>
-          <p className="text-3xl font-black mt-2">{categoryCounts.security}</p>
+
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 relative overflow-hidden group">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-500"></div>
+          <div className="flex justify-between items-start mb-4">
+            <ShieldCheck className="text-rose-500 w-5 h-5" />
+            <span className="text-rose-500 text-xs font-semibold">High priority</span>
+          </div>
+          <h2 className="text-4xl font-black text-[#1d1d1f] mb-1">{categoryCounts.security}</h2>
+          <p className="text-[#a1a1aa] text-[10px] font-bold tracking-widest uppercase">Security Events</p>
         </div>
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr_auto] gap-4">
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-[#a1a1aa] mb-1">Category</label>
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value as 'ALL' | AuditCategory)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-medium text-[#1d1d1f] focus:outline-none focus:border-[#eebf43]"
-            >
-              {CATEGORY_OPTIONS.map((value) => (
-                <option key={value} value={value}>
-                  {CATEGORY_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="mb-6 rounded-[30px] border border-gray-100 bg-[#fcfcfc] p-4 sm:p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#a1a1aa]">Filter By Category</p>
+          <span className="rounded-lg bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#8f8f98] border border-gray-100">
+            {logs.length} results
+          </span>
+        </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4">
           <form onSubmit={handleSearchSubmit} className="w-full">
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-[#a1a1aa] mb-1">Search</label>
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa]" />
+              <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-[#a1a1aa]" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by message, action, actor or target"
-                className="w-full rounded-lg border border-gray-200 pl-9 pr-3 py-2.5 text-sm font-medium text-[#1d1d1f] focus:outline-none focus:border-[#eebf43]"
+                placeholder="Search by message, action, actor or target..."
+                className="w-full rounded-2xl border-2 border-gray-100 pl-14 pr-6 py-4 text-sm font-bold text-[#1d1d1f] placeholder-[#a1a1aa] focus:outline-none focus:border-[#eebf43] focus:ring-4 focus:ring-[#eebf43]/5 transition-all bg-white shadow-sm"
               />
             </div>
           </form>
 
-          <div className="flex items-end">
-            <button
-              type="button"
-              onClick={() => void fetchLogs(true)}
-              className="h-[42px] px-5 rounded-lg bg-[#eebf43] text-white text-[11px] font-black tracking-[0.1em] uppercase hover:bg-[#dcae32] transition-colors"
-            >
-              Apply
-            </button>
-          </div>
+          <CustomSelect
+            value={category}
+            onChange={(value) => setCategory(value as 'ALL' | AuditCategory)}
+            options={CATEGORY_OPTIONS.map((value) => ({
+              value,
+              label: CATEGORY_LABELS[value],
+            }))}
+            className="w-full"
+          />
         </div>
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden flex flex-col" style={{ height: '740px' }}>
+        <div className="overflow-x-auto overflow-y-auto flex-1">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr>
@@ -276,7 +330,7 @@ export default function AuditLogsPage() {
                   </td>
                 </tr>
               ) : (
-                logs.map((entry) => {
+                paginatedLogs.map((entry) => {
                   const detailEntries = Object.entries(entry.details || {}).filter(([, value]) => value !== null && value !== undefined && String(value) !== '');
 
                   return (
@@ -322,6 +376,55 @@ export default function AuditLogsPage() {
             </tbody>
           </table>
         </div>
+
+        {!isLoading && !error && logs.length > 0 && (
+          <div className="px-6 py-4 flex items-center justify-between border-t border-gray-50 bg-[#fafafa]/50">
+            <span className="text-xs text-[#a1a1aa] font-medium">Showing {showingStart}-{showingEnd} of {logs.length} Logs</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#a1a1aa] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={14} />
+              </button>
+
+              <div className="flex items-center gap-1">
+                {paginationItems.map((item, idx) => {
+                  if (typeof item !== 'number') {
+                    return (
+                      <span key={`${item}-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs font-bold text-[#a1a1aa]">
+                        ...
+                      </span>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={item}
+                      onClick={() => handlePageChange(item)}
+                      className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold transition-all ${
+                        currentPage === item
+                          ? 'bg-[#eebf43] text-[#1d1d1f] shadow-sm shadow-[#eebf43]/20'
+                          : 'bg-white border border-gray-200 text-[#1d1d1f] hover:bg-gray-50'
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="w-8 h-8 flex items-center justify-center rounded bg-white border border-gray-200 text-[#a1a1aa] hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
