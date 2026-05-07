@@ -911,21 +911,6 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
             </div>
           </div>
 
-          <div className="mt-20 p-10 bg-[#111827] rounded-[40px] text-white shadow-2xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[#facc15]/5 rounded-full -mr-32 -mt-32 blur-3xl transition-all group-hover:scale-125 duration-1000"></div>
-            <div className="relative z-10">
-              <h2 className="text-[32px] font-black tracking-tight mb-4 text-[#facc15] italic uppercase">Command Center Activation</h2>
-              <p className="text-white/60 max-w-xl mx-auto text-[15px] font-medium leading-relaxed">
-                Live controls for guest check-ins, vendor logistics, and real-time alerts will become active on <span className="text-white font-bold">{new Date(event!.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>. 
-              </p>
-              <div className="mt-10 flex justify-center gap-6">
-                <div className="h-1.5 w-full max-w-[160px] bg-white/10 rounded-full overflow-hidden">
-                   <div className="h-full bg-[#facc15] animate-shimmer" style={{ width: '40%' }}></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Guests Checked In */}
           <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Guests Checked In</h3>
