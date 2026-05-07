@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { writeAuditLog } from "@/lib/audit";
 import { ObjectId } from "mongodb";
 
 const PESO_SYMBOL = "\u20B1";
@@ -181,6 +182,30 @@ export async function POST(
       sourceExpenseId: result.insertedId,
       createdBy: user.uid,
       createdAt: new Date()
+    });
+
+    // Log expense creation
+    await writeAuditLog({
+      request,
+      category: "EXPENSE_MANAGEMENT",
+      action: "EXPENSE_CREATED",
+      message: `Expense created: ${vendor} - ${PESO_SYMBOL}${amount.toLocaleString()} for ${eventTitle}`,
+      actor: {
+        uid: user.uid,
+        email: user.email,
+        role: user.role
+      },
+      target: {
+        type: "expense",
+        uid: result.insertedId.toString()
+      },
+      details: {
+        vendor,
+        amount,
+        description,
+        eventId: eventId.toString(),
+        eventTitle
+      }
     });
     
     // TODO: Add audit log for expense creation

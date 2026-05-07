@@ -1,6 +1,18 @@
 import { getMongoDb } from "@/lib/mongodb";
 
-export type AuditCategory = "USER_MANAGEMENT" | "PROFILE" | "SECURITY" | "AUTH" | "SYSTEM" | "TASK_MANAGEMENT";
+export type AuditCategory = 
+  | "USER_MANAGEMENT" 
+  | "PROFILE" 
+  | "SECURITY" 
+  | "AUTH" 
+  | "SYSTEM" 
+  | "TASK_MANAGEMENT"
+  | "CONTRACT_MANAGEMENT"
+  | "EVENT_MANAGEMENT"
+  | "EXPENSE_MANAGEMENT"
+  | "VENDOR_MANAGEMENT"
+  | "INQUIRY_MANAGEMENT";
+
 export type AuditSeverity = "info" | "warning" | "critical";
 
 export type AuditAction =
@@ -12,8 +24,14 @@ export type AuditAction =
   | "PROFILE_AVATAR_UPDATED"
   | "PROFILE_AVATAR_REMOVED"
   | "EVENT_CREATED"
+  | "EVENT_UPDATED"
   | "TASK_ASSIGNED"
-  | "TASK_STATUS_UPDATED";
+  | "TASK_STATUS_UPDATED"
+  | "CONTRACT_SIGNED"
+  | "CONTRACT_REVISION_REQUESTED"
+  | "EXPENSE_CREATED"
+  | "VENDOR_CREATED"
+  | "INQUIRY_STATUS";
 
 export type AuditLogDocument = {
   category: AuditCategory;
@@ -26,7 +44,7 @@ export type AuditLogDocument = {
   actorRole?: string | null;
   targetUid?: string | null;
   targetEmail?: string | null;
-  targetType?: "user" | "system" | "resource";
+  targetType?: "user" | "system" | "resource" | "contract" | "event" | "expense" | "vendor";
   ipAddress?: string | null;
   userAgent?: string | null;
   createdAt: Date;
@@ -41,7 +59,7 @@ type AuditActor = {
 type AuditTarget = {
   uid?: string | null;
   email?: string | null;
-  type?: "user" | "system" | "resource";
+  type?: "user" | "system" | "resource" | "contract" | "event" | "expense" | "vendor";
 };
 
 type CreateAuditLogInput = {

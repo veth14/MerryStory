@@ -145,6 +145,8 @@ export default function PostEventView({
   const [idToken, setIdToken] = useState<string>('');
   const [guestFilter, setGuestFilter] = useState<'all' | 'attended' | 'absent' | 'pending'>('all');
   const [selectedGuest, setSelectedGuest] = useState<NormalizedGuest | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<UpcomingPayment | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<RecentExpense | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -333,64 +335,62 @@ export default function PostEventView({
   return (
     <div>
       <div className="animate-in fade-in duration-300 space-y-8 pb-8">
-        <div className="space-y-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#d4a017]">
-                Post-Event Snapshot
-              </p>
-              <h2 className="mt-2 text-3xl font-black text-[#1c1c1c] tracking-tight">
-                Performance summary
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
-                A simplified view of attendance, cost, and settlement status in the same production workspace style.
-              </p>
+        
+        {/* KPI Cards Row */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Attendance Rate</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-[32px] font-black text-gray-900 tracking-tight leading-none">{attendanceRate}</span>
+              <span className="text-[18px] font-bold text-gray-400">%</span>
+            </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${attendanceRate}%` }}></div>
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm text-center">
-              <p className="text-[10px] uppercase tracking-[0.32em] text-gray-400">Attendance rate</p>
-              <p className="mt-6 text-5xl font-black text-gray-900">{attendanceRate}%</p>
-              <p className="mt-3 text-sm text-gray-500">
-                {guestData?.totalAttended ?? 0} of {guestData?.totalRsvps ?? 0} attended
-              </p>
+          <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Total RSVPs</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-[32px] font-black text-gray-900 tracking-tight leading-none">{guestData?.totalRsvps ?? 0}</span>
+              <span className="text-[18px] font-bold text-gray-400">Responses</span>
             </div>
-
-            <div className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm text-center">
-              <p className="text-[10px] uppercase tracking-[0.32em] text-gray-400">Total RSVPs</p>
-              <p className="mt-6 text-5xl font-black text-[#15803d]">{guestData?.totalRsvps ?? 0}</p>
-              <p className="mt-3 text-sm text-gray-500">Confirmed responses</p>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-[#facc15] rounded-full" style={{ width: '100%' }}></div>
             </div>
+          </div>
 
-            <div className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm text-center">
-              <p className="text-[10px] uppercase tracking-[0.32em] text-gray-400">Total Cost</p>
-              <p className="mt-6 text-5xl font-black text-[#7c3aed]">{totalEventCost}</p>
-              <p className="mt-3 text-sm text-gray-500">Event expenses summary</p>
+          <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Total Cost</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-[32px] font-black text-gray-900 tracking-tight leading-none">{totalEventCost}</span>
             </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-gray-900 rounded-full" style={{ width: '100%' }}></div>
+            </div>
+          </div>
 
-            <div className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm text-center">
-              <p className="text-[10px] uppercase tracking-[0.32em] text-gray-400">Outstanding</p>
-              <p className="mt-6 text-5xl font-black text-[#dc2626]">{outstandingBalance}</p>
-              <p className="mt-3 text-sm text-gray-500">Amount due for settlement</p>
+          <div className="bg-white rounded-2xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Outstanding</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-[32px] font-black text-gray-900 tracking-tight leading-none">{outstandingBalance}</span>
+            </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-rose-500 rounded-full" style={{ width: outstandingBalance !== '₱0.00' && outstandingBalance !== '0' && outstandingBalance !== '0.00' ? '100%' : '0%' }}></div>
             </div>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <section className="space-y-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <section className="space-y-8 lg:col-span-2">
             {/* Vendor Scorecard */}
-            <div className="rounded-[30px] border border-gray-100 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="bg-white rounded-2xl p-8 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#d4a017]">
-                    Vendor Performance Review
-                  </p>
-                  <h2 className="mt-3 text-2xl font-black text-[#1c1c1c] tracking-tight">
-                    Vendor scorecard
-                  </h2>
+                  <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Vendor <span className="text-[#facc15] italic">Scorecard</span></h2>
+                  <p className="text-[12px] text-gray-500 font-medium mt-1">Vendor Performance Review</p>
                 </div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-600">
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase">
                   {associatedVendors.length} Vendor{associatedVendors.length !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -477,20 +477,11 @@ export default function PostEventView({
             </div>
 
             {/* Guest Engagement */}
-            <div className="rounded-[30px] border border-gray-100 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="bg-white rounded-2xl p-8 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#d4a017]">
-                    Attendance overview
-                  </p>
-                  <h2 className="mt-3 text-3xl font-black text-[#1c1c1c] tracking-tight">
-                    Guest engagement
-                  </h2>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Confirmed RSVPs: {guestData?.totalRsvps ?? 0} · Attended: {guestData?.totalAttended ?? 0} · Absent:{' '}
-                    {guestData?.totalAbsent ?? 0} · Declined: {guestData?.totalDeclined ?? 0} · Pending:{' '}
-                    {guestData?.totalPending ?? 0}
-                  </p>
+                  <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Guest <span className="text-[#facc15] italic">Engagement</span></h2>
+                  <p className="text-[12px] text-gray-500 font-medium mt-1">Attendance overview</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   {(['all', 'attended', 'absent', 'pending'] as const).map((filter) => (
@@ -498,10 +489,10 @@ export default function PostEventView({
                       key={filter}
                       type="button"
                       onClick={() => setGuestFilter(filter)}
-                      className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] transition ${
+                      className={`inline-flex items-center justify-center px-4 py-2 rounded-full text-[10px] font-bold tracking-widest uppercase transition-colors ${
                         guestFilter === filter
-                          ? 'bg-[#facc15] text-[#1c1c1c] shadow-sm'
-                          : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                          ? 'bg-[#facc15] text-white shadow-sm shadow-[#facc15]/20'
+                          : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
                       }`}
                     >
                       {filter}{' '}
@@ -519,94 +510,94 @@ export default function PostEventView({
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
                 {[
-                  { title: 'Attended', value: guestData?.totalAttended ?? 0, accent: 'green', subtitle: 'Arrived' },
-                  { title: 'Absent', value: guestData?.totalAbsent ?? 0, accent: 'red', subtitle: 'No-shows' },
-                  { title: 'Declined', value: guestData?.totalDeclined ?? 0, accent: 'orange', subtitle: 'Declined RSVPs' },
+                  { title: 'Attended', value: guestData?.totalAttended ?? 0, accent: 'emerald', subtitle: 'Arrived' },
+                  { title: 'Absent', value: guestData?.totalAbsent ?? 0, accent: 'rose', subtitle: 'No-shows' },
+                  { title: 'Declined', value: guestData?.totalDeclined ?? 0, accent: 'amber', subtitle: 'Declined RSVPs' },
                   { title: 'Pending', value: guestData?.totalPending ?? 0, accent: 'gray', subtitle: 'Awaiting response' },
                 ].map((stat) => (
                   <div
                     key={stat.title}
-                    className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm text-center"
+                    className="rounded-2xl border border-gray-100 bg-gray-50 p-6 text-center"
                   >
-                    <p className="text-[10px] uppercase tracking-[0.28em] text-gray-400">{stat.title}</p>
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-gray-400">{stat.title}</p>
                     <p
-                      className={`mt-5 text-5xl font-black ${
-                        stat.accent === 'green'
-                          ? 'text-green-600'
-                          : stat.accent === 'red'
-                          ? 'text-red-600'
-                          : stat.accent === 'orange'
-                          ? 'text-orange-600'
-                          : 'text-gray-800'
+                      className={`mt-4 text-4xl font-black ${
+                        stat.accent === 'emerald'
+                          ? 'text-emerald-500'
+                          : stat.accent === 'rose'
+                          ? 'text-rose-500'
+                          : stat.accent === 'amber'
+                          ? 'text-amber-500'
+                          : 'text-gray-900'
                       }`}
                     >
                       {stat.value}
                     </p>
-                    <p className="mt-3 text-xs uppercase tracking-[0.24em] text-gray-400">{stat.subtitle}</p>
+                    <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">{stat.subtitle}</p>
                   </div>
                 ))}
               </div>
 
               {/* Guest Table */}
-              <div className="mt-6 rounded-[28px] border border-gray-100 bg-white shadow-sm">
-                <div className="flex flex-col gap-4 border-b border-gray-100 bg-gray-50 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-8">
+                <div className="flex flex-col gap-4 border-b border-gray-50 pb-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-lg font-black text-[#1c1c1c]">Guest list</h3>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <h3 className="text-[16px] font-black text-gray-900 tracking-tight">Guest list</h3>
+                    <p className="mt-1 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                       {filteredGuests.length} guests{guestFilter !== 'all' ? ` · filtered ${guestFilter}` : ''}
                     </p>
                   </div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
-                    <span className="text-xs uppercase tracking-[0.25em] text-gray-400">Total</span>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#facc15]/30 bg-[#fef9ec] px-4 py-2 text-sm font-bold text-[#a88231]">
+                    <span className="text-[10px] uppercase tracking-widest text-[#d4a017]">Total</span>
                     {guestData?.guests.length ?? 0}
                   </div>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="min-w-full border-collapse table-auto text-left text-sm">
-                    <thead className="bg-[#fafafa] text-xs uppercase tracking-[0.25em] text-gray-400">
+                  <table className="min-w-full border-collapse table-auto text-left text-sm mt-2">
+                    <thead className="text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest border-b border-gray-50">
                       <tr>
-                        <th className="px-6 py-4 text-left">Name</th>
-                        <th className="px-6 py-4 text-left">Contact</th>
-                        <th className="px-6 py-4 text-center">Code</th>
-                        <th className="px-6 py-4 text-center">RSVP</th>
-                        <th className="px-6 py-4 text-center">Table</th>
-                        <th className="px-6 py-4 text-center">Attendance</th>
+                        <th className="px-4 py-4 text-left">Name</th>
+                        <th className="px-4 py-4 text-left">Contact</th>
+                        <th className="px-4 py-4 text-center">Code</th>
+                        <th className="px-4 py-4 text-center">RSVP</th>
+                        <th className="px-4 py-4 text-center">Table</th>
+                        <th className="px-4 py-4 text-center">Attendance</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-50">
                       {filteredGuests.length > 0 ? (
                         filteredGuests.map((guest) => (
                           <tr
                             key={guest._id}
                             onClick={() => setSelectedGuest(guest)}
-                            className="cursor-pointer hover:bg-gray-50 transition-colors"
+                            className="cursor-pointer group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0"
                           >
-                            <td className="px-6 py-4">
-                              <p className="font-semibold text-gray-900">{guest.displayName}</p>
+                            <td className="px-4 py-4">
+                              <p className="font-bold text-[#1d1d1f] text-sm">{guest.displayName}</p>
                               {guest.plusOne && (
-                                <p className="mt-1 text-xs font-black uppercase tracking-[0.22em] text-[#d4a017]">+1</p>
+                                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-[#d4a017]">+1</p>
                               )}
                               {guest.tier && (
-                                <p className="mt-1 text-xs uppercase tracking-[0.2em] text-gray-400">{guest.tier}</p>
+                                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{guest.tier}</p>
                               )}
                             </td>
-                            <td className="px-6 py-4 text-gray-600">
+                            <td className="px-4 py-4 text-[#71717a] text-[12px]">
                               <p>{guest.email || 'No email'}</p>
-                              {guest.phone && <p className="mt-1 text-xs text-gray-400">{guest.phone}</p>}
-                              {guest.notes && <p className="mt-1 text-xs text-gray-400">{guest.notes}</p>}
+                              {guest.phone && <p className="mt-1 text-[11px] text-gray-400">{guest.phone}</p>}
+                              {guest.notes && <p className="mt-1 text-[11px] text-gray-400">{guest.notes}</p>}
                             </td>
-                            <td className="px-6 py-4 text-center text-gray-600">{guest.code || '—'}</td>
-                            <td className="px-6 py-4 text-center">
+                            <td className="px-4 py-4 text-center font-medium text-gray-500 text-[12px]">{guest.code || '—'}</td>
+                            <td className="px-4 py-4 text-center">
                               <span
-                                className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] ${
+                                className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border ${
                                   guest.rsvpStatus === 'accepted'
-                                    ? 'bg-green-100 text-green-700'
+                                    ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                                     : guest.rsvpStatus === 'declined'
-                                    ? 'bg-red-100 text-red-700'
-                                    : 'bg-gray-100 text-gray-600'
+                                    ? 'bg-rose-50 border-rose-100 text-rose-600'
+                                    : 'bg-gray-50 border-gray-200 text-gray-500'
                                 }`}
                               >
                                 {guest.status
@@ -614,15 +605,15 @@ export default function PostEventView({
                                   : guest.rsvpStatus}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-center text-gray-900">{guest.tableNo || '—'}</td>
-                            <td className="px-6 py-4 text-center">
+                            <td className="px-4 py-4 text-center text-gray-900 font-bold">{guest.tableNo || '—'}</td>
+                            <td className="px-4 py-4 text-center">
                               <span
-                                className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] ${
+                                className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border ${
                                   guest.attendanceStatus === 'attended'
-                                    ? 'bg-green-100 text-green-700'
+                                    ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                                     : guest.attendanceStatus === 'absent'
-                                    ? 'bg-red-100 text-red-700'
-                                    : 'bg-gray-100 text-gray-600'
+                                    ? 'bg-rose-50 border-rose-100 text-rose-600'
+                                    : 'bg-gray-50 border-gray-200 text-gray-500'
                                 }`}
                               >
                                 {guest.attendanceStatus === 'attended'
@@ -648,23 +639,13 @@ export default function PostEventView({
             </div>
           </section>
 
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-6 xl:grid-cols-2 lg:col-span-2">
             {/* Outstanding Payments */}
-            <section className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
+            <section className="bg-white rounded-2xl p-8 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+              <div className="flex items-start justify-between gap-4 mb-6">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#d4a017]">
-                    Outstanding payments
-                  </p>
-                  <h2 className="mt-3 text-2xl font-black text-[#1c1c1c] tracking-tight">
-                    Post-event settlement
-                  </h2>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Review vendor invoices and payment milestones.
-                  </p>
-                </div>
-                <div className="rounded-3xl bg-red-50 p-3 text-red-700">
-                  <DollarSign size={20} />
+                  <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Outstanding <span className="text-[#facc15] italic">Payments</span></h2>
+                  <p className="text-[12px] text-gray-500 font-medium mt-1">Post-event settlement</p>
                 </div>
               </div>
 
@@ -677,7 +658,8 @@ export default function PostEventView({
                     {financeData.upcomingPayments.map((payment, idx) => (
                       <div
                         key={idx}
-                        className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                        onClick={() => setSelectedPayment(payment)}
+                        className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-gray-50 transition-colors"
                       >
                         <div>
                           <p className="text-sm font-black text-gray-900">
@@ -708,21 +690,11 @@ export default function PostEventView({
             </section>
 
             {/* Recent Expenses */}
-            <section className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
+            <section className="bg-white rounded-2xl p-8 shadow-[0px_2px_8px_rgba(0,0,0,0.02)] border border-gray-100">
+              <div className="flex items-start justify-between gap-4 mb-6">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#d4a017]">
-                    Recent expenses
-                  </p>
-                  <h2 className="mt-3 text-2xl font-black text-[#1c1c1c] tracking-tight">
-                    Event cost breakdown
-                  </h2>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Most recent spending entries from the event budget.
-                  </p>
-                </div>
-                <div className="rounded-3xl bg-purple-50 p-3 text-purple-700">
-                  <FileText size={20} />
+                  <h2 className="text-[24px] font-black text-gray-900 tracking-tight">Cost <span className="text-[#facc15] italic">Breakdown</span></h2>
+                  <p className="text-[12px] text-gray-500 font-medium mt-1">Recent event expenses</p>
                 </div>
               </div>
 
@@ -731,7 +703,8 @@ export default function PostEventView({
                   {financeData.recentExpenses.map((expense, idx) => (
                     <div
                       key={idx}
-                      className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                      onClick={() => setSelectedExpense(expense)}
+                      className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-gray-50 transition-colors"
                     >
                       <div>
                         <p className="text-sm font-black text-gray-900">
@@ -779,173 +752,312 @@ export default function PostEventView({
       {/* Guest Detail Modal — outside animate-in div so overlay works correctly */}
       {selectedGuest && (
   <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-    <div className="w-full max-w-2xl rounded-[28px] bg-white p-8 shadow-2xl">
-
+    <div className="w-full max-w-2xl rounded-[40px] bg-white p-10 shadow-2xl">
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-3xl font-black text-slate-950">
+      <div className="mb-8">
+        <h2 className="text-[32px] font-black text-gray-900 tracking-tight">
           View <span className="text-[#facc15] italic">Guest</span>
         </h2>
-        <p className="mt-1 text-[10px] font-black uppercase tracking-[0.35em] text-gray-400">
+        <p className="mt-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
           Guest attendee details
         </p>
       </div>
 
       {/* Grid Layout — 3 columns landscape */}
-      <div className="grid grid-cols-3 gap-x-6 gap-y-5">
-
+      <div className="grid grid-cols-3 gap-x-6 gap-y-6">
         {/* Full Name — spans full width */}
         <div className="col-span-3">
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Full Legal Name
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.displayName}</p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedGuest.displayName}</p>
         </div>
 
-        {/* Email */}
+        {/* Row 2 */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Email Address
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.email || '—'}</p>
+          <p className="text-[13px] font-bold text-gray-900 truncate" title={selectedGuest.email || ''}>{selectedGuest.email || '—'}</p>
         </div>
-
-        {/* Phone */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Phone
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.phone || '—'}</p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedGuest.phone || '—'}</p>
         </div>
-
-        {/* Guest Code */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Guest Code
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.code || '—'}</p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedGuest.code || '—'}</p>
         </div>
 
-        {/* RSVP Status */}
+        {/* Row 3 */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             RSVP Status
           </p>
-          <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] ${
-            selectedGuest.rsvpStatus === 'accepted'
-              ? 'bg-green-100 text-green-700'
-              : selectedGuest.rsvpStatus === 'declined'
-              ? 'bg-red-100 text-red-700'
-              : 'bg-gray-100 text-gray-600'
-          }`}>
-            {selectedGuest.status
-              ? String(selectedGuest.status).replace(/^(.)/, (m) => m.toUpperCase())
-              : selectedGuest.rsvpStatus}
+          <span className="inline-flex items-center justify-center rounded-full border border-gray-200 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-600 bg-white">
+            {selectedGuest.status ? String(selectedGuest.status).toUpperCase() : selectedGuest.rsvpStatus.toUpperCase()}
           </span>
         </div>
-
-        {/* Attendance */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Attendance
           </p>
-          <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] ${
-            selectedGuest.attendanceStatus === 'attended'
-              ? 'bg-green-100 text-green-700'
-              : selectedGuest.attendanceStatus === 'absent'
-              ? 'bg-red-100 text-red-700'
-              : 'bg-gray-100 text-gray-600'
-          }`}>
-            {selectedGuest.attendanceStatus === 'attended'
-              ? 'Attended'
-              : selectedGuest.attendanceStatus === 'absent'
-              ? 'Absent'
-              : 'Pending'}
+          <span className="inline-flex items-center justify-center rounded-full border border-gray-200 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-600 bg-white">
+            {selectedGuest.attendanceStatus === 'attended' ? 'ATTENDED' : selectedGuest.attendanceStatus === 'absent' ? 'ABSENT' : 'PENDING'}
           </span>
         </div>
-
-        {/* Table Number */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Table Number
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.tableNo || '—'}</p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedGuest.tableNo || '—'}</p>
         </div>
 
-        {/* Tier */}
+        {/* Row 4 */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Tier
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.tier || '—'}</p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedGuest.tier || 'Standard'}</p>
         </div>
-
-        {/* Plus One */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Plus One
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.plusOne ? 'Yes' : 'No'}</p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedGuest.plusOne ? 'Yes' : 'No'}</p>
         </div>
-
-        {/* Attendees */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Attendees
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.attendees ?? '1'}</p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedGuest.attendees ?? '1'}</p>
         </div>
 
-        {/* Dietary */}
+        {/* Row 5 */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Dietary
           </p>
-          <p className="text-sm font-bold text-gray-900">{selectedGuest.dietary || 'None'}</p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedGuest.dietary || 'None'}</p>
         </div>
-
-        {/* Checked In */}
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
             Checked In
           </p>
-          <p className="text-sm font-bold text-gray-900">
+          <p className="text-[13px] font-bold text-gray-900">
             {selectedGuest.qrScannedAt || selectedGuest.usedAt || selectedGuest.checkedIn ? 'Yes' : 'No'}
           </p>
         </div>
 
-        {/* Notes — spans full width */}
+        {/* Notes (Spans full width if exists) */}
         {selectedGuest.notes && (
           <div className="col-span-3">
-            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
               Notes
             </p>
-            <p className="text-sm text-gray-700">{selectedGuest.notes}</p>
+            <p className="text-[13px] text-gray-700">{selectedGuest.notes}</p>
           </div>
         )}
       </div>
 
-      {/* Divider */}
-      <div className="my-6 border-t border-gray-100" />
-
       {/* Footer */}
-      <div className="flex items-center justify-between">
+      <div className="mt-12 flex items-center gap-4">
         <button
           type="button"
           onClick={() => setSelectedGuest(null)}
-          className="text-sm font-black uppercase tracking-[0.3em] text-gray-400 hover:text-gray-600 transition"
+          className="flex-1 text-left text-[12px] font-black uppercase tracking-[0.3em] text-gray-400 hover:text-gray-600 transition-colors"
         >
           Discard
         </button>
         <button
           type="button"
           onClick={() => setSelectedGuest(null)}
-          className="rounded-full bg-[#facc15] px-8 py-3 text-sm font-black uppercase tracking-[0.25em] text-white shadow-lg shadow-[#facc15]/30 transition hover:brightness-95"
+          className="rounded-full bg-[#facc15] px-8 py-3.5 text-[12px] font-black uppercase tracking-widest text-white shadow-xl shadow-[#facc15]/20 transition-all hover:bg-[#eab308]"
         >
           Close Guest
         </button>
       </div>
+    </div>
+  </div>
+)}
 
+      {/* Payment Detail Modal */}
+      {selectedPayment && (
+  <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div className="w-full max-w-xl rounded-[40px] bg-white p-10 shadow-2xl">
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-[32px] font-black text-gray-900 tracking-tight">
+          View <span className="text-[#facc15] italic">Payment</span>
+        </h2>
+        <p className="mt-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          Upcoming post-event payment details
+        </p>
+      </div>
+
+      {/* Grid Layout — 2 columns landscape */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-6">
+        {/* Full Name */}
+        <div className="col-span-2">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Entity
+          </p>
+          <p className="text-[15px] font-bold text-gray-900">{selectedPayment.entity}</p>
+        </div>
+
+        {/* Row 2 */}
+        <div>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Amount
+          </p>
+          <p className="text-[20px] font-black text-gray-900">{selectedPayment.amount}</p>
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Due Date
+          </p>
+          <p className="text-[15px] font-bold text-gray-900">{selectedPayment.due}</p>
+        </div>
+
+        {/* Row 3 */}
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Type
+          </p>
+          <span className="inline-flex items-center justify-center rounded-full border border-gray-200 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-600 bg-white">
+            {selectedPayment.type}
+          </span>
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Timeline
+          </p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedPayment.days}</p>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="mt-12 flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => setSelectedPayment(null)}
+          className="flex-1 text-left text-[12px] font-black uppercase tracking-[0.3em] text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          Discard
+        </button>
+        <button
+          type="button"
+          onClick={() => setSelectedPayment(null)}
+          className="rounded-full bg-[#facc15] px-8 py-3.5 text-[12px] font-black uppercase tracking-widest text-white shadow-xl shadow-[#facc15]/20 transition-all hover:bg-[#eab308]"
+        >
+          Close View
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+      {/* Expense Detail Modal */}
+      {selectedExpense && (
+  <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div className="w-full max-w-xl rounded-[40px] bg-white p-10 shadow-2xl">
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-[32px] font-black text-gray-900 tracking-tight">
+          View <span className="text-[#facc15] italic">Expense</span>
+        </h2>
+        <p className="mt-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+          Recent event cost breakdown
+        </p>
+      </div>
+
+      {/* Grid Layout */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-6">
+        {/* Desc */}
+        <div className="col-span-2">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Description
+          </p>
+          <p className="text-[15px] font-bold text-gray-900">{selectedExpense.desc}</p>
+        </div>
+
+        {/* Row 2 */}
+        <div>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Detail / Entity
+          </p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedExpense.subtitle}</p>
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Amount
+          </p>
+          <p className="text-[20px] font-black text-gray-900">{selectedExpense.amount}</p>
+        </div>
+
+        {/* Row 3 */}
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Category
+          </p>
+          <span className="inline-flex items-center justify-center rounded-full border border-purple-100 px-4 py-1.5 text-[10px] font-bold tracking-widest text-purple-700 bg-purple-50">
+            {selectedExpense.category}
+          </span>
+        </div>
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Status
+          </p>
+          <span className={`inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest ${
+            selectedExpense.status === 'paid' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+          }`}>
+            {selectedExpense.status}
+          </span>
+        </div>
+
+        {/* Row 4 */}
+        <div>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+            Date
+          </p>
+          <p className="text-[13px] font-bold text-gray-900">{selectedExpense.date}</p>
+        </div>
+
+        {/* Attachment */}
+        {selectedExpense.attachmentUrl && (
+          <div className="col-span-2 mt-4 rounded-xl bg-gray-50 border border-gray-100 p-4">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">
+              Proof of Payment
+            </p>
+            <a href={selectedExpense.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-[13px] font-bold text-[#d4a017] hover:underline flex items-center gap-2">
+              <FileText size={16} />
+              {selectedExpense.attachmentName || 'View Attachment'}
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="mt-12 flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => setSelectedExpense(null)}
+          className="flex-1 text-left text-[12px] font-black uppercase tracking-[0.3em] text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          Discard
+        </button>
+        <button
+          type="button"
+          onClick={() => setSelectedExpense(null)}
+          className="rounded-full bg-[#facc15] px-8 py-3.5 text-[12px] font-black uppercase tracking-widest text-white shadow-xl shadow-[#facc15]/20 transition-all hover:bg-[#eab308]"
+        >
+          Close View
+        </button>
+      </div>
     </div>
   </div>
 )}
