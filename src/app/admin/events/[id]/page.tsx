@@ -606,6 +606,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   const productionDate = event ? toDateInputValue(event.date) : '';
   const todayDate = toDateInputValue(new Date());
 
+  // Determine whether Post Event tab should be accessible
+  const normalizedEventStatus = String(event?.status || '').toLowerCase().trim();
+  const postEventAccessible = Boolean(
+    event && (normalizedEventStatus === 'completed' || isEventDatePassed(event?.date))
+  );
+
   const normalizedGuests = useMemo<NormalizedGuestData[]>(() => {
     const eventHasPassed = isEventDatePassed(event?.date);
 
@@ -1406,22 +1412,38 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
         {/* Top Level Tabs */}
         <div className="border-b border-gray-200 mt-8 flex gap-8">
-          {['pre-event', 'event-day', 'post-event'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-[13px] font-extrabold uppercase tracking-wider transition-colors border-b-2 relative top-[1px] ${activeTab === tab ? 'border-[#d4a017] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              {tab.replace('-', ' ')}
-            </button>
-          ))}
+          {['pre-event', 'event-day', 'post-event'].map((tab) => {
+            const isPost = tab === 'post-event';
+            const disabled = isPost && !postEventAccessible;
+
+            return (
+              <button
+                key={tab}
+                onClick={() => {
+                  if (disabled) return;
+                  setActiveTab(tab);
+                }}
+                disabled={disabled}
+                title={disabled ? 'Post-event is available only after production is completed or when the production date has passed.' : ''}
+                className={`pb-3 text-[13px] font-extrabold uppercase tracking-wider transition-colors border-b-2 relative top-[1px] ${
+                  activeTab === tab ? 'border-[#d4a017] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
+                } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {tab.replace('-', ' ')}
+              </button>
+            );
+          })}
         </div>
 
         {/* Tab Content Rendering */}
         <div className="pt-4">
           {activeTab === 'pre-event' && renderPreEvent()}
           {activeTab === 'event-day' && renderEventDay()}
-          {activeTab === 'post-event' && renderPostEvent()}
+          {activeTab === 'post-event' && (postEventAccessible ? renderPostEvent() : (
+            <div className="py-20 text-center text-gray-500">
+              Post-event is not available until production is completed or the production date has passed.
+            </div>
+          ))}
         </div>
       </div>
 
