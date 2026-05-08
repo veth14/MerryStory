@@ -65,7 +65,7 @@ export async function POST(
     }
     
     const body = await request.json();
-    const { invoiceNumber, clientName, amount, issueDate, dueDate, status = "Pending", description = "" } = body;
+    const { invoiceNumber, clientName, amount, issueDate, dueDate, status = "Pending", description = "", expenseId = "" } = body;
     
     if (!invoiceNumber || !clientName || !amount || !issueDate || !dueDate) {
       return NextResponse.json(
@@ -75,6 +75,12 @@ export async function POST(
     }
     
     const invoicesCollection = db.collection("invoices");
+    const normalizedExpenseId = String(expenseId || "").trim();
+    const linkedExpense =
+      normalizedExpenseId && ObjectId.isValid(normalizedExpenseId)
+        ? await db.collection("expenses").findOne({ _id: new ObjectId(normalizedExpenseId), eventId: eventObjectId })
+        : null;
+
     const newInvoice = {
       eventId: eventObjectId,
       invoiceNumber,
@@ -84,6 +90,9 @@ export async function POST(
       dueDate: new Date(dueDate),
       status,
       description,
+      expenseId: linkedExpense?._id || null,
+      expenseTitle: linkedExpense?.description || "",
+      expenseVendor: linkedExpense?.vendor || "",
       createdAt: new Date(),
       createdBy: user.uid
     };

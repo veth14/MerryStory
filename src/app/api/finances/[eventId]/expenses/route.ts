@@ -6,7 +6,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { ObjectId } from "mongodb";
 
 const PESO_SYMBOL = "\u20B1";
-const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "paid"]);
+const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "half-paid", "paid"]);
 const ALLOWED_PAYMENT_TYPES = new Set(["catering", "equipment", "decoration", "venue", "other"]);
 
 function formatBytes(bytes: number) {
