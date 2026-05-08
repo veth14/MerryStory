@@ -44,6 +44,10 @@ interface GuestData {
   tableNo: string;
   plusOne: boolean;
   code?: string;
+  tier?: string;
+  attendees?: number | string;
+  dietary?: string;
+  notes?: string;
   checkedIn: boolean;
   qrScannedAt?: string | null;
   usedAt?: string | null;
