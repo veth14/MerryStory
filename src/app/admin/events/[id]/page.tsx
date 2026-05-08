@@ -43,6 +43,7 @@ interface GuestData {
   status: 'Confirmed' | 'Pending' | 'Declined';
   tableNo: string;
   plusOne: boolean;
+  code?: string;
   checkedIn: boolean;
   qrScannedAt?: string | null;
   usedAt?: string | null;
