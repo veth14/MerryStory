@@ -43,6 +43,11 @@ interface GuestData {
   status: 'Confirmed' | 'Pending' | 'Declined';
   tableNo: string;
   plusOne: boolean;
+  code?: string;
+  tier?: string;
+  attendees?: number | string;
+  dietary?: string;
+  notes?: string;
   checkedIn: boolean;
   qrScannedAt?: string | null;
   usedAt?: string | null;
@@ -323,6 +328,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [editingProdTask, setEditingProdTask] = useState<ProdTaskData | null>(null);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+  const [selectedGuestView, setSelectedGuestView] = useState<NormalizedGuestData | null>(null);
   const [guestSearch, setGuestSearch] = useState('');
   const [guestPage, setGuestPage] = useState(1);
   const [newGuest, setNewGuest] = useState({
@@ -605,6 +611,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
   const productionDate = event ? toDateInputValue(event.date) : '';
   const todayDate = toDateInputValue(new Date());
 
+  // Determine whether Post Event tab should be accessible
+  const normalizedEventStatus = String(event?.status || '').toLowerCase().trim();
+  const postEventAccessible = Boolean(
+    event && (normalizedEventStatus === 'completed' || isEventDatePassed(event?.date))
+  );
+
   const normalizedGuests = useMemo<NormalizedGuestData[]>(() => {
     const eventHasPassed = isEventDatePassed(event?.date);
 
@@ -613,9 +625,11 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
       const normalizedRsvpStatus =
         statusValue === 'confirmed' ? 'Confirmed' : statusValue === 'declined' ? 'Declined' : 'Pending';
       const isCheckedIn = Boolean(guest?.checkedIn || guest?.qrScannedAt);
+      // After the production date has passed, any guest who is not checked in should be 'Absent'.
+      // Before the production date, preserve RSVP/declined/pending semantics.
       const attendanceStatus = isCheckedIn
         ? 'Checked In'
-        : normalizedRsvpStatus === 'Confirmed' && eventHasPassed
+        : eventHasPassed
           ? 'Absent'
           : normalizedRsvpStatus === 'Declined'
             ? 'Declined'
@@ -1193,7 +1207,8 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                       return (
                         <tr
                           key={guest._id}
-                          className="group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0"
+                          onClick={() => setSelectedGuestView(guest)}
+                          className="cursor-pointer group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0"
                         >
                           <td className="px-6 py-5">
                             <div className="flex items-center gap-4">
@@ -1230,7 +1245,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                                 {hasEmail ? (
                                   <button
                                     type="button"
-                                    onClick={() => sendGuestLink(guest).catch((err) => console.error(err))}
+                                    onClick={(e) => { e.stopPropagation(); sendGuestLink(guest).catch((err) => console.error(err)); }}
                                     className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
                                   >
                                     <Link2 size={13} />
@@ -1241,7 +1256,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                                     {guest.normalizedRsvpStatus === 'Pending' ? (
                                       <button
                                         type="button"
-                                        onClick={() => confirmGuest(guest).catch((err) => console.error(err))}
+                                        onClick={(e) => { e.stopPropagation(); confirmGuest(guest).catch((err) => console.error(err)); }}
                                         className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
                                       >
                                         <Check size={13} />
@@ -1250,7 +1265,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                                     ) : guest.normalizedRsvpStatus === 'Confirmed' ? (
                                       <button
                                         type="button"
-                                        onClick={() => toggleGuestCheckIn(guest).catch((err) => console.error(err))}
+                                        onClick={(e) => { e.stopPropagation(); toggleGuestCheckIn(guest).catch((err) => console.error(err)); }}
                                         className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase transition-colors hover:bg-[#fff6d8]"
                                       >
                                         <UserCheck size={13} />
@@ -1402,22 +1417,38 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
         {/* Top Level Tabs */}
         <div className="border-b border-gray-200 mt-8 flex gap-8">
-          {['pre-event', 'event-day', 'post-event'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-[13px] font-extrabold uppercase tracking-wider transition-colors border-b-2 relative top-[1px] ${activeTab === tab ? 'border-[#d4a017] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              {tab.replace('-', ' ')}
-            </button>
-          ))}
+          {['pre-event', 'event-day', 'post-event'].map((tab) => {
+            const isPost = tab === 'post-event';
+            const disabled = isPost && !postEventAccessible;
+
+            return (
+              <button
+                key={tab}
+                onClick={() => {
+                  if (disabled) return;
+                  setActiveTab(tab);
+                }}
+                disabled={disabled}
+                title={disabled ? 'Post-event is available only after production is completed or when the production date has passed.' : ''}
+                className={`pb-3 text-[13px] font-extrabold uppercase tracking-wider transition-colors border-b-2 relative top-[1px] ${
+                  activeTab === tab ? 'border-[#d4a017] text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
+                } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {tab.replace('-', ' ')}
+              </button>
+            );
+          })}
         </div>
 
         {/* Tab Content Rendering */}
         <div className="pt-4">
           {activeTab === 'pre-event' && renderPreEvent()}
           {activeTab === 'event-day' && renderEventDay()}
-          {activeTab === 'post-event' && renderPostEvent()}
+          {activeTab === 'post-event' && (postEventAccessible ? renderPostEvent() : (
+            <div className="py-20 text-center text-gray-500">
+              Post-event is not available until production is completed or the production date has passed.
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1583,6 +1614,83 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
               >
                 Add
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {selectedGuestView && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="w-full max-w-2xl rounded-[40px] bg-white p-10 shadow-2xl">
+            <div className="mb-8">
+              <h2 className="text-[32px] font-black text-gray-900 tracking-tight">View <span className="text-[#facc15] italic">Guest</span></h2>
+              <p className="mt-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Guest attendee details</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-x-6 gap-y-6">
+              <div className="col-span-3">
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Full Legal Name</p>
+                <p className="text-[13px] font-bold text-gray-900">{getGuestName(selectedGuestView)}</p>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Email Address</p>
+                <p className="text-[13px] font-bold text-gray-900 truncate" title={selectedGuestView.email || ''}>{selectedGuestView.email || '—'}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Phone</p>
+                <p className="text-[13px] font-bold text-gray-900">{selectedGuestView.phone || '—'}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Guest Code</p>
+                <p className="text-[13px] font-bold text-gray-900">{selectedGuestView.code || '—'}</p>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">RSVP Status</p>
+                <span className="inline-flex items-center justify-center rounded-full border border-gray-200 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-600 bg-white">{String(selectedGuestView.normalizedRsvpStatus).toUpperCase()}</span>
+              </div>
+              <div>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Attendance</p>
+                <span className="inline-flex items-center justify-center rounded-full border border-gray-200 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-600 bg-white">{selectedGuestView.attendanceStatus.toUpperCase()}</span>
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Table Number</p>
+                <p className="text-[13px] font-bold text-gray-900">{selectedGuestView.tableNo || '—'}</p>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Tier</p>
+                <p className="text-[13px] font-bold text-gray-900">{selectedGuestView.tier || 'Standard'}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Plus One</p>
+                <p className="text-[13px] font-bold text-gray-900">{selectedGuestView.plusOne ? 'Yes' : 'No'}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Attendees</p>
+                <p className="text-[13px] font-bold text-gray-900">{selectedGuestView.attendees ?? '1'}</p>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Dietary</p>
+                <p className="text-[13px] font-bold text-gray-900">{(selectedGuestView as any).dietary || 'None'}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Checked In</p>
+                <p className="text-[13px] font-bold text-gray-900">{selectedGuestView.qrScannedAt || selectedGuestView.checkedIn ? 'Yes' : 'No'}</p>
+              </div>
+
+              {(selectedGuestView as any).notes && (
+                <div className="col-span-3">
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Notes</p>
+                  <p className="text-[13px] text-gray-700">{(selectedGuestView as any).notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-12 flex items-center gap-4">
+              <button type="button" onClick={() => setSelectedGuestView(null)} className="flex-1 text-left text-[12px] font-black uppercase tracking-[0.3em] text-gray-400 hover:text-gray-600 transition-colors">Discard</button>
+              <button type="button" onClick={() => setSelectedGuestView(null)} className="rounded-full bg-[#facc15] px-8 py-3.5 text-[12px] font-black uppercase tracking-widest text-white shadow-xl shadow-[#facc15]/20 transition-all hover:bg-[#eab308]">Close Guest</button>
             </div>
           </div>
         </div>
