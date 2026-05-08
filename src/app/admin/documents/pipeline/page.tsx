@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Plus, ExternalLink, ChevronLeft, Edit, Send, CheckCircle, CheckCircle2, RefreshCw, X, Info, FileText, Upload, Loader, Download, Maximize2, Search } from 'lucide-react';
+import { ArrowRight, Plus, ExternalLink, ChevronLeft, Edit, Send, CheckCircle2, X, Info, FileText, Upload, Loader, Download, Maximize2, Search } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 interface Contract {
@@ -108,9 +108,6 @@ export default function PipelinePage() {
   const [createContractOpen, setCreateContractOpen] = useState(false);
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [submittingContract, setSubmittingContract] = useState(false);
-  const [sendContractOpen, setSendContractOpen] = useState(false);
-  const [sendingContractId, setSendingContractId] = useState<string | null>(null);
-  const [sendContractDraft, setSendContractDraft] = useState<Contract | null>(null);
   const [pipeline, setPipeline] = useState<Pipeline>({ drafting: [], sent: [], signed: [] });
   const [events, setEvents] = useState<Array<{ _id: string; title: string }>>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -146,10 +143,6 @@ export default function PipelinePage() {
     contractFile: null as File | null,
     existingFileName: '',
   });
-  const [sendContractForm, setSendContractForm] = useState({
-    recipientName: '',
-    recipientEmail: '',
-  });
 
   useEffect(() => {
     setHydrated(true);
@@ -173,15 +166,6 @@ export default function PipelinePage() {
     setCreateContractOpen(false);
     setEditingContractId(null);
     resetContractForm();
-  };
-
-  const closeSendContractModal = () => {
-    setSendContractOpen(false);
-    setSendContractDraft(null);
-    setSendContractForm({
-      recipientName: '',
-      recipientEmail: '',
-    });
   };
 
   const fetchPipeline = async (tokenOverride?: string) => {
@@ -479,76 +463,30 @@ export default function PipelinePage() {
     }
   };
 
-  const openSendContractModal = (contract: Contract) => {
-    setSendContractDraft(contract);
-    setSendContractForm({
-      recipientName: contract.recipientName || '',
-      recipientEmail: contract.recipientEmail || '',
-    });
-    setSendContractOpen(true);
-  };
-
-  const confirmSendContractEmail = async () => {
-    if (!user || !sendContractDraft) {
+  const handleSendContractEmail = async (id: string) => {
+    if (!user) {
       triggerModal('Authentication Required', 'Please sign in again before sending contract emails.');
       return;
     }
 
-    const recipientEmail = sendContractForm.recipientEmail.trim();
-    const recipientName = sendContractForm.recipientName.trim();
-
-    if (!recipientEmail) {
-      triggerModal('Missing Details', 'Please add the recipient email before sending this contract.');
-      return;
-    }
-
     try {
-      setSendingContractId(sendContractDraft._id);
       const token = await user.getIdToken();
-      const selectedEvent = events.find((event) => event._id === sendContractDraft.eventId);
-      const payload = new FormData();
-      payload.append('name', sendContractDraft.name || '');
-      payload.append('eventId', sendContractDraft.eventId || '');
-      payload.append('eventName', sendContractDraft.eventName || selectedEvent?.title || 'Unassigned Event');
-      payload.append('type', sendContractDraft.type || 'Service Agreement');
-      payload.append('value', formatContractValue(sendContractDraft.value));
-      payload.append('platform', sendContractDraft.platform || 'DocuSign');
-      payload.append('recipientName', recipientName);
-      payload.append('recipientEmail', recipientEmail);
-      payload.append('status', sendContractDraft.status || 'drafting');
-
-      const updateResponse = await fetch(`/api/admin/contracts/${sendContractDraft._id}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: payload,
-      });
-
-      if (!updateResponse.ok) {
-        const updatePayload = await updateResponse.json().catch(() => ({}));
-        throw new Error(updatePayload.error || 'Failed to update recipient details.');
-      }
-
-      const response = await fetch(`/api/admin/contracts/${sendContractDraft._id}/send`, {
+      const response = await fetch(`/api/admin/contracts/${id}/send`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      const responsePayload = await response.json().catch(() => ({}));
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(responsePayload.error || 'Failed to send contract email.');
+        throw new Error(payload.error || 'Failed to send contract email.');
       }
 
-      closeSendContractModal();
       triggerModal('Contract Sent', 'The review link has been sent to the recipient email.');
       await fetchPipeline(token);
     } catch (error) {
       triggerModal('Send Error', (error as Error).message || 'Failed to send contract email.');
-    } finally {
-      setSendingContractId(null);
     }
   };
 
@@ -617,6 +555,13 @@ export default function PipelinePage() {
       }
       return pages;
     };
+
+    // Calculate display range for the largest column
+    const draftingCount = filteredDrafting.length;
+    const sentCount = filteredSent.length;
+    const signedCount = filteredSigned.length;
+    const rangeStart = (currentPage - 1) * itemsPerPage + 1;
+    const rangeEnd = Math.min(currentPage * itemsPerPage, totalItems);
 
     return (
       <div className="mt-12 pt-4 flex flex-col items-center gap-3">
@@ -738,26 +683,21 @@ export default function PipelinePage() {
               </div>
             ) : (
               paginatedDrafting.map(contract => (
-                <div
-                  key={contract._id}
-                  onClick={() => void openPreviewModal(contract)}
-                  className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group flex flex-col min-h-[216px] cursor-pointer hover:border-[#eebf43]/40"
-                >
+                <div key={contract._id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group flex flex-col">
                   <div className="flex justify-between items-start mb-3">
                     <div className="text-[10px] font-extrabold text-[#eebf43] bg-[#fef9ec] px-2 py-1 rounded-md uppercase tracking-wider">{contract._id.slice(-6).toUpperCase()}</div>
                     <div className="text-[10px] font-medium text-gray-400">{formatDate(contract.lastUpdated)}</div>
                   </div>
-                  <h3 className="text-lg font-black text-[#1d1d1f] mb-1 leading-tight group-hover:text-[#eebf43] transition-colors line-clamp-2">{contract.name}</h3>
-                  <p className="text-xs font-semibold text-gray-500 mb-1 line-clamp-2">{contract.type}</p>
-                  <p className="text-[11px] font-semibold text-gray-400 mb-6 line-clamp-1">{contract.eventName || 'Unassigned Event'}</p>
+                  <h3 className="text-lg font-black text-[#1d1d1f] mb-1 leading-tight group-hover:text-[#eebf43] transition-colors">{contract.name}</h3>
+                  <p className="text-xs font-semibold text-gray-500 mb-6">{contract.type}</p>
                   
                   <div className="mt-auto border-t border-gray-50 pt-4 flex items-center justify-between">
                     <div className="text-sm font-black text-[#1d1d1f]">{formatContractValue(contract.value)}</div>
                     <div className="flex gap-2">
-                      <button onClick={(event) => { event.stopPropagation(); void handleEditDrafting(contract._id); }} className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors" title="Edit Draft">
+                      <button onClick={() => handleEditDrafting(contract._id)} className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors" title="Edit Draft">
                          <Edit size={14} />
                       </button>
-                      <button onClick={(event) => { event.stopPropagation(); openSendContractModal(contract); }} className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center text-white hover:bg-black transition-colors" title="Send To Email">
+                      <button onClick={() => handleSendContractEmail(contract._id)} className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center text-white hover:bg-black transition-colors" title="Send To Email">
                          <Send size={14} />
                       </button>
                     </div>
@@ -786,18 +726,13 @@ export default function PipelinePage() {
               </div>
             ) : (
               paginatedSent.map(contract => (
-                <div
-                  key={contract._id}
-                  onClick={() => void openPreviewModal(contract)}
-                  className="bg-white p-5 rounded-2xl border border-[#eebf43]/20 shadow-sm hover:shadow-md transition-all group flex flex-col min-h-[216px] cursor-pointer hover:border-[#eebf43]/40"
-                >
+                <div key={contract._id} className="bg-white p-5 rounded-2xl border border-[#eebf43]/20 shadow-sm hover:shadow-md transition-shadow group flex flex-col">
                   <div className="flex justify-between items-start mb-3">
                     <div className="text-[10px] font-extrabold text-[#eebf43] bg-[#fef9ec] px-2 py-1 rounded-md uppercase tracking-wider">{contract._id.slice(-6).toUpperCase()}</div>
                     <div className="text-[10px] font-medium text-gray-400">{formatDate(contract.lastUpdated)}</div>
                   </div>
-                  <h3 className="text-lg font-black text-[#1d1d1f] mb-1 leading-tight group-hover:text-[#eebf43] transition-colors line-clamp-2">{contract.name}</h3>
-                  <p className="text-xs font-semibold text-gray-500 mb-1 line-clamp-2">{contract.type}</p>
-                  <p className="text-[11px] font-semibold text-gray-400 mb-6 line-clamp-1">{contract.eventName || 'Unassigned Event'}</p>
+                  <h3 className="text-lg font-black text-[#1d1d1f] mb-1 leading-tight group-hover:text-[#eebf43] transition-colors">{contract.name}</h3>
+                  <p className="text-xs font-semibold text-gray-500 mb-6">{contract.type}</p>
                   
                   <div className="mt-auto border-t border-gray-50 pt-4 flex items-center justify-between">
                     <div className="text-sm font-black text-[#1d1d1f]">{formatContractValue(contract.value)}</div>
@@ -829,11 +764,7 @@ export default function PipelinePage() {
               </div>
             ) : (
               paginatedSigned.map(contract => (
-                <div
-                  key={contract._id}
-                  onClick={() => void openPreviewModal(contract)}
-                  className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-all flex flex-col min-h-[216px] cursor-pointer hover:border-emerald-200"
-                >
+                <div key={contract._id} className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-shadow flex flex-col">
                   <div className="flex justify-between items-start mb-3">
                     <div className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md uppercase tracking-wider">{contract._id.slice(-6).toUpperCase()}</div>
                     <div className="flex items-center gap-2">
@@ -841,13 +772,12 @@ export default function PipelinePage() {
                       <CheckCircle2 size={16} className="text-emerald-500" />
                     </div>
                   </div>
-                  <h3 className="text-lg font-black text-[#1d1d1f] mb-1 leading-tight line-clamp-2">{contract.name}</h3>
-                  <p className="text-xs font-semibold text-gray-500 mb-1 line-clamp-2">{contract.type}</p>
-                  <p className="text-[11px] font-semibold text-gray-400 mb-6 line-clamp-1">{contract.eventName || 'Unassigned Event'}</p>
+                  <h3 className="text-lg font-black text-[#1d1d1f] mb-1 leading-tight">{contract.name}</h3>
+                  <p className="text-xs font-semibold text-gray-500 mb-6">{contract.type}</p>
                   
                   <div className="mt-auto border-t border-gray-50 pt-4 flex items-center justify-between">
                     <div className="text-sm font-black text-[#1d1d1f]">{formatContractValue(contract.value)}</div>
-                    <button onClick={(event) => { event.stopPropagation(); void openPreviewModal(contract); }} className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:text-emerald-700 transition-colors flex items-center gap-1">
+                    <button onClick={() => void openPreviewModal(contract)} className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:text-emerald-700 transition-colors flex items-center gap-1">
                       VIEW PDF <ExternalLink size={12} />
                     </button>
                   </div>
@@ -999,35 +929,7 @@ export default function PipelinePage() {
       {/* Custom Modal Overlay */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/40 backdrop-blur-sm animate-in fade-in duration-200">
-          {['Contract Updated', 'Contract Sent'].includes(modal.title) ? (
-            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 overflow-hidden">
-              <button 
-                onClick={() => setModal({ ...modal, isOpen: false })}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-              >
-                <X size={16} strokeWidth={2.5} />
-              </button>
-              <div className="flex flex-col items-center text-center pt-4">
-                {modal.title === 'Contract Updated' ? (
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#eebf43] to-[#dcae32] flex items-center justify-center mb-6 animate-in scale-in-95 duration-300 shadow-lg">
-                    <RefreshCw size={32} className="text-white animate-in rotate-in duration-500" strokeWidth={1.5} />
-                  </div>
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#eebf43] to-[#dcae32] flex items-center justify-center mb-6 animate-in scale-in-95 duration-300 shadow-lg">
-                    <CheckCircle size={32} className="text-white animate-in scale-in-50 duration-500" strokeWidth={1.5} />
-                  </div>
-                )}
-                <h3 className="text-2xl font-black text-[#1d1d1f] mb-3 tracking-tight">{modal.title}</h3>
-                <p className="text-sm font-medium text-gray-600 leading-relaxed mb-8">{modal.message}</p>
-                <button 
-                  onClick={() => setModal({ ...modal, isOpen: false })} 
-                  className="w-full py-3.5 bg-gradient-to-r from-[#eebf43] to-[#dcae32] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:shadow-lg transition-all duration-200 shadow-md shadow-[#eebf43]/20 hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  Great!
-                </button>
-              </div>
-            </div>
-          ) : ['Send Error', 'PDF Error'].includes(modal.title) ? (
+          {['Send Error', 'PDF Error'].includes(modal.title) ? (
             <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 overflow-hidden">
               <button 
                 onClick={() => setModal({ ...modal, isOpen: false })}
@@ -1179,121 +1081,6 @@ export default function PipelinePage() {
               </button>
               <button disabled={submittingContract} onClick={handleCreateContract} className="flex-1 py-3.5 bg-[#eebf43] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors shadow-md shadow-[#eebf43]/20 disabled:opacity-70">
                 {submittingContract ? 'Saving...' : editingContractId ? 'Save Changes' : 'Create Contract'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {sendContractOpen && sendContractDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 lg:p-8 max-w-4xl w-full max-h-[88vh] overflow-y-auto shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200">
-            <button onClick={closeSendContractModal} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
-              <X size={16} strokeWidth={2.5} />
-            </button>
-
-            <div className="flex items-start justify-between mb-8 border-b border-gray-100 pb-6 pr-8">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2">Document Management</p>
-                <h3 className="text-3xl lg:text-4xl font-black text-[#1d1d1f] tracking-tight">Send To Email</h3>
-                <p className="text-[12px] text-[#71717a] font-medium leading-relaxed mt-2.5 max-w-2xl">
-                  Review the recipient details before sending this contract for signature. Any updates here will be saved to the contract first.
-                </p>
-              </div>
-              <div className="hidden lg:flex w-16 h-16 rounded-2xl bg-[#fef9ec] items-center justify-center text-[#eebf43] shrink-0">
-                <Send size={24} strokeWidth={1.5} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Contract Title</label>
-                    <div className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f]">
-                      {sendContractDraft.name}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Associated Event</label>
-                    <div className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f]">
-                      {sendContractDraft.eventName || 'Unassigned Event'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Type</label>
-                    <div className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f]">
-                      {sendContractDraft.type}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Value</label>
-                    <div className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f]">
-                      {formatContractValue(sendContractDraft.value)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Name</label>
-                    <input
-                      value={sendContractForm.recipientName}
-                      onChange={(event) => setSendContractForm((current) => ({ ...current, recipientName: event.target.value }))}
-                      type="text"
-                      placeholder="e.g. Juan Dela Cruz"
-                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-1">Recipient Email</label>
-                    <input
-                      value={sendContractForm.recipientEmail}
-                      onChange={(event) => setSendContractForm((current) => ({ ...current, recipientEmail: event.target.value }))}
-                      type="email"
-                      placeholder="name@example.com"
-                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-bold text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="lg:col-span-1">
-                <div className="h-full rounded-2xl border border-gray-100 bg-gray-50 p-5 flex flex-col justify-between">
-                  <div>
-                    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-3">Send Summary</p>
-                    <div className="space-y-3">
-                      <div className="rounded-xl bg-white border border-gray-100 p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Platform</p>
-                        <p className="text-sm font-black text-[#1d1d1f]">{sendContractDraft.platform || 'DocuSign'}</p>
-                      </div>
-                      <div className="rounded-xl bg-white border border-gray-100 p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Current Status</p>
-                        <p className="text-sm font-black text-[#1d1d1f] uppercase">{sendContractDraft.status}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-[11px] font-medium text-gray-500 leading-relaxed mt-5">
-                    This uses the saved contract file and the recipient details shown here, then moves the contract into the sent stage.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-8 pt-6 border-t border-gray-100">
-              <button onClick={closeSendContractModal} className="flex-1 py-3.5 bg-gray-100 text-gray-500 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-gray-200 transition-colors">
-                Cancel
-              </button>
-              <button
-                disabled={sendingContractId === sendContractDraft._id}
-                onClick={() => void confirmSendContractEmail()}
-                className="flex-1 py-3.5 bg-[#eebf43] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors shadow-md shadow-[#eebf43]/20 disabled:opacity-70"
-              >
-                {sendingContractId === sendContractDraft._id ? 'Sending...' : 'Send Contract'}
               </button>
             </div>
           </div>
