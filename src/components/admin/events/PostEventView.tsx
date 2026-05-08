@@ -274,8 +274,8 @@ export default function PostEventView({
   const associatedVendors = editableVendors.filter((v) => v.isAssociated) ?? [];
 
   const attendanceRate =
-    guestData && guestData.totalRsvps > 0
-      ? Math.round((guestData.totalAttended / guestData.totalRsvps) * 100)
+    guestData && guestData.guests.length > 0
+      ? Math.round((guestData.totalAttended / guestData.guests.length) * 100)
       : 0;
 
   const totalEventCost = currencyFormatter.format(
