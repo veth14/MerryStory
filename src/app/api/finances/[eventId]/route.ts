@@ -9,6 +9,7 @@ function normalizeStatus(value: unknown) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) return "Pending";
   if (normalized === "paid" || normalized === "cleared") return "Paid";
+  if (normalized === "half-paid" || normalized === "half payment") return "Half Payment";
   if (normalized === "overdue") return "Overdue";
   return "Pending";
 }
@@ -40,7 +41,7 @@ export async function GET(
     const totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0);
     const totalReceived = invoices
-      .filter((inv) => inv.status === "Paid")
+      .filter((inv) => normalizeStatus(inv.status) === "Paid")
       .reduce((sum, inv) => sum + (inv.amount || 0), 0);
     const outstanding = totalInvoiced - totalReceived;
 
@@ -54,6 +55,7 @@ export async function GET(
       .map((exp) => ({
         id: exp._id.toString(),
         date: new Date(exp.createdAt).toLocaleDateString(),
+        dueDateIso: exp.dueDate ? new Date(exp.dueDate).toISOString() : undefined,
         desc: exp.description || "Payment",
         subtitle: exp.vendor || "Unknown Vendor",
         category: exp.paymentType || "Payment",
@@ -73,6 +75,9 @@ export async function GET(
         due: new Date(inv.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
         amount: `${PESO_SYMBOL}${inv.amount.toLocaleString()}`,
         status: normalizeStatus(inv.status),
+        description: inv.description || "",
+        expenseId: inv.expenseId?.toString?.() || "",
+        expenseLabel: inv.expenseTitle ? `${inv.expenseTitle}${inv.expenseVendor ? ` - ${inv.expenseVendor}` : ""}` : "",
       }));
 
     const upcomingPayments = expenses
