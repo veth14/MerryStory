@@ -174,6 +174,11 @@ export default function PostEventView({
     fetchWithAuth
   );
 
+  const { data: eventDetails } = useSWR<any>(
+    idToken && eventId ? [`/api/events/${eventId}`, idToken] : null,
+    fetchWithAuth
+  );
+
   const vendors = React.useMemo<VendorWithRating[]>(() => {
     if (!rawVendors) return [];
 
@@ -206,13 +211,33 @@ export default function PostEventView({
   const guestData = React.useMemo<GuestData | null>(() => {
     if (!rawGuests) return null;
 
+    const isEventDatePassed = (eventDate?: string | null) => {
+      if (!eventDate) return false;
+      try {
+        const parsed = /^\d{4}-\d{2}-\d{2}/.test(eventDate)
+          ? new Date(`${eventDate.slice(0, 10)}T00:00:00`)
+          : new Date(eventDate);
+        if (Number.isNaN(parsed.getTime())) return false;
+        const absentCutoff = new Date(parsed);
+        absentCutoff.setHours(0, 0, 0, 0);
+        absentCutoff.setDate(absentCutoff.getDate() + 1);
+        return new Date() >= absentCutoff;
+      } catch {
+        return false;
+      }
+    };
+
+    const eventHasPassed = isEventDatePassed(eventDetails?.date ?? null);
+
     const guests = rawGuests.map((guest) => {
       const statusValue = String(guest?.status || '').toLowerCase();
       const normalizedStatus =
         statusValue === 'confirmed' ? 'confirmed' : statusValue === 'declined' ? 'declined' : 'pending';
-      const isCheckedIn = Boolean(guest?.checkedIn || guest?.qrScannedAt || guest?.usedAt);
-      const attendanceStatus =
-        isCheckedIn ? 'attended' : normalizedStatus === 'confirmed' ? 'absent' : 'pending';
+      // Only consider explicit check-in flags or an actual QR scan as "checked in".
+      // `usedAt` represents RSVP code usage (e.g. when a guest used their RSVP code to respond)
+      // and should not mark the guest as attended until their QR is scanned or they are explicitly checked in.
+      const isCheckedIn = Boolean(guest?.checkedIn || guest?.qrScannedAt);
+      const attendanceStatus = isCheckedIn ? 'attended' : eventHasPassed ? 'absent' : 'pending';
 
       return {
         ...guest,
@@ -235,7 +260,7 @@ export default function PostEventView({
       totalPending: guests.filter((g) => g.rsvpStatus === 'pending').length,
       guests,
     };
-  }, [rawGuests]);
+  }, [rawGuests, eventDetails?.date]);
 
   const loading = !financeData && !financeError;
   const error = financeError?.message ?? '';
@@ -849,7 +874,7 @@ export default function PostEventView({
             Checked In
           </p>
           <p className="text-[13px] font-bold text-gray-900">
-            {selectedGuest.qrScannedAt || selectedGuest.usedAt || selectedGuest.checkedIn ? 'Yes' : 'No'}
+            {selectedGuest.qrScannedAt || selectedGuest.checkedIn ? 'Yes' : 'No'}
           </p>
         </div>
 
