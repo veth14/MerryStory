@@ -4,7 +4,7 @@ import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { ObjectId } from "mongodb";
 
-const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "paid"]);
+const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "half-paid", "paid"]);
 const ALLOWED_PAYMENT_TYPES = new Set(["catering", "equipment", "decoration", "venue", "other"]);
 
 function formatBytes(bytes: number) {
@@ -62,9 +62,9 @@ export async function PUT(
     const description = String(formData.get("description") || "").trim();
     const amount = Number(formData.get("amount"));
     const dueDate = String(formData.get("dueDate") || "").trim();
-    const statusInput = String(formData.get("status") || "pending").trim().toLowerCase();
+    const statusInput = String(formData.get("status") || "half-paid").trim().toLowerCase();
     const paymentTypeInput = String(formData.get("paymentType") || "other").trim().toLowerCase();
-    const status = ALLOWED_PAYMENT_STATUSES.has(statusInput) ? statusInput : "pending";
+    const status = ALLOWED_PAYMENT_STATUSES.has(statusInput) ? statusInput : "half-paid";
     const paymentType = ALLOWED_PAYMENT_TYPES.has(paymentTypeInput) ? paymentTypeInput : "other";
     const attachment = formData.get("attachment");
 

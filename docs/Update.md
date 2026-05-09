@@ -5,6 +5,4 @@ RSVP - In Progress
 Contract Pipeline - In progress
 Event Day - Done
 Logic Done
-Updates
-
-UPDATE NEW FILEsss
+Finance Update

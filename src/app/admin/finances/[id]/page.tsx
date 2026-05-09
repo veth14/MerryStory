@@ -54,6 +54,9 @@ type ExpenseOption = {
   id: string;
   title: string;
   vendor: string;
+  amount: number;
+  dueDate: string;
+  status: string;
 };
 
 type ExpenseFormState = {
@@ -71,7 +74,7 @@ const createEmptyExpenseForm = (): ExpenseFormState => ({
   vendor: '',
   amount: '',
   category: 'venue',
-  status: 'pending',
+  status: 'half-paid',
   dueDate: '',
   attachment: null,
 });
@@ -107,7 +110,7 @@ const EXPENSE_CATEGORY_OPTIONS = [
 ];
 
 const EXPENSE_STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pending', sublabel: 'Awaiting settlement' },
+  { value: 'half-paid', label: 'Half Payment', sublabel: 'Pay in two parts' },
   { value: 'paid', label: 'Paid', sublabel: 'Already cleared' },
 ];
 
@@ -178,6 +181,20 @@ function getExpenseStatusMeta(status: string) {
   };
 }
 
+function normalizeExpenseStatusForForm(status: string) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'paid' || normalized === 'cleared') return 'paid';
+  if (normalized === 'half payment' || normalized === 'half-paid' || normalized === 'pending') return 'half-paid';
+  return 'half-paid';
+}
+
+function calculateRemainingBalance(amount: number, status: string) {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'half payment' || normalized === 'half-paid' || normalized === 'pending') return amount / 2;
+  return amount;
+}
+
 export default function FinancesAdminPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'invoices'>('overview');
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '' });
@@ -195,6 +212,8 @@ export default function FinancesAdminPage() {
   const [expenseErrors, setExpenseErrors] = useState<Partial<Record<keyof ExpenseFormState, string>>>({});
   const [expenseOptions, setExpenseOptions] = useState<ExpenseOption[]>([]);
   const [selectedExpenseDetail, setSelectedExpenseDetail] = useState<FinancialData['recentExpenses'][number] | null>(null);
+  const [vendorOptions, setVendorOptions] = useState<Array<{ value: string; label: string; sublabel?: string }>>([]);
+  const [vendorsLoading, setVendorsLoading] = useState(false);
 
   // Generate Invoice Modal State
   const [showGenerateInvoiceModal, setShowGenerateInvoiceModal] = useState(false);
@@ -251,6 +270,9 @@ export default function FinancesAdminPage() {
                 id: expense.id,
                 title: expense.description || 'Untitled Expense',
                 vendor: expense.vendor || 'Unknown Vendor',
+                amount: Number(expense.amount) || 0,
+                dueDate: expense.dueDate ? new Date(expense.dueDate).toISOString().slice(0, 10) : '',
+                status: normalizeExpenseStatusForForm(expense.status),
               }))
             : []
         );
@@ -295,10 +317,49 @@ export default function FinancesAdminPage() {
     setEditingExpenseId(null);
     setExpenseForm(createEmptyExpenseForm());
     setExpenseErrors({});
+    setVendorOptions([]);
   };
 
-  const openExpenseEditor = (expense: FinancialData['recentExpenses'][number]) => {
-    const normalizedStatus = String(expense.status || '').trim().toLowerCase();
+  const openAddExpenseModal = async () => {
+    setExpenseErrors({});
+    await loadVendors();
+    setShowAddExpenseModal(true);
+  };
+
+  const loadVendors = async () => {
+    try {
+      setVendorsLoading(true);
+      const auth = getFirebaseClientAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error('User not authenticated');
+      
+      const token = await user.getIdToken();
+      const response = await fetch('/api/vendors', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const vendors = await response.json();
+        setVendorOptions(
+          Array.isArray(vendors)
+            ? vendors.map((vendor: any) => ({
+                value: vendor.name,
+                label: vendor.name,
+                sublabel: vendor.category || 'Vendor',
+              }))
+            : []
+        );
+      }
+    } catch (err) {
+      console.error('Error loading vendors:', err);
+    } finally {
+      setVendorsLoading(false);
+    }
+  };
+
+  const openExpenseEditor = async (expense: FinancialData['recentExpenses'][number]) => {
     setSelectedExpenseDetail(null);
     setEditingExpenseId(expense.id);
     setExpenseErrors({});
@@ -307,10 +368,11 @@ export default function FinancesAdminPage() {
       vendor: expense.subtitle || '',
       amount: String(expense.amount || '').replace(/[^\d.-]/g, ''),
       category: String(expense.category || 'other').trim().toLowerCase(),
-      status: normalizedStatus === 'paid' || normalizedStatus === 'cleared' ? 'paid' : 'pending',
+      status: normalizeExpenseStatusForForm(expense.status),
       dueDate: expense.dueDateIso ? expense.dueDateIso.slice(0, 10) : '',
       attachment: null,
     });
+    await loadVendors();
     setShowAddExpenseModal(true);
   };
 
@@ -353,6 +415,44 @@ export default function FinancesAdminPage() {
   };
 
   const isInvoiceFormComplete = validateInvoiceForm();
+  const selectedExpenseOption = expenseOptions.find((expense) => expense.id === invoiceForm.expenseId) || null;
+  const selectedExpenseRemainingBalance = selectedExpenseOption
+    ? calculateRemainingBalance(selectedExpenseOption.amount, selectedExpenseOption.status)
+    : 0;
+
+  const updateInvoiceField = <K extends keyof InvoiceFormState>(field: K, value: InvoiceFormState[K]) => {
+    setInvoiceForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const openGenerateInvoiceModal = () => {
+    setInvoiceForm({
+      ...createEmptyInvoiceForm(),
+      clientName: eventData?.eventName || '',
+    });
+    setShowGenerateInvoiceModal(true);
+  };
+
+  const closeGenerateInvoiceModal = () => {
+    setShowGenerateInvoiceModal(false);
+    setInvoiceForm(createEmptyInvoiceForm());
+  };
+
+  const handleExpenseReferenceChange = (expenseId: string) => {
+    const linkedExpense = expenseOptions.find((expense) => expense.id === expenseId);
+    if (!linkedExpense) {
+      updateInvoiceField('expenseId', expenseId);
+      return;
+    }
+
+    const remainingBalance = calculateRemainingBalance(linkedExpense.amount, linkedExpense.status);
+    setInvoiceForm((current) => ({
+      ...current,
+      expenseId,
+      amount: remainingBalance > 0 ? remainingBalance.toFixed(2) : current.amount,
+      dueDate: linkedExpense.dueDate || current.dueDate,
+      status: linkedExpense.status || current.status,
+    }));
+  };
 
   // Generate conic-gradient string from category breakdown
   const generateConicGradient = (breakdown: Array<{ category: string; amount: number; percentage: number }>) => {
@@ -458,12 +558,12 @@ export default function FinancesAdminPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to generate invoice: ${response.statusText}`);
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || `Failed to generate invoice: ${response.statusText}`);
       }
 
       // Close modal and refresh data
-      setShowGenerateInvoiceModal(false);
-      setInvoiceForm(createEmptyInvoiceForm());
+      closeGenerateInvoiceModal();
       await loadFinancialData(token);
 
       triggerModal('Success', 'Invoice generated successfully!');
@@ -879,10 +979,7 @@ export default function FinancesAdminPage() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                 <h3 className="text-sm font-black text-[#1d1d1f] tracking-widest uppercase">Detailed Records</h3>
                 <button
-                  onClick={() => {
-                    setExpenseErrors({});
-                    setShowAddExpenseModal(true);
-                  }}
+                  onClick={openAddExpenseModal}
                   className="bg-[#eebf43] text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors shadow-sm flex items-center gap-2 shrink-0"
                 >
                   <Plus size={14} strokeWidth={3} />
@@ -1015,7 +1112,7 @@ export default function FinancesAdminPage() {
                 <p className="text-[10px] font-bold text-[#a1a1aa] mt-1 tracking-wider">CLIENT & SPONSOR BILLING</p>
               </div>
               <button
-                onClick={() => setShowGenerateInvoiceModal(true)}
+                onClick={openGenerateInvoiceModal}
                 className="px-5 py-2.5 bg-[#eebf43] text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-colors border border-transparent flex items-center gap-2 shadow-sm">
                 <Plus size={14} /> Generate Invoice
               </button>
@@ -1289,8 +1386,16 @@ export default function FinancesAdminPage() {
                         {expenseErrors.title ? <p className="text-[11px] font-bold text-red-500 ml-1">{expenseErrors.title}</p> : null}
                       </div>
                       <div className="md:col-span-2 space-y-2">
-                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Vendor</label>
-                        <input type="text" placeholder="e.g. Grand Ballroom C" value={expenseForm.vendor} onChange={(e) => updateExpenseField('vendor', e.target.value)} className={`w-full px-5 py-4 bg-gray-50 border-2 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none ${expenseErrors.vendor ? 'border-red-300 focus:border-red-400' : 'border-gray-100 focus:border-[#facc15]'}`} />
+                        <CustomSelect
+                          label="Vendor"
+                          value={expenseForm.vendor}
+                          onChange={(val) => updateExpenseField('vendor', val)}
+                          options={[
+                            { value: '', label: 'Select vendor or type custom', sublabel: 'Required' },
+                            ...vendorOptions,
+                          ]}
+                          icon={Briefcase}
+                        />
                         {expenseErrors.vendor ? <p className="text-[11px] font-bold text-red-500 ml-1">{expenseErrors.vendor}</p> : null}
                       </div>
                       <div className="space-y-2">
@@ -1364,7 +1469,7 @@ export default function FinancesAdminPage() {
       {showGenerateInvoiceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[28px] p-5 lg:p-6 max-w-4xl w-full max-h-[88vh] overflow-y-auto shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100">
-            <button onClick={() => setShowGenerateInvoiceModal(false)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-2xl text-gray-400 hover:text-[#1d1d1f] transition-colors">
+            <button onClick={closeGenerateInvoiceModal} className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-2xl text-gray-400 hover:text-[#1d1d1f] transition-colors">
               <X size={20} strokeWidth={2} />
             </button>
 
@@ -1391,19 +1496,27 @@ export default function FinancesAdminPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Invoice Number</label>
-                        <input required type="text" placeholder="e.g. INV-2026-001" value={invoiceForm.invoiceNumber} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceNumber: e.target.value })} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none" />
+                        <input required type="text" placeholder="e.g. INV-2026-001" value={invoiceForm.invoiceNumber} onChange={(e) => updateInvoiceField('invoiceNumber', e.target.value)} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none" />
                       </div>
-                     
-
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Client Name</label>
+                        <input required type="text" placeholder="e.g. MerryStory Client" value={invoiceForm.clientName} onChange={(e) => updateInvoiceField('clientName', e.target.value)} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none" />
+                      </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Amount ({PESO_SYMBOL})</label>
                         <div className="relative">
                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-black text-[#d4a017]">{PESO_SYMBOL}</span>
-                          <input required type="number" placeholder="0.00" value={invoiceForm.amount} onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} step="0.01" className="w-full pl-10 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
+                          <input required type="number" placeholder="0.00" value={invoiceForm.amount} onChange={(e) => updateInvoiceField('amount', e.target.value)} step="0.01" className="w-full pl-10 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none" />
                         </div>
                       </div>
-                      <CustomDatePicker label="Issue Date" value={invoiceForm.issueDate} onChange={(val) => setInvoiceForm({ ...invoiceForm, issueDate: val })} />
-                      <CustomDatePicker label="Due Date" value={invoiceForm.dueDate} onChange={(val) => setInvoiceForm({ ...invoiceForm, dueDate: val })} />
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Remaining Balance</label>
+                        <div className="w-full px-5 py-3.5 bg-[#fef9e8] border border-[#f4d98a] rounded-xl text-[14px] font-extrabold text-[#1d1d1f]">
+                          {PESO_SYMBOL}{selectedExpenseRemainingBalance.toLocaleString()}
+                        </div>
+                      </div>
+                      <CustomDatePicker label="Issue Date" value={invoiceForm.issueDate} onChange={(val) => updateInvoiceField('issueDate', val)} />
+                      <CustomDatePicker label="Due Date" value={invoiceForm.dueDate} onChange={(val) => updateInvoiceField('dueDate', val)} />
                     </div>
                   </div>
                   <div className="bg-white rounded-[26px] p-5 border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
@@ -1413,7 +1526,8 @@ export default function FinancesAdminPage() {
                     <CustomSelect
                       label="Expense Reference"
                       value={invoiceForm.expenseId}
-                      onChange={(val) => setInvoiceForm({ ...invoiceForm, expenseId: val })}
+                      onChange={handleExpenseReferenceChange}
+                      direction="up"
                       options={[
                         { value: '', label: 'No linked expense', sublabel: 'Optional' },
                         ...expenseOptions.map((expense) => ({
@@ -1424,6 +1538,11 @@ export default function FinancesAdminPage() {
                       ]}
                       icon={Briefcase}
                     />
+                    {selectedExpenseOption ? (
+                      <p className="mt-4 text-[12px] font-medium text-[#71717a] leading-relaxed">
+                        Remaining balance is automatically pulled from the linked expense so the invoice stays in sync without repeating extra payment details.
+                      </p>
+                    ) : null}
                   </div>
 
 
@@ -1434,7 +1553,7 @@ export default function FinancesAdminPage() {
                     <h4 className="text-[17px] font-extrabold text-gray-900 mb-6 tracking-tight flex items-center gap-3">
                       <Target className="text-[#facc15]" size={20} /> Invoice Status
                     </h4>
-                    <CustomSelect label="Collection Status" value={invoiceForm.status} onChange={(val) => setInvoiceForm({ ...invoiceForm, status: val })} options={INVOICE_STATUS_OPTIONS} icon={Send} />
+                    <CustomSelect label="Collection Status" value={invoiceForm.status} onChange={(val) => updateInvoiceField('status', val)} options={INVOICE_STATUS_OPTIONS} icon={Send} />
                   </div>
                   <div className="bg-white rounded-[26px] p-5 border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
                     <h4 className="text-[17px] font-extrabold text-gray-900 mb-6 tracking-tight flex items-center gap-3">
@@ -1442,14 +1561,14 @@ export default function FinancesAdminPage() {
                     </h4>
                     <div className="space-y-2">
                       <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Description</label>
-                      <textarea placeholder="e.g. Event sponsorship for Gala 2026" value={invoiceForm.description} onChange={(e) => setInvoiceForm({ ...invoiceForm, description: e.target.value })} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[14px] font-bold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none resize-none h-32 leading-relaxed" />
+                      <textarea placeholder="e.g. Event sponsorship for Gala 2026" value={invoiceForm.description} onChange={(e) => updateInvoiceField('description', e.target.value)} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[14px] font-bold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none resize-none h-32 leading-relaxed" />
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="flex gap-4 pt-4 border-t border-gray-100">
-                <button type="button" onClick={() => setShowGenerateInvoiceModal(false)} className="px-7 py-3.5 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all">
+                <button type="button" onClick={closeGenerateInvoiceModal} className="px-7 py-3.5 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all">
                   Cancel
                 </button>
                 <button type="submit" disabled={invoiceLoading || !isInvoiceFormComplete} className="flex-1 py-3.5 text-white bg-[#eebf43] hover:bg-[#dcae32] text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">

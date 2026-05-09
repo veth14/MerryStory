@@ -10,7 +10,8 @@ export const CustomSelect = ({
   onChange, 
   icon: Icon,
   placeholder = "Select option...",
-  className = ""
+  className = "",
+  direction = "down"
 }: { 
   label?: string, 
   options: { value: string, label: string, sublabel?: string, avatar?: string }[], 
@@ -18,7 +19,8 @@ export const CustomSelect = ({
   onChange: (val: string) => void,
   icon?: any,
   placeholder?: string,
-  className?: string
+  className?: string,
+  direction?: "up" | "down"
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -28,8 +30,10 @@ export const CustomSelect = ({
   const updatePosition = () => {
     if (isOpen && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
+      const dropdownDirection = direction === 'up' ? 'bottom' : 'top';
+      const dropdownOffset = direction === 'up' ? window.innerHeight - rect.top + 8 : rect.bottom + 8;
       setDropdownStyle({
-        top: rect.bottom + 8,
+        [dropdownDirection]: dropdownOffset,
         left: rect.left,
         width: rect.width,
       });
