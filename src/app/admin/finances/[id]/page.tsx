@@ -4,8 +4,6 @@ import { useParams } from 'next/navigation';
 import {
   AlertTriangle,
   CheckCircle2,
-  Download,
-  Info,
   X,
   Briefcase,
   Target,
@@ -47,10 +45,16 @@ interface FinancialData {
   outstandingValue: number;
   budgetStatus: 'within-limit' | 'exceeded';
   upcomingPayments: Array<{ entity: string; type: string; amount: string; due: string; days: string; dueDateIso?: string }>;
-  recentExpenses: Array<{ id: string; date: string; desc: string; subtitle: string; category: string; amount: string; status: string; attachmentUrl?: string | null; attachmentName?: string | null }>;
-  invoices: Array<{ id: string; invoiceNumber: string; client: string; issue: string; due: string; amount: string; status: string }>;
+  recentExpenses: Array<{ id: string; date: string; dueDateIso?: string; desc: string; subtitle: string; category: string; amount: string; status: string; attachmentUrl?: string | null; attachmentName?: string | null }>;
+  invoices: Array<{ id: string; invoiceNumber: string; client: string; issue: string; due: string; amount: string; status: string; description?: string; expenseId?: string; expenseLabel?: string }>;
   categoryBreakdown: Array<{ category: string; amount: number; percentage: number }>;
 }
+
+type ExpenseOption = {
+  id: string;
+  title: string;
+  vendor: string;
+};
 
 type ExpenseFormState = {
   title: string;
@@ -79,6 +83,7 @@ type InvoiceFormState = {
   issueDate: string;
   dueDate: string;
   status: string;
+  expenseId: string;
   description: string;
 };
 
@@ -89,6 +94,7 @@ const createEmptyInvoiceForm = (): InvoiceFormState => ({
   issueDate: '',
   dueDate: '',
   status: 'pending',
+  expenseId: '',
   description: '',
 });
 
@@ -107,6 +113,7 @@ const EXPENSE_STATUS_OPTIONS = [
 
 const INVOICE_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending', sublabel: 'Awaiting payment' },
+  { value: 'half-paid', label: 'Half Payment', sublabel: 'Partially received' },
   { value: 'paid', label: 'Paid', sublabel: 'Already received' },
   { value: 'overdue', label: 'Overdue', sublabel: 'Past the due date' },
 ];
@@ -122,18 +129,6 @@ function getDueDateParts(value?: string) {
     day: parsed.toLocaleDateString('en-US', { day: '2-digit' }),
     full: parsed.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
   };
-}
-
-function openBlobPreview(objectUrl: string) {
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.target = '_blank';
-  anchor.rel = 'noopener noreferrer';
-  anchor.style.display = 'none';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 function getBudgetStatusMeta(financialData: FinancialData) {
@@ -157,6 +152,32 @@ function getBudgetStatusMeta(financialData: FinancialData) {
       };
 }
 
+function getExpenseStatusMeta(status: string) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'paid' || normalized === 'cleared') {
+    return {
+      label: 'Paid',
+      dotClass: 'bg-emerald-400',
+      textClass: 'text-emerald-600',
+      badgeClass: 'bg-emerald-50 text-emerald-600 border-emerald-100/50',
+    };
+  }
+  if (normalized === 'half payment' || normalized === 'half-paid') {
+    return {
+      label: 'Half Payment',
+      dotClass: 'bg-orange-400',
+      textClass: 'text-orange-600',
+      badgeClass: 'bg-orange-50 text-orange-600 border-orange-100/50',
+    };
+  }
+  return {
+    label: 'Pending',
+    dotClass: 'bg-amber-400',
+    textClass: 'text-amber-600',
+    badgeClass: 'bg-amber-50 text-amber-600 border-amber-100/50',
+  };
+}
+
 export default function FinancesAdminPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'invoices'>('overview');
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '' });
@@ -168,14 +189,18 @@ export default function FinancesAdminPage() {
 
   // Add Expense Modal State
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseForm, setExpenseForm] = useState<ExpenseFormState>(createEmptyExpenseForm());
   const [expenseLoading, setExpenseLoading] = useState(false);
   const [expenseErrors, setExpenseErrors] = useState<Partial<Record<keyof ExpenseFormState, string>>>({});
+  const [expenseOptions, setExpenseOptions] = useState<ExpenseOption[]>([]);
+  const [selectedExpenseDetail, setSelectedExpenseDetail] = useState<FinancialData['recentExpenses'][number] | null>(null);
 
   // Generate Invoice Modal State
   const [showGenerateInvoiceModal, setShowGenerateInvoiceModal] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState<InvoiceFormState>(createEmptyInvoiceForm());
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [selectedInvoiceDetail, setSelectedInvoiceDetail] = useState<FinancialData['invoices'][number] | null>(null);
   const [budgetStatusModalShown, setBudgetStatusModalShown] = useState(false);
 
   const params = useParams();
@@ -199,11 +224,18 @@ export default function FinancesAdminPage() {
       }
 
       const token = tokenOverride || await user.getIdToken();
-      const response = await fetch(`/api/finances/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const [response, expensesResponse] = await Promise.all([
+        fetch(`/api/finances/${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }),
+        fetch(`/api/finances/${id}/expenses`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+      ]);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch financial data: ${response.statusText}`);
@@ -211,6 +243,20 @@ export default function FinancesAdminPage() {
 
       const data = await response.json();
       setEventData(data);
+      if (expensesResponse.ok) {
+        const expenses = await expensesResponse.json();
+        setExpenseOptions(
+          Array.isArray(expenses)
+            ? expenses.map((expense) => ({
+                id: expense.id,
+                title: expense.description || 'Untitled Expense',
+                vendor: expense.vendor || 'Unknown Vendor',
+              }))
+            : []
+        );
+      } else {
+        setExpenseOptions([]);
+      }
       setError(null);
 
       if (data.categoryBreakdown && data.categoryBreakdown.length > 0) {
@@ -242,6 +288,30 @@ export default function FinancesAdminPage() {
 
   const triggerModal = (title: string, message: string) => {
     setModal({ isOpen: true, title, message });
+  };
+
+  const closeExpenseModal = () => {
+    setShowAddExpenseModal(false);
+    setEditingExpenseId(null);
+    setExpenseForm(createEmptyExpenseForm());
+    setExpenseErrors({});
+  };
+
+  const openExpenseEditor = (expense: FinancialData['recentExpenses'][number]) => {
+    const normalizedStatus = String(expense.status || '').trim().toLowerCase();
+    setSelectedExpenseDetail(null);
+    setEditingExpenseId(expense.id);
+    setExpenseErrors({});
+    setExpenseForm({
+      title: expense.desc || '',
+      vendor: expense.subtitle || '',
+      amount: String(expense.amount || '').replace(/[^\d.-]/g, ''),
+      category: String(expense.category || 'other').trim().toLowerCase(),
+      status: normalizedStatus === 'paid' || normalizedStatus === 'cleared' ? 'paid' : 'pending',
+      dueDate: expense.dueDateIso ? expense.dueDateIso.slice(0, 10) : '',
+      attachment: null,
+    });
+    setShowAddExpenseModal(true);
   };
 
   const updateExpenseField = <K extends keyof ExpenseFormState>(field: K, value: ExpenseFormState[K]) => {
@@ -283,45 +353,6 @@ export default function FinancesAdminPage() {
   };
 
   const isInvoiceFormComplete = validateInvoiceForm();
-
-  const handleInvoicePdf = async (invoiceId: string, download = false) => {
-    try {
-      const auth = getFirebaseClientAuth();
-      const user = auth.currentUser;
-      if (!user) throw new Error('User not authenticated');
-
-      const token = await user.getIdToken();
-      const response = await fetch(`/api/finances/${id}/invoices/${invoiceId}/pdf${download ? '?download=1' : ''}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || 'Failed to load invoice PDF');
-      }
-
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-
-      if (download) {
-        const anchor = document.createElement('a');
-        anchor.href = objectUrl;
-        anchor.download = `invoice-${invoiceId}.pdf`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(objectUrl);
-        return;
-      }
-
-      openBlobPreview(objectUrl);
-    } catch (err) {
-      console.error('Invoice PDF error:', err);
-      triggerModal('PDF Error', err instanceof Error ? err.message : 'Failed to load invoice PDF.');
-    }
-  };
 
   // Generate conic-gradient string from category breakdown
   const generateConicGradient = (breakdown: Array<{ category: string; amount: number; percentage: number }>) => {
@@ -367,8 +398,8 @@ export default function FinancesAdminPage() {
         payload.append('attachment', expenseForm.attachment);
       }
 
-      const response = await fetch(`/api/finances/${id}/expenses`, {
-        method: 'POST',
+      const response = await fetch(editingExpenseId ? `/api/finances/${id}/expenses/${editingExpenseId}` : `/api/finances/${id}/expenses`, {
+        method: editingExpenseId ? 'PUT' : 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -376,20 +407,18 @@ export default function FinancesAdminPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to add expense: ${response.statusText}`);
+        throw new Error(`Failed to ${editingExpenseId ? 'update' : 'add'} expense: ${response.statusText}`);
       }
 
       // Close modal and refresh data
-      setShowAddExpenseModal(false);
-      setExpenseForm(createEmptyExpenseForm());
-      setExpenseErrors({});
+      closeExpenseModal();
 
       await loadFinancialData(token);
 
-      triggerModal('Success', 'Expense added successfully!');
+      triggerModal('Success', editingExpenseId ? 'Expense updated successfully!' : 'Expense added successfully!');
     } catch (err) {
       console.error('Error adding expense:', err);
-      triggerModal('Error', err instanceof Error ? err.message : 'Failed to add expense');
+      triggerModal('Error', err instanceof Error ? err.message : `Failed to ${editingExpenseId ? 'update' : 'add'} expense`);
     } finally {
       setExpenseLoading(false);
     }
@@ -423,6 +452,7 @@ export default function FinancesAdminPage() {
           issueDate: invoiceForm.issueDate,
           dueDate: invoiceForm.dueDate,
           status: invoiceForm.status,
+          expenseId: invoiceForm.expenseId,
           description: invoiceForm.description
         })
       });
@@ -696,7 +726,7 @@ export default function FinancesAdminPage() {
               <div className="space-y-4 flex-1">
                 {eventData.recentExpenses.length > 0 ? (
                   eventData.recentExpenses.map((tx, idx) => (
-                    <div key={idx} className="group flex justify-between items-center p-4 rounded-[16px] hover:bg-[#fafafa] transition-colors border border-transparent hover:border-gray-100">
+                    <div key={idx} onClick={() => setSelectedExpenseDetail(tx)} className="group flex justify-between items-center p-4 rounded-[16px] hover:bg-[#fafafa] transition-colors border border-transparent hover:border-gray-100 cursor-pointer">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-50 border border-gray-100 shadow-sm group-hover:bg-white transition-colors">
                           <Receipt size={14} className="text-[#a1a1aa] group-hover:text-[#1d1d1f] transition-colors" />
@@ -719,7 +749,7 @@ export default function FinancesAdminPage() {
                       </div>
                       <div className="flex flex-col items-end">
                         <span className="text-sm font-black text-[#1d1d1f]">- {tx.amount}</span>
-                        <span className="text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-100/50 uppercase tracking-widest">{tx.status}</span>
+                        <span className={`text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full border uppercase tracking-widest ${getExpenseStatusMeta(tx.status).badgeClass}`}>{getExpenseStatusMeta(tx.status).label}</span>
                       </div>
                     </div>
                   ))
@@ -875,12 +905,11 @@ export default function FinancesAdminPage() {
                     {eventData.recentExpenses.length > 0 ? (
                       eventData.recentExpenses.map((expense, idx) => {
                         const categoryInitials = (expense.subtitle || 'EX').substring(0, 2).toUpperCase();
-                        const statusColor = expense.status === 'Cleared' || expense.status === 'Paid' ? 'emerald' : expense.status === 'Pending' ? 'amber' : 'gray';
-                        const displayStatus = expense.status === 'Cleared' ? 'Paid' : expense.status;
+                        const expenseStatusMeta = getExpenseStatusMeta(expense.status);
                         return (
                           <tr
                             key={idx}
-                            onClick={() => triggerModal('Expense Details', `Title: ${expense.desc}\nAmount: ${expense.amount}\nStatus: ${displayStatus}\nDate: ${expense.date}\n\nCategory: ${expense.subtitle}${expense.attachmentName ? `\nAttachment: ${expense.attachmentName}\nLink: ${expense.attachmentUrl}` : ''}`)}
+                            onClick={() => setSelectedExpenseDetail(expense)}
                             className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
                           >
                             <td className="py-4 px-4 border-b border-gray-50">
@@ -904,8 +933,8 @@ export default function FinancesAdminPage() {
                             </td>
                             <td className="py-4 px-4 border-b border-gray-50">
                               <div className="inline-flex items-center gap-1.5 flex-nowrap">
-                                <div className={`w-1.5 h-1.5 rounded-full bg-${statusColor}-400`}></div>
-                                <span className={`text-[11px] font-bold text-${statusColor}-600`}>{displayStatus}</span>
+                                <div className={`w-1.5 h-1.5 rounded-full ${expenseStatusMeta.dotClass}`}></div>
+                                <span className={`text-[11px] font-bold ${expenseStatusMeta.textClass}`}>{expenseStatusMeta.label}</span>
                               </div>
                             </td>
                             <td className="py-4 px-4 border-b border-gray-50">
@@ -997,18 +1026,18 @@ export default function FinancesAdminPage() {
                 <thead>
                   <tr className="bg-white border-b border-gray-100 uppercase text-[10px] font-black text-[#a1a1aa] tracking-widest">
                     <th className="py-4 px-8 font-extrabold whitespace-nowrap">Invoice #</th>
-                    <th className="py-4 px-8 font-extrabold">Client / Sponsor</th>
+                
                     <th className="py-4 px-8 font-extrabold">Issued Date</th>
                     <th className="py-4 px-8 font-extrabold">Due Date</th>
                     <th className="py-4 px-8 font-extrabold text-right">Amount (₱)</th>
                     <th className="py-4 px-10 font-extrabold text-center">Status</th>
-                    <th className="py-4 px-8 font-extrabold text-center">Download</th>
+                    <th className="py-4 px-8 font-extrabold text-center">Details</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs font-medium text-[#71717a] divide-y divide-gray-50">
                   {eventData.invoices.length > 0 ? (
                     eventData.invoices.map((inv, idx) => (
-                      <tr key={idx} onClick={() => void handleInvoicePdf(inv.id)} className="hover:bg-[#fafafa] transition-colors group cursor-pointer">
+                      <tr key={idx} onClick={() => setSelectedInvoiceDetail(inv)} className="hover:bg-[#fafafa] transition-colors group cursor-pointer">
                         <td className="py-4 px-8 font-black text-[#1d1d1f]">{inv.invoiceNumber}</td>
                         <td className="py-4 px-8 font-bold text-[#1d1d1f]">{inv.client}</td>
                         <td className="py-4 px-8 text-[#a1a1aa]">{inv.issue}</td>
@@ -1017,6 +1046,7 @@ export default function FinancesAdminPage() {
                         <td className="py-4 px-10 text-center">
                           <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest inline-block border ${inv.status === "Paid" ? "bg-green-50 text-green-600 border-green-100/50" :
                               inv.status === "Pending" ? "bg-yellow-50 text-yellow-600 border-yellow-100/50" :
+                                inv.status === "Half Payment" ? "bg-orange-50 text-orange-600 border-orange-100/50" :
                                 "bg-red-50 text-red-600 border-red-100/50"
                             }`}>
                             {inv.status}
@@ -1024,8 +1054,8 @@ export default function FinancesAdminPage() {
                         </td>
                         <td className="py-4 px-8">
                           <div className="flex items-center justify-center">
-                            <button onClick={(event) => { event.stopPropagation(); void handleInvoicePdf(inv.id, true); }} className="w-8 h-8 rounded-full flex items-center justify-center text-[#a1a1aa] hover:bg-white hover:text-[#1d1d1f] hover:shadow-sm border border-transparent hover:border-gray-100 transition-all">
-                              <Download size={14} />
+                            <button onClick={(event) => { event.stopPropagation(); setSelectedInvoiceDetail(inv); }} className="w-8 h-8 rounded-full flex items-center justify-center text-[#a1a1aa] hover:bg-white hover:text-[#1d1d1f] hover:shadow-sm border border-transparent hover:border-gray-100 transition-all">
+                              <FileText size={14} />
                             </button>
                           </div>
                         </td>
@@ -1043,6 +1073,147 @@ export default function FinancesAdminPage() {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {selectedInvoiceDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[24px] p-10 max-w-md w-full shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setSelectedInvoiceDetail(null)}
+              className="absolute top-6 right-6 text-gray-400 hover:text-[#1d1d1f] transition-colors"
+            >
+              <X size={20} strokeWidth={2} />
+            </button>
+
+            <div>
+              <div className="mb-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-3">Invoice Details</p>
+                <h3 className="text-[24px] font-black text-[#1d1d1f] mb-2">{selectedInvoiceDetail.invoiceNumber}</h3>
+                <p className="text-[13px] font-medium text-[#71717a] leading-relaxed">Review the invoice record directly here without opening a generated PDF page.</p>
+              </div>
+
+              <div className="space-y-4 mb-8">
+                <div className="rounded-[20px] border border-gray-100 bg-[#fafafa] p-5 space-y-3">
+                  <div className="flex justify-between gap-4"><span className="text-[11px] font-black uppercase tracking-widest text-[#a1a1aa]">Client</span><span className="text-[13px] font-bold text-[#1d1d1f] text-right">{selectedInvoiceDetail.client}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-[11px] font-black uppercase tracking-widest text-[#a1a1aa]">Amount</span><span className="text-[13px] font-black text-[#1d1d1f] text-right">{selectedInvoiceDetail.amount}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-[11px] font-black uppercase tracking-widest text-[#a1a1aa]">Issue Date</span><span className="text-[13px] font-bold text-[#1d1d1f] text-right">{selectedInvoiceDetail.issue}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-[11px] font-black uppercase tracking-widest text-[#a1a1aa]">Due Date</span><span className="text-[13px] font-bold text-[#1d1d1f] text-right">{selectedInvoiceDetail.due}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-[11px] font-black uppercase tracking-widest text-[#a1a1aa]">Status</span><span className="text-[13px] font-bold text-[#1d1d1f] text-right">{selectedInvoiceDetail.status}</span></div>
+                  {selectedInvoiceDetail.expenseLabel ? (
+                    <div className="flex justify-between gap-4"><span className="text-[11px] font-black uppercase tracking-widest text-[#a1a1aa]">Related Expense</span><span className="text-[13px] font-bold text-[#1d1d1f] text-right">{selectedInvoiceDetail.expenseLabel}</span></div>
+                  ) : null}
+                </div>
+                <div className="rounded-[20px] border border-gray-100 bg-white p-5">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#a1a1aa] mb-3">Billing Notes</p>
+                  <p className="text-[13px] font-medium text-[#71717a] leading-relaxed">{selectedInvoiceDetail.description || 'No billing notes were added to this invoice.'}</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedInvoiceDetail(null)}
+                className="w-full py-3.5 bg-[#eebf43] text-white rounded-[24px] text-[11px] font-black tracking-[0.2em] uppercase hover:bg-[#dcae32] transition-colors shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedExpenseDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] p-5 lg:p-6 max-w-4xl w-full max-h-[88vh] overflow-y-auto shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100">
+            <button onClick={() => setSelectedExpenseDetail(null)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-2xl text-gray-400 hover:text-[#1d1d1f] transition-colors">
+              <X size={20} strokeWidth={2} />
+            </button>
+
+            <div className="flex items-center justify-between mb-5 border-b border-gray-100 pb-4 pr-12">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2">Finance Workspace</p>
+                <h3 className="text-[28px] font-black text-[#1d1d1f] tracking-tight">Expense Details</h3>
+                <p className="text-[12px] text-[#71717a] font-medium leading-relaxed mt-2.5 max-w-xl">
+                  Review the recorded expense information, payment status, and attached receipt details for this event.
+                </p>
+              </div>
+              <div className="hidden lg:flex w-16 h-16 rounded-2xl bg-[#fef3c7] items-center justify-center text-[#d4a017]">
+                <Receipt size={24} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-5">
+              <div className="space-y-4">
+                <div className="bg-white rounded-[26px] p-5 border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+                  <h4 className="text-[17px] font-extrabold text-gray-900 mb-6 tracking-tight flex items-center gap-3">
+                    <Briefcase className="text-[#facc15]" size={20} /> Expense Details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2 space-y-2">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Expense Title</label>
+                      <div className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900">{selectedExpenseDetail.desc}</div>
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Vendor</label>
+                      <div className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900">{selectedExpenseDetail.subtitle}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Amount</label>
+                      <div className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-extrabold text-gray-900">{selectedExpenseDetail.amount}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Recorded Date</label>
+                      <div className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-extrabold text-gray-900">{selectedExpenseDetail.date}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-white rounded-[26px] p-5 border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+                  <h4 className="text-[17px] font-extrabold text-gray-900 mb-6 tracking-tight flex items-center gap-3">
+                    <Target className="text-[#facc15]" size={20} /> Tracking Setup
+                  </h4>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1 mb-2">Expense Category</p>
+                      <div className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[14px] font-extrabold text-gray-900 uppercase">{selectedExpenseDetail.category || 'Other'}</div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1 mb-2">Payment Status</p>
+                      <div className={`inline-flex items-center px-4 py-3 rounded-2xl border text-[13px] font-black uppercase tracking-widest ${getExpenseStatusMeta(selectedExpenseDetail.status).badgeClass}`}>
+                        {getExpenseStatusMeta(selectedExpenseDetail.status).label}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-[26px] p-5 border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+                  <h4 className="text-[17px] font-extrabold text-gray-900 mb-6 tracking-tight flex items-center gap-3">
+                    <Paperclip className="text-[#facc15]" size={20} /> Receipt Attachment
+                  </h4>
+                  <div className="w-full border-2 border-dashed border-gray-200 rounded-[26px] p-5 bg-gray-50/60">
+                    <p className="text-[13px] font-black text-[#1d1d1f]">{selectedExpenseDetail.attachmentName || 'No attachment uploaded for this expense.'}</p>
+                    {selectedExpenseDetail.attachmentUrl ? (
+                      <a href={selectedExpenseDetail.attachmentUrl} target="_blank" rel="noreferrer" className="inline-flex mt-3 text-[11px] font-black uppercase tracking-[0.1em] text-[#dcae32] hover:text-[#b98f23]">
+                        Open Attachment
+                      </a>
+                    ) : (
+                      <p className="text-[11px] text-[#a1a1aa] font-medium mt-2">There isn&apos;t a receipt file linked to this expense yet.</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-4 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => openExpenseEditor(selectedExpenseDetail)}
+                    className="flex-1 py-3.5 bg-[#eebf43] text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-[#dcae32] transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95"
+                  >
+                    <Briefcase size={18} />
+                    Edit Expense Data
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1085,16 +1256,18 @@ export default function FinancesAdminPage() {
       {showAddExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1d1d1f]/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[28px] p-5 lg:p-6 max-w-4xl w-full max-h-[88vh] overflow-y-auto shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100">
-            <button onClick={() => { setShowAddExpenseModal(false); setExpenseErrors({}); }} className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-2xl text-gray-400 hover:text-[#1d1d1f] transition-colors">
+            <button onClick={closeExpenseModal} className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-2xl text-gray-400 hover:text-[#1d1d1f] transition-colors">
               <X size={20} strokeWidth={2} />
             </button>
 
             <div className="flex items-center justify-between mb-5 border-b border-gray-100 pb-4 pr-12">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-2">Finance Workspace</p>
-                <h3 className="text-[28px] font-black text-[#1d1d1f] tracking-tight">Add Expense</h3>
+                <h3 className="text-[28px] font-black text-[#1d1d1f] tracking-tight">{editingExpenseId ? 'Edit Expense' : 'Add Expense'}</h3>
                 <p className="text-[12px] text-[#71717a] font-medium leading-relaxed mt-2.5 max-w-xl">
-                  Record a live production expense, assign the payment status, and attach the supporting receipt so it lands in the expense documents folder automatically.
+                  {editingExpenseId
+                    ? 'Update the recorded expense details, revise the payment status, and refresh the linked receipt information when needed.'
+                    : 'Record a live production expense, assign the payment status, and attach the supporting receipt so it lands in the expense documents folder automatically.'}
                 </p>
               </div>
               <div className="hidden lg:flex w-16 h-16 rounded-2xl bg-[#fef3c7] items-center justify-center text-[#d4a017]">
@@ -1135,12 +1308,12 @@ export default function FinancesAdminPage() {
                     </div>
                   </div>
                   <div className="flex gap-4 pt-4 border-t border-gray-100">
-                    <button type="button" onClick={() => { setShowAddExpenseModal(false); setExpenseErrors({}); }} className="px-7 py-3.5 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all">
+                    <button type="button" onClick={closeExpenseModal} className="px-7 py-3.5 bg-white border-2 border-gray-100 hover:bg-gray-50 text-gray-400 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all">
                       Cancel
                     </button>
                     <button type="submit" disabled={expenseLoading || !isExpenseFormComplete} className="flex-1 py-3.5 text-white bg-[#eebf43] hover:bg-[#dcae32] text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                       {expenseLoading ? <Loader size={18} className="animate-spin" /> : <Receipt size={18} />}
-                      {expenseLoading ? 'Saving Expense...' : 'Save Expense Record'}
+                      {expenseLoading ? (editingExpenseId ? 'Updating Expense...' : 'Saving Expense...') : (editingExpenseId ? 'Update Expense Record' : 'Save Expense Record')}
                     </button>
                   </div>
 
@@ -1220,10 +1393,8 @@ export default function FinancesAdminPage() {
                         <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Invoice Number</label>
                         <input required type="text" placeholder="e.g. INV-2026-001" value={invoiceForm.invoiceNumber} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceNumber: e.target.value })} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none" />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Client / Sponsor</label>
-                        <input required type="text" placeholder="e.g. Starlight Gala Organizers" value={invoiceForm.clientName} onChange={(e) => setInvoiceForm({ ...invoiceForm, clientName: e.target.value })} className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-[15px] font-extrabold text-gray-900 focus:bg-white focus:border-[#facc15] focus:ring-4 focus:ring-[#facc15]/10 transition-all outline-none" />
-                      </div>
+                     
+
                       <div className="space-y-2">
                         <label className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 ml-1">Amount ({PESO_SYMBOL})</label>
                         <div className="relative">
@@ -1232,10 +1403,27 @@ export default function FinancesAdminPage() {
                         </div>
                       </div>
                       <CustomDatePicker label="Issue Date" value={invoiceForm.issueDate} onChange={(val) => setInvoiceForm({ ...invoiceForm, issueDate: val })} />
-                      <div className="md:col-span-2">
-                        <CustomDatePicker label="Due Date" value={invoiceForm.dueDate} onChange={(val) => setInvoiceForm({ ...invoiceForm, dueDate: val })} />
-                      </div>
+                      <CustomDatePicker label="Due Date" value={invoiceForm.dueDate} onChange={(val) => setInvoiceForm({ ...invoiceForm, dueDate: val })} />
                     </div>
+                  </div>
+                  <div className="bg-white rounded-[26px] p-5 border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+                    <h4 className="text-[17px] font-extrabold text-gray-900 mb-6 tracking-tight flex items-center gap-3">
+                      <Receipt className="text-[#facc15]" size={20} /> Related Expense
+                    </h4>
+                    <CustomSelect
+                      label="Expense Reference"
+                      value={invoiceForm.expenseId}
+                      onChange={(val) => setInvoiceForm({ ...invoiceForm, expenseId: val })}
+                      options={[
+                        { value: '', label: 'No linked expense', sublabel: 'Optional' },
+                        ...expenseOptions.map((expense) => ({
+                          value: expense.id,
+                          label: expense.title,
+                          sublabel: expense.vendor,
+                        })),
+                      ]}
+                      icon={Briefcase}
+                    />
                   </div>
 
 
