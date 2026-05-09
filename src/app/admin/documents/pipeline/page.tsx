@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Plus, ExternalLink, ChevronLeft, Edit, Send, CheckCircle2, X, Info, FileText, Upload, Loader, Download, Maximize2, Search } from 'lucide-react';
+import { ArrowRight, Plus, ExternalLink, ChevronLeft, Edit, Send, CheckCircle2, X, Info, FileText, Upload, Loader, Download, Maximize2, Search, RefreshCw, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 interface Contract {
@@ -98,6 +98,7 @@ interface PreviewModalData {
   fileName?: string;
   previewUrl?: string | null;
   previewMode?: 'iframe' | 'external';
+  hasAttachedFile?: boolean;
 }
 
 export default function PipelinePage() {
@@ -108,6 +109,7 @@ export default function PipelinePage() {
   const [createContractOpen, setCreateContractOpen] = useState(false);
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [submittingContract, setSubmittingContract] = useState(false);
+  const [sendingContractId, setSendingContractId] = useState<string | null>(null);
   const [pipeline, setPipeline] = useState<Pipeline>({ drafting: [], sent: [], signed: [] });
   const [events, setEvents] = useState<Array<{ _id: string; title: string }>>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -129,6 +131,7 @@ export default function PipelinePage() {
     fileName: '',
     previewUrl: null,
     previewMode: 'iframe',
+    hasAttachedFile: false,
   });
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -351,30 +354,11 @@ export default function PipelinePage() {
     const directFileUrl = contract.signedFileUrl || contract.fileUrl || null;
     const directFileName = contract.signedFileName || contract.fileName || contract.name;
     const directFileType = contract.signedFileType || contract.fileType || contract.type;
+    const hasAttachedFile = Boolean(directFileUrl);
 
     setPreviewError(null);
-
-    if (directFileUrl) {
-      const previewConfig = resolvePreviewConfig(directFileUrl, directFileType, directFileName);
-      setIsLoadingPreview(false);
-      setPreviewModal({
-        isOpen: true,
-        id: contract._id,
-        name: contract.name,
-        type: directFileType,
-        event: contract.eventName || 'N/A',
-        status: contract.status,
-        value: contract.value,
-        date: contract.lastUpdated,
-        fileUrl: directFileUrl,
-        fileName: directFileName,
-        previewUrl: previewConfig.previewUrl,
-        previewMode: previewConfig.previewMode,
-      });
-      return;
-    }
-
-    setIsLoadingPreview(true);
+    const previewConfig = resolvePreviewConfig(directFileUrl, directFileType, directFileName);
+    setIsLoadingPreview(false);
     setPreviewModal({
       isOpen: true,
       id: contract._id,
@@ -384,38 +368,12 @@ export default function PipelinePage() {
       status: contract.status,
       value: contract.value,
       date: contract.lastUpdated,
-      fileUrl: null,
+      fileUrl: directFileUrl,
       fileName: directFileName,
-      previewUrl: null,
-      previewMode: 'iframe',
+      previewUrl: previewConfig.previewUrl,
+      previewMode: previewConfig.previewMode,
+      hasAttachedFile,
     });
-
-    try {
-      const fileUrl = await openContractPdf(contract._id, false);
-      if (fileUrl) {
-        const previewConfig = resolvePreviewConfig(fileUrl, directFileType, directFileName);
-        setPreviewModal({
-          isOpen: true,
-          id: contract._id,
-          name: contract.name,
-          type: directFileType,
-          event: contract.eventName || 'N/A',
-          status: contract.status,
-          value: contract.value,
-          date: contract.lastUpdated,
-          fileUrl,
-          fileName: directFileName,
-          previewUrl: previewConfig.previewUrl,
-          previewMode: previewConfig.previewMode,
-        });
-      } else {
-        setPreviewError('Failed to load PDF preview');
-      }
-    } catch (error) {
-      setPreviewError((error as Error).message || 'Failed to load PDF preview');
-    } finally {
-      setIsLoadingPreview(false);
-    }
   };
 
   const closePreviewModal = () => {
@@ -435,6 +393,7 @@ export default function PipelinePage() {
       fileName: '',
       previewUrl: null,
       previewMode: 'iframe',
+      hasAttachedFile: false,
     });
     setPreviewError(null);
     setIsLoadingPreview(false);
@@ -446,6 +405,11 @@ export default function PipelinePage() {
   };
 
   const downloadCurrentPdf = async () => {
+    if (!previewModal.hasAttachedFile) {
+      triggerModal('No Attached File', 'This contract does not have an attached file to download.');
+      return;
+    }
+
     if (previewModal.fileUrl && !previewModal.fileUrl.startsWith('blob:')) {
       const anchor = document.createElement('a');
       anchor.href = previewModal.fileUrl;
@@ -470,6 +434,7 @@ export default function PipelinePage() {
     }
 
     try {
+      setSendingContractId(id);
       const token = await user.getIdToken();
       const response = await fetch(`/api/admin/contracts/${id}/send`, {
         method: 'POST',
@@ -487,6 +452,8 @@ export default function PipelinePage() {
       await fetchPipeline(token);
     } catch (error) {
       triggerModal('Send Error', (error as Error).message || 'Failed to send contract email.');
+    } finally {
+      setSendingContractId(null);
     }
   };
 
@@ -601,6 +568,13 @@ export default function PipelinePage() {
     );
   };
 
+  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, contract: Contract) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      void openPreviewModal(contract);
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-full max-w-none text-[#1d1d1f] pb-20 flex items-center justify-center py-20">
@@ -621,7 +595,7 @@ export default function PipelinePage() {
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="max-w-3xl">
           <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-3 flex items-center gap-2">
-            Workspace <ArrowRight size={10} /> <span className="text-[#1d1d1f]">Kanban Tracker</span>
+            Workspace <ArrowRight size={10} /> <span className="text-[#1d1d1f]"> CONTRACT WORKFLOW</span>
           </p>
           <h1 className="text-4xl lg:text-5xl font-black text-[#1d1d1f] tracking-tight">
             Contract <span className="text-[#eebf43] italic pr-2">Pipeline</span>
@@ -638,20 +612,20 @@ export default function PipelinePage() {
       {/* Search Bar */}
       <div className="mb-6">
         <div className="relative max-w-md">
-          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={18} className="text-[#a1a1aa] absolute left-5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search by title, type, event, or recipient..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-[#1d1d1f] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#eebf43]/50 focus:border-[#eebf43] outline-none transition-all"
+            className="w-full pl-14 pr-12 py-4 bg-white border-2 border-gray-100 shadow-sm rounded-2xl text-sm font-bold text-[#1d1d1f] placeholder-[#a1a1aa] focus:outline-none focus:border-[#eebf43] focus:ring-4 focus:ring-[#eebf43]/5 transition-all"
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-5 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#1d1d1f] transition-colors"
             >
-              <X size={14} />
+              <X size={16} />
             </button>
           )}
         </div>
@@ -683,7 +657,14 @@ export default function PipelinePage() {
               </div>
             ) : (
               paginatedDrafting.map(contract => (
-                <div key={contract._id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group flex flex-col">
+                <div
+                  key={contract._id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void openPreviewModal(contract)}
+                  onKeyDown={(event) => handleCardKeyDown(event, contract)}
+                  className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#eebf43]/40 transition-all group flex flex-col min-h-[200px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#eebf43]/40"
+                >
                   <div className="flex justify-between items-start mb-3">
                     <div className="text-[10px] font-extrabold text-[#eebf43] bg-[#fef9ec] px-2 py-1 rounded-md uppercase tracking-wider">{contract._id.slice(-6).toUpperCase()}</div>
                     <div className="text-[10px] font-medium text-gray-400">{formatDate(contract.lastUpdated)}</div>
@@ -694,11 +675,30 @@ export default function PipelinePage() {
                   <div className="mt-auto border-t border-gray-50 pt-4 flex items-center justify-between">
                     <div className="text-sm font-black text-[#1d1d1f]">{formatContractValue(contract.value)}</div>
                     <div className="flex gap-2">
-                      <button onClick={() => handleEditDrafting(contract._id)} className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors" title="Edit Draft">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleEditDrafting(contract._id);
+                        }}
+                        className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors"
+                        title="Edit Draft"
+                      >
                          <Edit size={14} />
                       </button>
-                      <button onClick={() => handleSendContractEmail(contract._id)} className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center text-white hover:bg-black transition-colors" title="Send To Email">
-                         <Send size={14} />
+                      <button
+                        disabled={sendingContractId === contract._id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleSendContractEmail(contract._id);
+                        }}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                          sendingContractId === contract._id
+                            ? 'bg-[#fef9ec] text-[#eebf43] cursor-not-allowed'
+                            : 'bg-gray-900 text-white hover:bg-black'
+                        }`}
+                        title={sendingContractId === contract._id ? 'Sending...' : 'Send To Email'}
+                      >
+                        {sendingContractId === contract._id ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}
                       </button>
                     </div>
                   </div>
@@ -726,7 +726,14 @@ export default function PipelinePage() {
               </div>
             ) : (
               paginatedSent.map(contract => (
-                <div key={contract._id} className="bg-white p-5 rounded-2xl border border-[#eebf43]/20 shadow-sm hover:shadow-md transition-shadow group flex flex-col">
+                <div
+                  key={contract._id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void openPreviewModal(contract)}
+                  onKeyDown={(event) => handleCardKeyDown(event, contract)}
+                  className="bg-white p-5 rounded-2xl border border-[#eebf43]/20 shadow-sm hover:shadow-md hover:border-[#eebf43]/50 transition-all group flex flex-col min-h-[200px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#eebf43]/40"
+                >
                   <div className="flex justify-between items-start mb-3">
                     <div className="text-[10px] font-extrabold text-[#eebf43] bg-[#fef9ec] px-2 py-1 rounded-md uppercase tracking-wider">{contract._id.slice(-6).toUpperCase()}</div>
                     <div className="text-[10px] font-medium text-gray-400">{formatDate(contract.lastUpdated)}</div>
@@ -764,7 +771,14 @@ export default function PipelinePage() {
               </div>
             ) : (
               paginatedSigned.map(contract => (
-                <div key={contract._id} className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-shadow flex flex-col">
+                <div
+                  key={contract._id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void openPreviewModal(contract)}
+                  onKeyDown={(event) => handleCardKeyDown(event, contract)}
+                  className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all flex flex-col min-h-[200px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                >
                   <div className="flex justify-between items-start mb-3">
                     <div className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md uppercase tracking-wider">{contract._id.slice(-6).toUpperCase()}</div>
                     <div className="flex items-center gap-2">
@@ -777,7 +791,13 @@ export default function PipelinePage() {
                   
                   <div className="mt-auto border-t border-gray-50 pt-4 flex items-center justify-between">
                     <div className="text-sm font-black text-[#1d1d1f]">{formatContractValue(contract.value)}</div>
-                    <button onClick={() => void openPreviewModal(contract)} className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:text-emerald-700 transition-colors flex items-center gap-1">
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void openPreviewModal(contract);
+                      }}
+                      className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:text-emerald-700 transition-colors flex items-center gap-1"
+                    >
                       VIEW PDF <ExternalLink size={12} />
                     </button>
                   </div>
@@ -806,14 +826,16 @@ export default function PipelinePage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => void downloadCurrentPdf()}
-                  className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
-                  title="Download PDF"
-                >
-                  <Download size={18} />
-                </button>
-                {previewModal.previewMode === 'external' && (
+                {previewModal.hasAttachedFile && (
+                  <button
+                    onClick={() => void downloadCurrentPdf()}
+                    className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
+                    title="Download PDF"
+                  >
+                    <Download size={18} />
+                  </button>
+                )}
+                {previewModal.hasAttachedFile && previewModal.previewMode === 'external' && (
                   <button
                     onClick={openPreviewInNewTab}
                     className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
@@ -881,6 +903,16 @@ export default function PipelinePage() {
                     <p className="text-red-600 font-medium mb-2">Failed to load PDF</p>
                     <p className="text-gray-500 text-sm">{previewError}</p>
                   </div>
+                ) : !previewModal.hasAttachedFile ? (
+                  <div className="max-w-md text-center bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
+                    <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-5">
+                      <FileText size={28} className="text-gray-400" />
+                    </div>
+                    <h4 className="text-lg font-black text-[#1d1d1f] mb-3">No Attached File</h4>
+                    <p className="text-sm text-gray-500 leading-relaxed">
+                      This contract doesn&apos;t have an attached file yet.
+                    </p>
+                  </div>
                 ) : previewModal.previewMode === 'external' ? (
                   <div className="max-w-md text-center bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
                     <div className="w-16 h-16 rounded-2xl bg-[#fef9ec] border border-[#eebf43]/20 flex items-center justify-center mx-auto mb-5">
@@ -929,7 +961,35 @@ export default function PipelinePage() {
       {/* Custom Modal Overlay */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0f172a]/40 backdrop-blur-sm animate-in fade-in duration-200">
-          {['Send Error', 'PDF Error'].includes(modal.title) ? (
+          {['Contract Updated', 'Contract Sent'].includes(modal.title) ? (
+            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 overflow-hidden">
+              <button 
+                onClick={() => setModal({ ...modal, isOpen: false })}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              >
+                <X size={16} strokeWidth={2.5} />
+              </button>
+              <div className="flex flex-col items-center text-center pt-4">
+                {modal.title === 'Contract Updated' ? (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#eebf43] to-[#dcae32] flex items-center justify-center mb-6 animate-in scale-in-95 duration-300 shadow-lg">
+                    <RefreshCw size={32} className="text-white animate-in rotate-in duration-500" strokeWidth={1.5} />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#eebf43] to-[#dcae32] flex items-center justify-center mb-6 animate-in scale-in-95 duration-300 shadow-lg">
+                    <CheckCircle size={32} className="text-white animate-in scale-in-50 duration-500" strokeWidth={1.5} />
+                  </div>
+                )}
+                <h3 className="text-2xl font-black text-[#1d1d1f] mb-3 tracking-tight">{modal.title}</h3>
+                <p className="text-sm font-medium text-gray-600 leading-relaxed mb-8">{modal.message}</p>
+                <button 
+                  onClick={() => setModal({ ...modal, isOpen: false })} 
+                  className="w-full py-3.5 bg-gradient-to-r from-[#eebf43] to-[#dcae32] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:shadow-lg transition-all duration-200 shadow-md shadow-[#eebf43]/20 hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  Great!
+                </button>
+              </div>
+            </div>
+          ) : ['Send Error', 'PDF Error'].includes(modal.title) ? (
             <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative animate-in zoom-in-95 duration-200 overflow-hidden">
               <button 
                 onClick={() => setModal({ ...modal, isOpen: false })}
