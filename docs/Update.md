@@ -6,3 +6,4 @@ Contract Pipeline - In progress
 Event Day - Done
 Logic Done
 Finance Update
+Documents Done
