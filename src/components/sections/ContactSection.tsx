@@ -33,7 +33,7 @@ export function ContactSection() {
         message: formData.message
       };
 
-      const response = await fetch('/api/contact', {
+      const response = await fetch('/api/contacts/inquiry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
