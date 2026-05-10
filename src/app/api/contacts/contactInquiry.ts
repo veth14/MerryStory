@@ -101,17 +101,18 @@ const normalizePayload = (payload: ContactInquiryPayload) => {
 };
 
 const buildAdminEmailHtml = (payload: ReturnType<typeof normalizePayload>) => {
+  const submissionLabel = payload.type === 'inquiry' ? 'Inquiry' : 'Consultation';
   const summaryRows =
     payload.type === 'inquiry'
       ? buildSummaryRows([
-          { label: 'Inquiry Type', value: 'General Inquiry' },
+          { label: 'Submission Type', value: 'Inquiry' },
           { label: 'Client Name', value: payload.name },
           { label: 'Client Email', value: payload.email },
           { label: 'Event Type', value: payload.eventType || 'Not specified' },
           { label: 'Message', value: payload.message || 'Not specified', multiline: true },
         ])
       : buildSummaryRows([
-          { label: 'Inquiry Type', value: 'Detailed Consultation Request' },
+          { label: 'Submission Type', value: 'Consultation' },
           { label: 'Client Name', value: payload.name },
           { label: 'Client Email', value: payload.email },
           { label: 'Preferred Date', value: payload.date || 'Not specified' },
@@ -121,7 +122,7 @@ const buildAdminEmailHtml = (payload: ReturnType<typeof normalizePayload>) => {
 
   return buildEmailShell(`
     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444; font-family: 'Georgia', serif; font-style: italic; text-align: center;">
-      A new contact inquiry has arrived.
+      A new ${submissionLabel.toLowerCase()} has arrived.
     </p>
 
     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
@@ -129,7 +130,7 @@ const buildAdminEmailHtml = (payload: ReturnType<typeof normalizePayload>) => {
     </p>
 
     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 35px; color: #444;">
-      A new ${payload.type === 'inquiry' ? 'landing page inquiry' : 'consultation request'} was submitted through the website. You can reply directly to this sender at <strong>${escapeHtml(payload.email)}</strong>.
+      A new ${payload.type === 'inquiry' ? 'inquiry from the #contact section' : 'consultation request from the /contact page'} was submitted through the website. You can reply directly to this sender at <strong>${escapeHtml(payload.email)}</strong>.
     </p>
 
     <div style="background-color: #FAFAFA; padding: 25px 30px; border-left: 3px solid #D4AF37; margin-bottom: 35px;">
@@ -139,6 +140,7 @@ const buildAdminEmailHtml = (payload: ReturnType<typeof normalizePayload>) => {
 };
 
 const buildClientEmailHtml = (payload: ReturnType<typeof normalizePayload>) => {
+  const submissionLabel = payload.type === 'inquiry' ? 'Inquiry' : 'Consultation';
   const summaryRows =
     payload.type === 'inquiry'
       ? buildSummaryRows([
@@ -153,7 +155,7 @@ const buildClientEmailHtml = (payload: ReturnType<typeof normalizePayload>) => {
 
   return buildEmailShell(`
     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444; font-family: 'Georgia', serif; font-style: italic; text-align: center;">
-      Your inquiry has been safely received.
+      Your ${submissionLabel.toLowerCase()} has been safely received.
     </p>
 
     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
@@ -161,7 +163,7 @@ const buildClientEmailHtml = (payload: ReturnType<typeof normalizePayload>) => {
     </p>
 
     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
-      Thank you for reaching out to Merry Story Productions. We received your ${payload.type === 'inquiry' ? 'inquiry' : 'consultation request'} and shared it with our team at <strong>${BUSINESS_EMAIL}</strong>.
+      Thank you for reaching out to Merry Story Productions. We received your ${payload.type === 'inquiry' ? 'inquiry from our contact section' : 'consultation request'} and shared it with our team at <strong>${BUSINESS_EMAIL}</strong>.
     </p>
 
     <p style="font-size: 15px; line-height: 1.8; margin-bottom: 35px; color: #444;">
@@ -215,7 +217,7 @@ export const submitContactInquiry = async (input: ContactInquiryPayload) => {
       subject:
         payload.type === 'inquiry'
           ? `New Inquiry from ${payload.name}`
-          : `New Consultation Request from ${payload.name}`,
+          : `New Consultation from ${payload.name}`,
       html: buildAdminEmailHtml(payload),
     }),
     transporter.sendMail({
@@ -225,7 +227,7 @@ export const submitContactInquiry = async (input: ContactInquiryPayload) => {
       subject:
         payload.type === 'inquiry'
           ? 'Your Inquiry - Merry Story'
-          : 'Consultation Request Received - Merry Story',
+          : 'Your Consultation Request - Merry Story',
       html: buildClientEmailHtml(payload),
     }),
   ]);
