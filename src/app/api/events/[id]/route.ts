@@ -138,6 +138,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
 
+    if (status === 'Completed' && !isEventDatePassed(date) && existingEvent.status !== 'Completed') {
+      return NextResponse.json(
+        { error: 'Production can only be marked Completed after the production date has passed.' },
+        { status: 400 }
+      );
+    }
+
     const updateData: any = {
       title,
       type,

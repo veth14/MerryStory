@@ -163,7 +163,7 @@ export default function ProjectsView({ archived }: { archived?: boolean } ) {
                 }`}>
                   {event.status || 'Active'}
                 </div>
-                {event.status === 'Completed' && role === 'admin' && (
+                {!archived && event.status === 'Completed' && role === 'admin' && (
                   <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => openModal('Archive Event', 'Archive this completed event to move it to Archived events. This can be undone by restoring.', async () => {
                       try {

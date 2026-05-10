@@ -137,12 +137,14 @@ export const CustomDatePicker = ({
   label, 
   value, 
   onChange,
-  className = ""
+  className = "",
+  direction = "down"
 }: { 
   label?: string, 
   value: string, 
   onChange: (val: string) => void,
-  className?: string
+  className?: string,
+  direction?: "up" | "down"
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -173,6 +175,10 @@ export const CustomDatePicker = ({
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+  const positionClass = direction === "up" 
+    ? "absolute z-[100] bottom-full left-0 w-full mb-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
+    : "absolute z-[100] top-full left-0 w-full mt-2 animate-in fade-in slide-in-from-top-2 duration-200";
+
   return (
     <div className={`space-y-2 relative ${className}`} ref={containerRef}>
       {label && (
@@ -191,7 +197,7 @@ export const CustomDatePicker = ({
       </div>
 
       {isOpen && (
-        <div className="absolute z-[100] top-full left-0 w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl p-6 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className={`${positionClass} bg-white border border-gray-100 rounded-2xl shadow-2xl p-6`}>
           <div className="flex items-center justify-between mb-4">
             <button type="button" onClick={handlePrevMonth} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400"><ArrowLeft size={16} /></button>
             <div className="text-[14px] font-extrabold text-gray-900">
@@ -648,5 +654,55 @@ export const CustomTimePicker = ({
         document.body
       )}
     </div>
+  );
+};
+
+export const CustomButton = ({
+  children,
+  onClick,
+  disabled = false,
+  className = "",
+  type = "button",
+  variant = "primary",
+  size = "md",
+  icon: Icon,
+  showArrow = true,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+  type?: "button" | "submit" | "reset";
+  variant?: "primary" | "secondary" | "danger" | "cancel";
+  size?: "sm" | "md" | "lg";
+  icon?: any;
+  showArrow?: boolean;
+}) => {
+  const baseStyles = "font-bold uppercase tracking-widest rounded-full transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed";
+  
+  const variants = {
+    primary: "bg-[#facc15] text-gray-900 hover:shadow-lg hover:shadow-[#facc15]/30 active:scale-95",
+    secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200 active:scale-95",
+    danger: "bg-red-600 text-white hover:shadow-lg hover:shadow-red-600/30 active:scale-95",
+    cancel: "bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95",
+  };
+
+  const sizes = {
+    sm: "px-4 py-2 text-[11px]",
+    md: "px-6 py-3 text-[12px]",
+    lg: "px-8 py-4 text-[13px]",
+  };
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+    >
+      {Icon && <Icon size={16} />}
+      {children}
+      {showArrow && variant === "primary" && <ChevronDown size={14} className="rotate-90" />}
+    </button>
   );
 };

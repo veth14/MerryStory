@@ -771,12 +771,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           </div>
           <div className="flex justify-between items-center relative z-10">
             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{Math.round((event.budget.utilized / event.budget.total) * 100) || 0}% utilized</span>
-            <button 
-              onClick={() => setActiveTab('pre-event')}
+            <Link
+              href={`/admin/finances/${event._id}`}
               className="text-[9px] font-extrabold text-[#d4a017] uppercase tracking-widest hover:text-[#b8860b]"
             >
               Manage Budget
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -793,12 +793,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
           </div>
           <div className="flex justify-between items-center relative z-10 mt-1">
             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{event.vendors.total - event.vendors.secured} pending contracts</span>
-            <button 
-              onClick={() => setActiveTab('pre-event')}
+            <Link
+              href={`/admin/vendors?eventId=${event._id}`}
               className="text-[9px] font-extrabold text-[#d4a017] uppercase tracking-widest hover:text-[#b8860b]"
             >
               View All
-            </button>
+            </Link>
           </div>
         </div>
 
