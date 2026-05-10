@@ -2,7 +2,217 @@
 
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const getTodayDate = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+const formatDateLabel = (value: string) => {
+  if (!value) return 'dd/mm/yyyy';
+
+  return new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+function useDropdownLayer<T extends HTMLElement, U extends HTMLElement>(isOpen: boolean, onClose: () => void) {
+  const triggerRef = useRef<T>(null);
+  const panelRef = useRef<U>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      onClose();
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, onClose]);
+
+  return { triggerRef, panelRef };
+}
+
+function FloatingDropdown({
+  isOpen,
+  anchorRef,
+  panelRef,
+  children,
+  minWidth,
+}: {
+  isOpen: boolean;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
+  minWidth?: number;
+}) {
+  const [style, setStyle] = useState<React.CSSProperties | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const preferredWidth = Math.max(rect.width, minWidth || 0);
+      const width = Math.min(preferredWidth, viewportWidth - 24);
+      const spaceBelow = viewportHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+      const openUp = spaceBelow < 300 && spaceAbove > spaceBelow;
+
+      const nextStyle: React.CSSProperties = {
+        position: 'fixed',
+        width,
+        left: Math.min(Math.max(12, rect.left), Math.max(12, viewportWidth - width - 12)),
+        zIndex: 260,
+        maxHeight: Math.max(180, Math.min(360, openUp ? spaceAbove : spaceBelow)),
+        overflowY: 'auto',
+      };
+
+      if (openUp) {
+        nextStyle.bottom = viewportHeight - rect.top + 8;
+      } else {
+        nextStyle.top = rect.bottom + 8;
+      }
+
+      setStyle(nextStyle);
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [anchorRef, isOpen, minWidth]);
+
+  if (!isOpen || !style || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div ref={panelRef} style={style} className="bg-white border border-gray-100 rounded-2xl shadow-2xl p-6 animate-in fade-in slide-in-from-top-2 duration-200">
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+function ConsultationDatePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    if (value) {
+      return new Date(`${value}T00:00:00`);
+    }
+
+    return new Date();
+  });
+  const { triggerRef, panelRef } = useDropdownLayer<HTMLDivElement, HTMLDivElement>(isOpen, () => setIsOpen(false));
+  const today = getTodayDate();
+  const monthNames = useMemo(
+    () => ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    []
+  );
+
+  useEffect(() => {
+    if (!value) return;
+    setCurrentMonth(new Date(`${value}T00:00:00`));
+  }, [value]);
+
+  const totalDays = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+  const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
+  const days = [...Array(firstDay).fill(null), ...Array.from({ length: totalDays }, (_, index) => index + 1)];
+
+  return (
+    <div className="relative" ref={triggerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className="w-full border-b border-gray-200 pb-3 text-sm text-left focus:outline-none focus:border-brand-yellow hover:border-brand-yellow text-gray-900 transition-colors bg-transparent flex items-center justify-between gap-3"
+      >
+        <span className={value ? 'text-gray-900 uppercase' : 'text-gray-300 uppercase'}>{formatDateLabel(value)}</span>
+        <Calendar className="w-4 h-4 text-gray-600 shrink-0" />
+      </button>
+
+      <FloatingDropdown isOpen={isOpen} anchorRef={triggerRef} panelRef={panelRef} minWidth={340}>
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+              className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="text-[14px] font-extrabold text-gray-900">
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+              className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center mb-2">
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+              <div key={`${day}-${index}`} className="text-[10px] font-bold text-[#d4a017] uppercase">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((day, index) => {
+              if (day === null) {
+                return <div key={`empty-${index}`} className="h-9 w-9" />;
+              }
+
+              const dateValue = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const isSelected = value === dateValue;
+              const isDisabled = dateValue < today;
+              const isToday = dateValue === today;
+
+              return (
+                <button
+                  key={dateValue}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => {
+                    onChange(dateValue);
+                    setIsOpen(false);
+                  }}
+                  className={`h-9 w-9 flex items-center justify-center rounded-lg text-[12px] font-extrabold transition-all ${isSelected ? 'bg-[#facc15] text-gray-900' : isToday ? 'bg-gray-100 text-[#d4a017]' : 'text-gray-700 hover:bg-gray-50'} ${isDisabled ? 'opacity-30 cursor-not-allowed hover:bg-transparent' : 'cursor-pointer'}`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </FloatingDropdown>
+    </div>
+  );
+}
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -160,19 +370,7 @@ export default function ContactPage() {
                  <div className="flex flex-col md:flex-row gap-8 md:gap-10">
                     <div className="flex-1">
                       <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 block mb-3">PREFERRED DATE</label>
-                      <div className="relative">
-                        <input 
-                          type="text" 
-                          name="date"
-                          value={formData.date}
-                          onChange={handleChange}
-                          placeholder="dd/mm/yyyy" 
-                          className="w-full border-b border-gray-200 pb-3 text-sm focus:outline-none focus:border-brand-yellow text-gray-900 placeholder:text-gray-300 transition-colors bg-transparent uppercase"
-                        />
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 absolute right-0 bottom-3 text-gray-600 pointer-events-none">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                        </svg>
-                      </div>
+                      <ConsultationDatePicker value={formData.date} onChange={(date) => setFormData((prev) => ({ ...prev, date }))} />
                     </div>
                     <div className="flex-1">
                       <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 block mb-3">GUEST COUNT</label>
@@ -208,7 +406,7 @@ export default function ContactPage() {
                       className="w-full bg-brand-yellow hover:bg-yellow-500 disabled:bg-gray-200 disabled:text-gray-400 text-black py-5 px-8 flex justify-between items-center transition-colors duration-300 group"
                     >
                        <span className="font-bold text-[11px] uppercase tracking-[0.15em]">
-                         {status === 'loading' ? 'SENDING INQUIRY...' : 'REQUEST PRIVATE SESSION'}
+                         {status === 'loading' ? 'SENDING CONSULTATION...' : 'REQUEST PRIVATE SESSION'}
                        </span>
                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 group-hover:translate-x-2 transition-transform">
                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -217,13 +415,13 @@ export default function ContactPage() {
 
                     {status === 'success' && (
                        <p className="mt-4 text-[10px] font-bold tracking-[0.1em] text-green-600 uppercase text-center w-full bg-green-50 p-3">
-                         Inquiry sent successfully. Check your email.
+                         Consultation request sent successfully. Check your email.
                        </p>
                     )}
                     
                     {status === 'error' && (
                        <p className="mt-4 text-[10px] font-bold tracking-[0.1em] text-red-600 uppercase text-center w-full bg-red-50 p-3">
-                         Failed to send. Please try again or email us directly.
+                         Failed to send consultation request. Please try again or email us directly.
                        </p>
                     )}
 
