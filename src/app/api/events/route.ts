@@ -73,6 +73,9 @@ export async function POST(request: NextRequest) {
       guests: { invited: guestCapacity, rsvp: 0, checkedIn: 0 },
       health: 100,
       status: "Active Production",
+      archived: false,
+      archivedAt: null,
+      doNotPurge: false,
       leadAssigned,
       initialAlert,
       client: {
@@ -121,7 +124,7 @@ export async function GET(request: NextRequest) {
     const db = await getMongoDb();
     const eventsCollection = db.collection("events");
     
-    const events = await eventsCollection.find({}).sort({ createdAt: -1 }).toArray();
+    const events = await eventsCollection.find({ archived: { $ne: true } }).sort({ createdAt: -1 }).toArray();
     
     return NextResponse.json(events, { status: 200 });
   } catch (error) {

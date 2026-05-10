@@ -121,7 +121,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const updateData = {
+    const updateData: any = {
       title,
       type,
       date,
@@ -152,6 +152,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       coverImageUrl,
       updatedAt: new Date()
     };
+
+    // If status moved to Completed and not marked doNotPurge, mark as archived
+    const shouldArchive = status === 'Completed' && !existingEvent?.archived && !existingEvent?.doNotPurge;
+    if (shouldArchive) {
+      updateData.archived = true;
+      updateData.archivedAt = new Date();
+    }
 
     const result = await eventsCollection.updateOne(
       { _id: new ObjectId(id) },
@@ -186,6 +193,18 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         changes: changes
       }
     });
+
+    if (shouldArchive) {
+      await writeAuditLog({
+        request,
+        category: "EVENT_MANAGEMENT",
+        action: "EVENT_ARCHIVED",
+        message: `Event archived due to status Completed: ${title}`,
+        actor: { uid: user.uid, email: user.email, role: user.role },
+        target: { type: 'event', uid: id },
+        details: { eventTitle: title }
+      });
+    }
 
     return NextResponse.json({ message: "Event updated successfully" }, { status: 200 });
   } catch (error) {

@@ -9,6 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
+    ,"create-indexes": "tsx scripts/createIndexes.ts"
+    ,"auto-archive": "tsx scripts/autoArchive.ts"
+    ,"predelete-notify": "tsx scripts/preDeleteNotification.ts"
   },
   "keywords": [],
   "author": "",

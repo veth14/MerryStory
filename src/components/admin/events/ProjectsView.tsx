@@ -18,25 +18,33 @@ interface Event {
   coverImageUrl?: string;
 }
 
-export default function ProjectsView() {
-  const { user } = useAuth();
+export default function ProjectsView({ archived }: { archived?: boolean } ) {
+  const { user, role } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All types');
+  const [modal, setModal] = useState<{ isOpen: boolean; title: string; desc: string; action: (() => Promise<void>) | null; type: 'info' | 'danger' }>({ isOpen: false, title: '', desc: '', action: null, type: 'info' });
+
+  const openModal = (title: string, desc: string, action: (() => Promise<void>) | null = null, type: 'info' | 'danger' = 'info') => {
+    setModal({ isOpen: true, title, desc, action, type });
+  };
+
+  const closeModal = () => setModal({ isOpen: false, title: '', desc: '', action: null, type: 'info' });
 
   useEffect(() => {
     if (user) {
       fetchEvents();
     }
-  }, [user]);
+  }, [user, archived]);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
       const idToken = await user!.getIdToken();
-      const response = await fetch('/api/events', {
+      const endpoint = archived ? '/api/events/archived' : '/api/events';
+      const response = await fetch(endpoint, {
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
@@ -195,28 +203,80 @@ export default function ProjectsView() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col gap-2 mt-auto">
-                  <Link href={`/admin/events/${event._id}`} className="w-full bg-[#d4a017] hover:bg-[#c49214] text-white font-extrabold uppercase tracking-widest py-3 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center">        
-                    Event Dashboard
-                  </Link>
-                  <div className="flex gap-2">
-                    <Link href={`/admin/rsvp/${event._id}`} className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
-                      <Users className="w-3.5 h-3.5" />
-                      RSVP
-                    </Link>
-                    <Link href={`/admin/tasks/${event._id}`} className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                      Tasks
-                    </Link>
-                    <Link href={`/admin/finances/${event._id}`} className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      Finances
-                    </Link>
-                  </div>
+                  <div className="flex flex-col gap-2 mt-auto">
+                  {!archived && (
+                    <>
+                      <Link href={`/admin/events/${event._id}`} className="w-full bg-[#d4a017] hover:bg-[#c49214] text-white font-extrabold uppercase tracking-widest py-3 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center">        
+                        Event Dashboard
+                      </Link>
+                      <div className="flex gap-2">
+                        <Link href={`/admin/rsvp/${event._id}`} className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                          <Users className="w-3.5 h-3.5" />
+                          RSVP
+                        </Link>
+                        <Link href={`/admin/tasks/${event._id}`} className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                          Tasks
+                        </Link>
+                        <Link href={`/admin/finances/${event._id}`} className="flex-1 border-2 border-gray-100 hover:border-[#d4a017] text-gray-500 hover:text-[#d4a017] font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Finances
+                        </Link>
+                      </div>
+                    </>
+                  )}
+
+                  {archived && role === 'admin' && (
+                    <div className="flex gap-2">
+                      <button onClick={async () => {
+                        try {
+                          const idToken = await user!.getIdToken();
+                          const res = await fetch(`/api/events/${event._id}/archive`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                            body: JSON.stringify({ action: 'restore' })
+                          });
+                          if (res.ok) fetchEvents();
+                        } catch (err) { console.error(err); }
+                      }} className="flex-1 border-2 border-gray-100 hover:border-green-600 text-green-600 font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all">Restore</button>
+                      <button onClick={() => openModal('Permanently delete event', 'This will permanently delete the event and cannot be undone. Are you sure?', async () => {
+                        try {
+                          const idToken = await user!.getIdToken();
+                          const res = await fetch(`/api/events/${event._id}/archive`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                            body: JSON.stringify({ action: 'delete' })
+                          });
+                          if (res.ok) await fetchEvents();
+                        } catch (err) { console.error(err); }
+                      }, 'danger') } className="flex-1 border-2 border-red-100 hover:border-red-600 text-red-600 font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all">Delete Now</button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {modal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-black text-[#1d1d1f]">{modal.title}</h3>
+                <p className="text-sm text-gray-500 mt-2">{modal.desc}</p>
+              </div>
+              <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-2xl">✕</button>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button onClick={async () => { if (modal.action) await modal.action(); closeModal(); }} className={`flex-1 py-3 rounded-xl font-extrabold ${modal.type === 'danger' ? 'bg-red-600 text-white' : 'bg-[#facc15] text-white'}`}>
+                {modal.type === 'danger' ? 'Delete' : 'Confirm'}
+              </button>
+              <button onClick={closeModal} className="flex-1 py-3 rounded-xl border-2 border-gray-100 font-extrabold">Cancel</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
