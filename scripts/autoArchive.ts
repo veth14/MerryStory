@@ -1,6 +1,15 @@
 import { getMongoDb } from "../src/lib/mongodb";
 import nodemailer from "nodemailer";
 
+const isEventDatePassed = (eventDate?: string | Date | null) => {
+  if (!eventDate) return false;
+  const parsedDate = new Date(eventDate);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return parsedDate.getTime() < startOfToday.getTime();
+};
+
 async function run() {
   try {
     const db = await getMongoDb();
@@ -8,16 +17,47 @@ async function run() {
     const users = db.collection('users');
     const audit = db.collection('audit_logs');
 
+    const now = new Date();
+
+    // Promote any past-dated production that is still active to Completed first.
+    const overdueProductions = await events
+      .find({
+        archived: { $ne: true },
+        doNotPurge: { $ne: true },
+        status: { $ne: 'Completed' },
+      })
+      .toArray();
+
+    for (const ev of overdueProductions) {
+      if (!isEventDatePassed(ev.date)) continue;
+
+      await events.updateOne(
+        { _id: ev._id },
+        { $set: { status: 'Completed', updatedAt: now } }
+      );
+
+      await audit.insertOne({
+        category: 'EVENT_MANAGEMENT',
+        action: 'EVENT_UPDATED',
+        severity: 'info',
+        message: `Auto-marked completed due to passed date: ${ev.title}`,
+        details: { eventId: ev._id.toString(), eventTitle: ev.title },
+        actorUid: null,
+        actorEmail: 'system',
+        actorRole: 'system',
+        targetUid: ev._id.toString(),
+        targetType: 'event',
+        createdAt: now
+      });
+    }
+
     // Find events that should be archived: status === 'Completed', not archived, and not doNotPurge
-    const cursor = events.find({ status: 'Completed', archived: { $ne: true }, doNotPurge: { $ne: true } });
-    const toArchive = await cursor.toArray();
+    const toArchive = await events.find({ status: 'Completed', archived: { $ne: true }, doNotPurge: { $ne: true } }).toArray();
 
     if (toArchive.length === 0) {
       console.log('No events to archive.');
       process.exit(0);
     }
-
-    const now = new Date();
 
     for (const ev of toArchive) {
       await events.updateOne({ _id: ev._id }, { $set: { archived: true, archivedAt: now } });

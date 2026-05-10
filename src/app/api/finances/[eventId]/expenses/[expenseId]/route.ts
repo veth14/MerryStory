@@ -150,3 +150,48 @@ export async function PUT(
     return NextResponse.json({ error: "Failed to update expense" }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ eventId: string; expenseId: string }> }
+) {
+  try {
+    const user = await requireAuthenticatedUser(request);
+    const db = await getMongoDb();
+
+    const { eventId, expenseId } = await params;
+    if (!ObjectId.isValid(eventId) || !ObjectId.isValid(expenseId)) {
+      return NextResponse.json({ error: "Invalid event or expense ID" }, { status: 400 });
+    }
+
+    const expensesCollection = db.collection("expenses");
+    const expense = await expensesCollection.findOne({
+      _id: new ObjectId(expenseId),
+      eventId: new ObjectId(eventId),
+    });
+
+    if (!expense) {
+      return NextResponse.json({ error: "Expense not found." }, { status: 404 });
+    }
+
+    // Delete the expense
+    await expensesCollection.deleteOne({ _id: new ObjectId(expenseId) });
+
+    // Update event's utilized budget by subtracting the expense amount
+    await db.collection("events").updateOne(
+      { _id: new ObjectId(eventId) },
+      { $inc: { "budget.utilized": -(expense.amount || 0) } }
+    );
+
+    // Delete related document entries
+    await db.collection("documents").deleteMany({ sourceExpenseId: new ObjectId(expenseId) });
+
+    return NextResponse.json({ message: "Expense deleted successfully" }, { status: 200 });
+  } catch (error) {
+    if (error instanceof AuthGuardError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    console.error("Delete expense error:", error);
+    return NextResponse.json({ error: "Failed to delete expense" }, { status: 500 });
+  }
+}
