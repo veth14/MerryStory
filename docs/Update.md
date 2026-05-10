@@ -7,3 +7,4 @@ Event Day - Done
 Logic Done
 Finance Update
 Documents Done
+Client Side Email Working
