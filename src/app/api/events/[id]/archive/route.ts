@@ -44,6 +44,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: true, message: 'Event restored' }, { status: 200 });
     }
 
+    if (action === 'archive') {
+      // archive an active/completed event again
+      const now = new Date();
+      await eventsCollection.updateOne({ _id: event._id }, { $set: { archived: true, archivedAt: now } });
+
+      const { writeAuditLog } = await import("@/lib/audit");
+      await writeAuditLog({
+        request,
+        category: "EVENT_MANAGEMENT",
+        action: "EVENT_ARCHIVED",
+        message: `Event archived by admin: ${event.title}`,
+        actor: { uid: user.uid, email: user.email, role: user.role },
+        target: { type: 'event', uid: id },
+        details: { eventTitle: event.title }
+      });
+
+      return NextResponse.json({ success: true, message: 'Event archived' }, { status: 200 });
+    }
+
     if (action === 'delete') {
       await eventsCollection.deleteOne({ _id: event._id });
 

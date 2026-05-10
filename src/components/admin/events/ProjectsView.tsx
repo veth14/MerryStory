@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Search, Plus, Calendar, MapPin, Users, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface Event {
   _id: string;
@@ -25,13 +26,13 @@ export default function ProjectsView({ archived }: { archived?: boolean } ) {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All types');
-  const [modal, setModal] = useState<{ isOpen: boolean; title: string; desc: string; action: (() => Promise<void>) | null; type: 'info' | 'danger' }>({ isOpen: false, title: '', desc: '', action: null, type: 'info' });
+  const [modal, setModal] = useState<{ isOpen: boolean; title: string; desc: string; action: (() => Promise<void>) | null; type: 'info' | 'danger'; confirmLabel?: string }>({ isOpen: false, title: '', desc: '', action: null, type: 'info' });
 
-  const openModal = (title: string, desc: string, action: (() => Promise<void>) | null = null, type: 'info' | 'danger' = 'info') => {
-    setModal({ isOpen: true, title, desc, action, type });
+  const openModal = (title: string, desc: string, action: (() => Promise<void>) | null = null, type: 'info' | 'danger' = 'info', confirmLabel?: string) => {
+    setModal({ isOpen: true, title, desc, action, type, confirmLabel });
   };
 
-  const closeModal = () => setModal({ isOpen: false, title: '', desc: '', action: null, type: 'info' });
+  const closeModal = () => setModal({ isOpen: false, title: '', desc: '', action: null, type: 'info', confirmLabel: undefined });
 
   useEffect(() => {
     if (user) {
@@ -162,6 +163,23 @@ export default function ProjectsView({ archived }: { archived?: boolean } ) {
                 }`}>
                   {event.status || 'Active'}
                 </div>
+                {event.status === 'Completed' && role === 'admin' && (
+                  <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openModal('Archive Event', 'Archive this completed event to move it to Archived events. This can be undone by restoring.', async () => {
+                      try {
+                        const idToken = await user!.getIdToken();
+                        const res = await fetch(`/api/events/${event._id}/archive`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                          body: JSON.stringify({ action: 'archive' })
+                        });
+                        if (res.ok) fetchEvents();
+                      } catch (err) { console.error(err); }
+                    }, 'info', 'Archive Now') } className="px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-full text-[12px] font-bold text-gray-700 border border-gray-100 shadow-sm hover:bg-white">
+                      Archive
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="p-6 flex flex-col flex-grow">
@@ -228,7 +246,7 @@ export default function ProjectsView({ archived }: { archived?: boolean } ) {
 
                   {archived && role === 'admin' && (
                     <div className="flex gap-2">
-                      <button onClick={async () => {
+                      <button onClick={() => openModal('Restore Event', 'Restore this archived event back to the active archive list. This can be archived again later.', async () => {
                         try {
                           const idToken = await user!.getIdToken();
                           const res = await fetch(`/api/events/${event._id}/archive`, {
@@ -238,7 +256,7 @@ export default function ProjectsView({ archived }: { archived?: boolean } ) {
                           });
                           if (res.ok) fetchEvents();
                         } catch (err) { console.error(err); }
-                      }} className="flex-1 border-2 border-gray-100 hover:border-green-600 text-green-600 font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all">Restore</button>
+                      }, 'info', 'Restore Now')} className="flex-1 border-2 border-gray-100 hover:border-green-600 text-green-600 font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all">Restore</button>
                       <button onClick={() => openModal('Permanently delete event', 'This will permanently delete the event and cannot be undone. Are you sure?', async () => {
                         try {
                           const idToken = await user!.getIdToken();
@@ -249,7 +267,7 @@ export default function ProjectsView({ archived }: { archived?: boolean } ) {
                           });
                           if (res.ok) await fetchEvents();
                         } catch (err) { console.error(err); }
-                      }, 'danger') } className="flex-1 border-2 border-red-100 hover:border-red-600 text-red-600 font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all">Delete Now</button>
+                      }, 'danger', 'Delete Now') } className="flex-1 border-2 border-red-100 hover:border-red-600 text-red-600 font-extrabold py-2.5 rounded-xl text-[10px] uppercase tracking-widest transition-all">Delete Now</button>
                     </div>
                   )}
                 </div>
@@ -260,25 +278,20 @@ export default function ProjectsView({ archived }: { archived?: boolean } ) {
       )}
 
       {/* Confirmation Modal */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-xl font-black text-[#1d1d1f]">{modal.title}</h3>
-                <p className="text-sm text-gray-500 mt-2">{modal.desc}</p>
-              </div>
-              <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-2xl">✕</button>
-            </div>
-            <div className="mt-6 flex gap-3">
-              <button onClick={async () => { if (modal.action) await modal.action(); closeModal(); }} className={`flex-1 py-3 rounded-xl font-extrabold ${modal.type === 'danger' ? 'bg-red-600 text-white' : 'bg-[#facc15] text-white'}`}>
-                {modal.type === 'danger' ? 'Delete' : 'Confirm'}
-              </button>
-              <button onClick={closeModal} className="flex-1 py-3 rounded-xl border-2 border-gray-100 font-extrabold">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={modal.isOpen}
+        title={modal.title}
+        description={modal.desc}
+        type={modal.type}
+        confirmLabel={modal.confirmLabel}
+        onConfirm={async () => {
+          if (modal.action) {
+            await modal.action();
+          }
+          closeModal();
+        }}
+        onClose={closeModal}
+      />
     </div>
   );
 }

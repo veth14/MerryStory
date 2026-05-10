@@ -3,6 +3,15 @@ import { requireAuthenticatedUser, AuthGuardError } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
+const isEventDatePassed = (eventDate?: string | Date | null) => {
+  if (!eventDate) return false;
+  const parsedDate = new Date(eventDate);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return parsedDate.getTime() < startOfToday.getTime();
+};
+
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
@@ -24,6 +33,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     if (!event) {
       return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    }
+
+    if (event.archived !== true && event.status !== 'Completed' && isEventDatePassed(event.date)) {
+      await eventsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: 'Completed', updatedAt: new Date() } }
+      );
+      event.status = 'Completed';
     }
 
     // Fetch lead and team profiles to get avatars
