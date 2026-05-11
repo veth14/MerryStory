@@ -56,6 +56,14 @@ To run this project locally or on Vercel, the following environment variables ar
 - `EMAIL_USER`: Gmail address for sending automated emails.
 - `EMAIL_PASS`: Gmail App Password.
 
+### GitHub Actions
+The `Auto Archive and Retention` workflow in `.github/workflows/auto-archive.yml` requires the same values to be added as repository secrets:
+- `MONGODB_URI`
+- `EMAIL_USER`
+- `EMAIL_PASS`
+
+If any of those secrets are missing, the workflow will fail before the archive scripts run.
+
 ## 🛣 Roadmap: What's Left To Do
 
 - [ ] **Event Creation Workflow**: Implement the multi-step form to convert an approved inquiry into a live project.

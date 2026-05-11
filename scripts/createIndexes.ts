@@ -1,3 +1,4 @@
+import { pathToFileURL } from "url";
 import { getMongoDb } from "../src/lib/mongodb";
 
 async function run() {
@@ -19,6 +20,8 @@ async function run() {
   }
 }
 
-if (require.main === module) {
-  run();
+const isMainModule = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
+
+if (isMainModule) {
+  void run();
 }

@@ -8,6 +8,10 @@ on:
 jobs:
   run-scripts:
     runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js
@@ -16,19 +20,27 @@ jobs:
           node-version: '20'
       - name: Install deps
         run: npm ci
+      - name: Validate required secrets
+        run: |
+          missing=0
+          if [ -z "$MONGODB_URI" ]; then
+            echo "::error::Missing MONGODB_URI repository secret."
+            missing=1
+          fi
+          if [ -z "$EMAIL_USER" ]; then
+            echo "::error::Missing EMAIL_USER repository secret."
+            missing=1
+          fi
+          if [ -z "$EMAIL_PASS" ]; then
+            echo "::error::Missing EMAIL_PASS repository secret."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
       - name: Create indexes
-        env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
         run: npm run create-indexes
       - name: Run auto-archive
-        env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: npm run auto-archive
       - name: Run pre-delete notifications
-        env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: npm run predelete-notify
