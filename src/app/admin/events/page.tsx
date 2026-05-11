@@ -46,11 +46,18 @@ export default function EventsAdminPage() {
         >
           Vendor Management
         </button>
+        <button
+          onClick={() => setActiveTab('archived')}
+          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'archived' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
+        >
+          Archived
+        </button>
       </div>
 
       {/* Tab Content */}
       <div className="mt-8 animate-in fade-in duration-500">
         {activeTab === 'projects' && <ProjectsView />}
+        {activeTab === 'archived' && <ProjectsView archived />}
         {activeTab === 'calendar' && <CalendarView />}
         {activeTab === 'vendors' && <VendorsView />}
       </div>

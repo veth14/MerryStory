@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 
+function getCategoryType(category: string): string {
+  switch (category) {
+    case "TASK_MANAGEMENT":
+      return "Task";
+    case "INQUIRY_MANAGEMENT":
+      return "Inquiry";
+    case "EVENT_MANAGEMENT":
+      return "Event";
+    case "EXPENSE_MANAGEMENT":
+      return "Expense";
+    case "CONTRACT_MANAGEMENT":
+      return "Contract";
+    case "USER_MANAGEMENT":
+      return "Staff";
+    case "VENDOR_MANAGEMENT":
+      return "Vendor";
+    default:
+      return "Update";
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser(request);
@@ -12,7 +33,15 @@ export async function GET(request: NextRequest) {
     const logsCollection = db.collection("audit_logs");
 
     let query: any = {
-      category: "TASK_MANAGEMENT"
+      $or: [
+        { category: "TASK_MANAGEMENT" },
+        { category: "INQUIRY_MANAGEMENT" },
+        { category: "EVENT_MANAGEMENT" },
+        { category: "EXPENSE_MANAGEMENT" },
+        { category: "CONTRACT_MANAGEMENT" },
+        { category: "USER_MANAGEMENT" },
+        { category: "VENDOR_MANAGEMENT" }
+      ]
     };
 
     if (targetUid && (user as any).role === "admin") {
@@ -22,16 +51,55 @@ export async function GET(request: NextRequest) {
       // Regular user or admin requesting their own activity
       const userName = (user as any).displayName || "";
       query.$or = [
-        { actorUid: user.uid },
-        { message: { $regex: userName, $options: "i" } },
-        { "details.assignee": userName }
+        { 
+          $and: [
+            { actorUid: user.uid },
+            { $or: [
+              { category: "TASK_MANAGEMENT" },
+              { category: "INQUIRY_MANAGEMENT" },
+              { category: "EVENT_MANAGEMENT" },
+              { category: "EXPENSE_MANAGEMENT" },
+              { category: "CONTRACT_MANAGEMENT" },
+              { category: "USER_MANAGEMENT" },
+              { category: "VENDOR_MANAGEMENT" }
+            ]}
+          ]
+        },
+        { 
+          $and: [
+            { message: { $regex: userName, $options: "i" } },
+            { $or: [
+              { category: "TASK_MANAGEMENT" },
+              { category: "INQUIRY_MANAGEMENT" },
+              { category: "EVENT_MANAGEMENT" },
+              { category: "EXPENSE_MANAGEMENT" },
+              { category: "CONTRACT_MANAGEMENT" },
+              { category: "USER_MANAGEMENT" },
+              { category: "VENDOR_MANAGEMENT" }
+            ]}
+          ]
+        },
+        { 
+          $and: [
+            { "details.assignee": userName },
+            { $or: [
+              { category: "TASK_MANAGEMENT" },
+              { category: "INQUIRY_MANAGEMENT" },
+              { category: "EVENT_MANAGEMENT" },
+              { category: "EXPENSE_MANAGEMENT" },
+              { category: "CONTRACT_MANAGEMENT" },
+              { category: "USER_MANAGEMENT" },
+              { category: "VENDOR_MANAGEMENT" }
+            ]}
+          ]
+        }
       ];
     }
 
     const logs = await logsCollection
       .find(query)
       .sort({ createdAt: -1 })
-      .limit(10)
+      .limit(15)
       .toArray();
 
     const activities = logs.map(log => ({
@@ -40,7 +108,9 @@ export async function GET(request: NextRequest) {
       message: log.message,
       time: log.createdAt,
       actor: log.actorEmail === user.email ? "You" : (log.actorEmail || "System"),
-      details: log.details
+      type: getCategoryType(log.category),
+      details: log.details,
+      category: log.category
     }));
 
     return NextResponse.json(activities, { status: 200 });

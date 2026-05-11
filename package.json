@@ -9,6 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
+    ,"create-indexes": "tsx scripts/createIndexes.ts"
+    ,"auto-archive": "tsx scripts/autoArchive.ts"
+    ,"predelete-notify": "tsx scripts/preDeleteNotification.ts"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +32,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "swr": "^2.4.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

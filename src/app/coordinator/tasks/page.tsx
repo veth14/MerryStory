@@ -9,10 +9,14 @@ type TaskRecord = {
   _id: string;
   eventId?: string;
   eventTitle?: string;
+  eventType?: string;
+  eventLocation?: string;
   title?: string;
   description?: string;
   status?: string;
   priority?: string;
+  taskType?: 'event' | 'production';
+  taskTypeLabel?: string;
   due?: {
     date?: string;
     time?: string;
@@ -104,9 +108,12 @@ export default function CoordinatorTasksPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [productionTasks, setProductionTasks] = useState<TaskRecord[]>([]);
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAllActivities, setShowAllActivities] = useState(false);
+  const [confirmTask, setConfirmTask] = useState<TaskRecord | null>(null);
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   const refreshPageData = async (idToken: string, userName?: string | null) => {
     await fetch(`/api/tasks/priority-update${userName ? `?assignee=${encodeURIComponent(userName)}` : ''}`, {
@@ -114,8 +121,8 @@ export default function CoordinatorTasksPage() {
       headers: { Authorization: `Bearer ${idToken}` },
     });
 
-    const [tasksRes, actRes] = await Promise.all([
-      fetch(`/api/tasks${userName ? `?assignee=${encodeURIComponent(userName)}` : ''}`, {
+    const [taskHubRes, actRes] = await Promise.all([
+      fetch('/api/coordinator/task-hub', {
         headers: { Authorization: `Bearer ${idToken}` },
       }),
       fetch('/api/activities', {
@@ -123,11 +130,13 @@ export default function CoordinatorTasksPage() {
       }),
     ]);
 
-    if (tasksRes.ok) {
-      const taskData = await tasksRes.json();
-      setTasks(Array.isArray(taskData) ? taskData : []);
+    if (taskHubRes.ok) {
+      const taskData = await taskHubRes.json();
+      setTasks(Array.isArray(taskData?.eventTasks) ? taskData.eventTasks : []);
+      setProductionTasks(Array.isArray(taskData?.productionTasks) ? taskData.productionTasks : []);
     } else {
       setTasks([]);
+      setProductionTasks([]);
     }
 
     if (actRes.ok) {
@@ -154,25 +163,52 @@ export default function CoordinatorTasksPage() {
     fetchTasks();
   }, [user]);
 
-  const toggleTask = async (taskId: string, currentStatus: string) => {
+  const toggleTask = async (task: TaskRecord) => {
     if (!user) return;
     try {
-      const normalizedStatus = normalizeTaskStatus(currentStatus);
+      const normalizedStatus = normalizeTaskStatus(task.status);
       const newStatus = normalizedStatus === 'COMPLETED' ? 'TO DO' : 'COMPLETED';
       const idToken = await user.getIdToken();
-      const res = await fetch('/api/tasks', {
+      setUpdatingTaskId(task._id);
+      const res = await fetch(task.taskType === 'production' ? '/api/admin/event-day' : '/api/tasks', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`
         },
-        body: JSON.stringify({ taskObjectId: taskId, status: newStatus })
+        body: JSON.stringify({ taskObjectId: task._id, status: newStatus })
       });
       if (res.ok) {
         await refreshPageData(idToken, user.displayName);
       }
+      setUpdatingTaskId(null);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleConfirmTaskDone = async () => {
+    if (!confirmTask || !user) return;
+    setUpdatingTaskId(confirmTask._id);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(confirmTask.taskType === 'production' ? '/api/admin/event-day' : '/api/tasks', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ taskObjectId: confirmTask._id, status: 'COMPLETED' }),
+      });
+
+      if (res.ok) {
+        await refreshPageData(idToken, user.displayName);
+        setConfirmTask(null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUpdatingTaskId(null);
     }
   };
 
@@ -190,13 +226,24 @@ export default function CoordinatorTasksPage() {
   };
 
   const completeCount = useMemo(
-    () => tasks.filter((task) => normalizeTaskStatus(task.status) === 'COMPLETED').length,
-    [tasks]
+    () => [...tasks, ...productionTasks].filter((task) => normalizeTaskStatus(task.status) === 'COMPLETED').length,
+    [productionTasks, tasks]
   );
 
   const pendingTasks = useMemo(
-    () => tasks.filter((task) => normalizeTaskStatus(task.status) !== 'COMPLETED'),
+    () => tasks.filter((task) => {
+      const completed = (task as any).normalizedStatus === 'COMPLETED' || normalizeTaskStatus(task.status) === 'COMPLETED';
+      return !completed;
+    }),
     [tasks]
+  );
+
+  const pendingProductionTasks = useMemo(
+    () => productionTasks.filter((task) => {
+      const completed = (task as any).normalizedStatus === 'COMPLETED' || normalizeTaskStatus(task.status) === 'COMPLETED';
+      return !completed;
+    }),
+    [productionTasks]
   );
 
   const tasksByPriority = useMemo(
@@ -211,6 +258,7 @@ export default function CoordinatorTasksPage() {
 
   const visibleActivities = showAllActivities ? activities : activities.slice(0, 5);
   const hiddenActivityCount = Math.max(activities.length - 5, 0);
+  const totalAssignedTasks = tasks.length + productionTasks.length;
   
   return (
     <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative">
@@ -233,6 +281,29 @@ export default function CoordinatorTasksPage() {
         
         {/* Left Column: Task Lists */}
         <div className="lg:w-2/3 space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+            <div className="p-6 border-b border-gray-50 flex items-center justify-between">
+              <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-[#d4a017]">
+                <CalendarClock size={16} /> Production Directives
+              </h2>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-1 rounded-md border text-[#d4a017] bg-[#fff9e6] border-[#eebf43]/30">
+                {loading ? '...' : pendingProductionTasks.length} Tasks
+              </span>
+            </div>
+
+            <div className="divide-y divide-gray-50">
+              {loading ? (
+                <div className="p-6 text-sm text-gray-500">Loading...</div>
+              ) : pendingProductionTasks.length === 0 ? (
+                <div className="p-6 text-sm text-gray-500">No production directives assigned to you right now.</div>
+              ) : (
+                pendingProductionTasks.map((task) => (
+                  <TaskRow key={task._id} task={task} onToggle={(t) => setConfirmTask(t)} />
+                ))
+              )}
+            </div>
+          </div>
+
           {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const).map((priorityKey) => {
             const meta = priorityMeta[priorityKey];
             const sectionTasks = tasksByPriority[priorityKey];
@@ -255,7 +326,9 @@ export default function CoordinatorTasksPage() {
                   ) : sectionTasks.length === 0 ? (
                     <div className="p-6 text-sm text-gray-500">{meta.empty}</div>
                   ) : (
-                    sectionTasks.map((task) => (
+                    sectionTasks.map((task) => {
+                      const isDone = (task as any).normalizedStatus === 'COMPLETED' || normalizeTaskStatus(task.status) === 'COMPLETED';
+                      return (
                       <div
                         key={task._id}
                         className="p-5 px-6 flex items-start justify-between gap-4 hover:bg-[#fafafa] transition-colors group cursor-pointer"
@@ -266,7 +339,7 @@ export default function CoordinatorTasksPage() {
                             className="text-gray-300 hover:text-emerald-500 transition-colors shrink-0 mt-0.5 p-2 -m-2 group/btn"
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleTask(task._id, task.status || '');
+                              if (!isDone) setConfirmTask(task);
                             }}
                           >
                             <Circle size={22} strokeWidth={2} className="group-hover/btn:hidden" />
@@ -297,7 +370,8 @@ export default function CoordinatorTasksPage() {
                           <ArrowRight size={18} className="text-[#a1a1aa]" />
                         </div>
                       </div>
-                    ))
+                    );
+                    })
                   )}
                 </div>
               </div>
@@ -314,14 +388,14 @@ export default function CoordinatorTasksPage() {
 
              <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-[#a1a1aa] uppercase tracking-widest">Completed</span>
-                <span className="text-xs font-black text-emerald-600">{completeCount} / {tasks.length} Tasks</span>
+                <span className="text-xs font-black text-emerald-600">{completeCount} / {totalAssignedTasks} Tasks</span>
              </div>
              
              {/* Progress Bar */}
              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-6">
                 <div 
                   className="h-full bg-emerald-500 rounded-full transition-all duration-1000 ease-out" 
-                  style={{ width: `${tasks.length > 0 ? (completeCount / tasks.length) * 100 : 0}%` }}
+                  style={{ width: `${totalAssignedTasks > 0 ? (completeCount / totalAssignedTasks) * 100 : 0}%` }}
                 ></div>
              </div>
 
@@ -377,6 +451,93 @@ export default function CoordinatorTasksPage() {
           </div>
 
         </div>
+      </div>
+
+      {confirmTask && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px] flex items-center justify-center px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white border border-gray-100 shadow-2xl p-8">
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#a1a1aa] mb-3">Confirm Completion</p>
+            <h3 className="text-2xl font-black text-[#1d1d1f] tracking-tight mb-3">Mark this task as completed?</h3>
+            <p className="text-sm font-medium text-[#71717a] leading-relaxed">
+              <span className="font-bold text-[#1d1d1f]">{confirmTask.title || 'Untitled Task'}</span> will be moved to finished directives and your progress KPI will update immediately.
+            </p>
+            <div className="flex items-center justify-end gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => setConfirmTask(null)}
+                className="px-5 py-3 rounded-xl border border-gray-200 text-sm font-bold text-[#71717a] hover:text-[#1d1d1f] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updatingTaskId === confirmTask._id}
+                onClick={handleConfirmTaskDone}
+                className="px-5 py-3 rounded-xl bg-[#1d1d1f] hover:bg-[#d4a017] text-white text-sm font-extrabold transition-colors disabled:opacity-60"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskRow({ task, onToggle }: { task: TaskRecord; onToggle: (task: TaskRecord) => void }) {
+  const isDone = (task as any).normalizedStatus === 'COMPLETED' || normalizeTaskStatus(task.status) === 'COMPLETED';
+
+  return (
+    <div
+      className={`p-5 px-6 flex items-start justify-between gap-4 hover:bg-[#fafafa] transition-colors group cursor-pointer ${isDone ? 'opacity-60' : ''}`}
+      onClick={() => task.eventId && window.location.assign(`/coordinator/events/${task.eventId}?tab=tasks`)}
+    >
+      <div className="flex items-start gap-4">
+        <button
+          className="text-gray-300 hover:text-emerald-500 transition-colors shrink-0 mt-0.5 p-2 -m-2 group/btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(task);
+          }}
+        >
+          {isDone ? (
+            <CheckCircle2 size={22} strokeWidth={2} className="text-emerald-500" />
+          ) : (
+            <>
+              <Circle size={22} strokeWidth={2} className="group-hover/btn:hidden" />
+              <CheckCircle2 size={22} strokeWidth={2} className="hidden group-hover/btn:block text-emerald-500" />
+            </>
+          )}
+        </button>
+        <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[15px] font-bold text-[#1d1d1f]">{task.title || 'Untitled Task'}</p>
+            <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-[#d4a017] bg-[#fff9e6] border border-[#eebf43]/30 px-2 py-0.5 rounded-md">
+              Production
+            </span>
+          </div>
+          {task.description && (
+            <p className="text-xs font-medium text-[#71717a] mt-1 max-w-lg leading-relaxed">{task.description}</p>
+          )}
+
+          <div className="flex flex-wrap gap-2 mt-3">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md border text-[#d4a017] bg-[#fff9e6] border-[#eebf43]/30">
+              <Clock size={12} /> {formatPriorityLabel(task.priority)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#71717a] bg-[#fafafa] border border-gray-100 px-2 py-1 rounded-md">
+              Due {formatDueLabel(task)}
+            </span>
+            {task.eventTitle && (
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-[#1d1d1f] bg-white border border-gray-100 px-2 py-1 rounded-md">
+                {task.eventTitle}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-center shrink-0 self-center md:opacity-0 md:-translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0 transition-all duration-300">
+        <ArrowRight size={18} className="text-[#a1a1aa]" />
       </div>
     </div>
   );

@@ -4,6 +4,15 @@ import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 
+const isEventDatePassed = (eventDate?: string | Date | null) => {
+  if (!eventDate) return false;
+  const parsedDate = new Date(eventDate);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return parsedDate.getTime() < startOfToday.getTime();
+};
+
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser(request);
@@ -73,6 +82,9 @@ export async function POST(request: NextRequest) {
       guests: { invited: guestCapacity, rsvp: 0, checkedIn: 0 },
       health: 100,
       status: "Active Production",
+      archived: false,
+      archivedAt: null,
+      doNotPurge: false,
       leadAssigned,
       initialAlert,
       client: {
@@ -90,9 +102,9 @@ export async function POST(request: NextRequest) {
     
     await writeAuditLog({
       request,
-      category: "SYSTEM",
+      category: "EVENT_MANAGEMENT",
       action: "EVENT_CREATED",
-      message: `Created new event: ${title}`,
+      message: `New event created: ${title}`,
       actor: {
         uid: user.uid,
         email: user.email,
@@ -120,8 +132,18 @@ export async function GET(request: NextRequest) {
     await requireAuthenticatedUser(request);
     const db = await getMongoDb();
     const eventsCollection = db.collection("events");
+
+    const overdueActiveEvents = await eventsCollection.find({ archived: { $ne: true }, status: { $ne: "Completed" } }).toArray();
+    const overdueIds = overdueActiveEvents.filter((event) => isEventDatePassed(event.date)).map((event) => event._id);
+
+    if (overdueIds.length > 0) {
+      await eventsCollection.updateMany(
+        { _id: { $in: overdueIds } },
+        { $set: { status: "Completed", updatedAt: new Date() } }
+      );
+    }
     
-    const events = await eventsCollection.find({}).sort({ createdAt: -1 }).toArray();
+    const events = await eventsCollection.find({ archived: { $ne: true } }).sort({ createdAt: -1 }).toArray();
     
     return NextResponse.json(events, { status: 200 });
   } catch (error) {

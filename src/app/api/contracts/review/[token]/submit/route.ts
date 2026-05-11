@@ -4,6 +4,7 @@ import { sendContractStatusEmail } from '@/lib/email';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { createContractAdminAccessToken } from '@/lib/contract-review-access';
+import { writeAuditLog } from '@/lib/audit';
 
 function decodeDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
@@ -247,6 +248,31 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     await contracts.updateOne({ reviewToken: token }, { $set: updateDoc });
+
+    // Log contract review action
+    await writeAuditLog({
+      request,
+      category: "CONTRACT_MANAGEMENT",
+      action: action === 'signature' ? 'CONTRACT_SIGNED' : 'CONTRACT_REVISION_REQUESTED',
+      message: `Contract "${contract.name || 'Unnamed'}" ${action === 'signature' ? 'signed by' : 'revision requested by'} ${signerName || contract.recipientName || 'Client'}`,
+      actor: {
+        uid: "external",
+        email: contract.recipientEmail || "unknown",
+        role: "client"
+      },
+      target: {
+        type: "contract",
+        uid: contract._id.toString()
+      },
+      details: {
+        contractId: contract._id.toString(),
+        contractName: contract.name,
+        eventName: contract.eventName,
+        action,
+        signerName: signerName || contract.recipientName,
+        note
+      }
+    });
 
     const adminEmail = process.env.EMAIL_USER;
     if (adminEmail) {

@@ -14,12 +14,16 @@ import {
   Plus,
   ArrowRight,
   Trash2,
+  UserX,
   Loader2,
   CheckCircle2,
   AlertCircle,
+  ChevronDown,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useRouter } from 'next/navigation';
+import { CustomSelect } from '@/components/ui/CustomInputs';
 
 type AccessRole = 'ADMINISTRATOR' | 'LEAD COORDINATOR' | 'PRODUCTION STAFF';
 type UserStatus = 'Active' | 'On-Site' | 'Away' | 'Invited';
@@ -113,6 +117,26 @@ function toRelativeTime(isoString: string | null): string {
   return date.toLocaleDateString();
 }
 
+function toFullDateTime(isoString: string | null): string {
+  if (!isoString) {
+    return 'Not available';
+  }
+
+  const date = new Date(isoString);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Invalid date';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
 export default function UsersAdministrationPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -128,6 +152,7 @@ export default function UsersAdministrationPage() {
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
   const [alert, setAlert] = useState<AlertState | null>(null);
   const [recentAuditLogs, setRecentAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
   const [formData, setFormData] = useState<UserFormState>(DEFAULT_FORM);
 
@@ -325,21 +350,21 @@ export default function UsersAdministrationPage() {
     }
   };
 
-  const handleDelete = async (uid: string) => {
-    if (!user) {
-      return;
-    }
+  const [deactivateUid, setDeactivateUid] = useState<string | null>(null);
 
-    const shouldDelete = window.confirm('Are you sure you want to delete this user? This also removes the Firebase account.');
+  const confirmDeactivate = (uid: string) => {
+    setDeactivateUid(uid);
+  };
 
-    if (!shouldDelete) {
+  const handleDeactivate = async () => {
+    if (!deactivateUid || !user) {
       return;
     }
 
     try {
-      setDeletingUid(uid);
+      setDeletingUid(deactivateUid);
       const idToken = await user.getIdToken();
-      const response = await fetch(`/api/users/${uid}`, {
+      const response = await fetch(`/api/users/${deactivateUid}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -349,14 +374,15 @@ export default function UsersAdministrationPage() {
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
 
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to delete user.');
+        throw new Error(payload.error || 'Failed to suspend user.');
       }
 
-      setUsers((prev) => prev.filter((entry) => entry.uid !== uid));
+      setUsers((prev) => prev.filter((entry) => entry.uid !== deactivateUid));
       await fetchRecentAuditLogs();
-      showAlert('User deleted successfully.', 'success');
+      setDeactivateUid(null);
+      showAlert('User suspended successfully.', 'success');
     } catch (error) {
-      showAlert(error instanceof Error ? error.message : 'Failed to delete user.', 'error');
+      showAlert(error instanceof Error ? error.message : 'Failed to suspend user.', 'error');
     } finally {
       setDeletingUid(null);
     }
@@ -538,7 +564,11 @@ export default function UsersAdministrationPage() {
                     </tr>
                   ) : (
                     users.map((entry) => (
-                      <tr key={entry.uid} className="group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0">
+                      <tr
+                        key={entry.uid}
+                        onClick={() => setSelectedUser(entry)}
+                        className="group hover:bg-[#fafafa] transition-colors border-b border-gray-50 last:border-b-0 cursor-pointer"
+                      >
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-4">
                             {entry.avatarUrl ? (
@@ -575,19 +605,25 @@ export default function UsersAdministrationPage() {
                         <td className="px-6 py-5 text-right">
                           <div className="inline-flex items-center gap-2">
                             <button
-                              onClick={() => handleEdit(entry)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(entry);
+                              }}
                               className="text-[#a1a1aa] hover:text-[#1d1d1f] transition-colors outline-none focus:outline-none"
                               title="Edit user"
                             >
                               <MoreVertical size={16} />
                             </button>
                             <button
-                              onClick={() => handleDelete(entry.uid)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                confirmDeactivate(entry.uid);
+                              }}
                               className="text-[#f87171] hover:text-[#dc2626] transition-colors outline-none focus:outline-none"
-                              title="Delete user"
+                              title="Deactivate user"
                               disabled={deletingUid === entry.uid}
                             >
-                              {deletingUid === entry.uid ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={15} />}
+                              {deletingUid === entry.uid ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} strokeWidth={2.5} />}
                             </button>
                           </div>
                         </td>
@@ -713,158 +749,270 @@ export default function UsersAdministrationPage() {
         </div>
       </div>
 
-      {isAddingUser && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-[#1d1d1f]/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => !isSubmitting && setIsAddingUser(false)}></div>
+      {selectedUser && (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300 my-auto">
+            <div className="bg-[#fafafa] px-10 py-8 border-b border-gray-100 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                {selectedUser.avatarUrl ? (
+                  <img src={selectedUser.avatarUrl} alt={selectedUser.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm bg-gray-100" />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-[#f4f4f5] border border-[#e4e4e7] flex items-center justify-center text-[#71717a] text-sm font-black shadow-sm">
+                    {selectedUser.name
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((part) => part[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-1">User Directory Profile</p>
+                  <h3 className="text-xl font-black text-[#1d1d1f] tracking-tight">{selectedUser.name}</h3>
+                  <p className="text-xs font-semibold text-[#71717a] mt-1">{selectedUser.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUser(null)}
+                className="p-3 hover:bg-gray-100 rounded-2xl transition-colors"
+                title="Close profile"
+              >
+                <X size={20} className="text-[#a1a1aa]" />
+              </button>
+            </div>
 
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="p-10 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Access Role</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100">
+                    <span className="inline-flex py-1.5 px-3 rounded-full bg-[#fef9ec] border border-[#eebf43]/30 text-[#a88231] text-[10px] font-bold tracking-widest uppercase">
+                      {selectedUser.role}
+                    </span>
+                  </div>
+                </div>
 
-            <div className="inline-block align-bottom bg-white rounded-xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-8">
-              <div>
-                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                  <h3 className="text-xl font-extrabold text-[#1d1d1f]" id="modal-title">
-                    {editingUser ? 'Edit User Credentials' : 'Invite New User'}
-                  </h3>
-                  <p className="text-xs text-[#71717a] mt-1">
-                    {editingUser ? 'Modify access levels, avatar, and password for this user.' : 'Create a real account with a login password.'}
-                  </p>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Current Status</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${STATUS_COLOR_MAP[selectedUser.status] || 'bg-gray-400'}`}></span>
+                    <span className="text-sm font-bold text-[#1d1d1f]">{selectedUser.status}</span>
+                  </div>
+                </div>
 
-                  <div className="mt-8">
-                    <form onSubmit={handleSave}>
-                      <div className="space-y-5">
-                        <div className="flex justify-center mb-6">
-                          <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                            {formData.avatarPreview ? (
-                              <img src={formData.avatarPreview} alt="Profile" className="h-20 w-20 rounded-full object-cover border border-gray-200 shadow-sm" />
-                            ) : (
-                              <div className="h-20 w-20 rounded-full bg-[#fafafa] flex items-center justify-center border border-dashed border-[#dcae32] group-hover:bg-[#fef9ec] transition-colors">
-                                <span className="text-[10px] text-[#a88231] font-bold uppercase tracking-wider">Photo</span>
-                              </div>
-                            )}
-                            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <span className="text-white text-[10px] font-bold tracking-widest uppercase">Change</span>
-                            </div>
-                            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                          </div>
-                        </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Last Active</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 space-y-1">
+                    <span className="text-sm font-bold text-[#1d1d1f] block">{toRelativeTime(selectedUser.lastActiveAt)}</span>
+                    <span className="text-[11px] font-medium text-[#71717a]">{toFullDateTime(selectedUser.lastActiveAt)}</span>
+                  </div>
+                </div>
 
-                        {formData.avatarPreview && (
-                          <div className="flex justify-center">
-                            <button
-                              type="button"
-                              onClick={handleClearAvatar}
-                              className="text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-700"
-                            >
-                              Remove selected picture
-                            </button>
-                          </div>
-                        )}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Joined</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 space-y-1">
+                    <span className="text-sm font-bold text-[#1d1d1f] block">{toRelativeTime(selectedUser.createdAt)}</span>
+                    <span className="text-[11px] font-medium text-[#71717a]">{toFullDateTime(selectedUser.createdAt)}</span>
+                  </div>
+                </div>
 
-                        <div>
-                          <label htmlFor="name" className="block text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">
-                            Full Name
-                          </label>
-                          <input
-                            type="text"
-                            name="name"
-                            id="name"
-                            required
-                            value={formData.name}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                            className="block w-full border border-gray-200 rounded-md shadow-sm py-2.5 px-3 focus:outline-none focus:border-[#dcae32] focus:ring-1 focus:ring-[#dcae32] text-sm text-[#1d1d1f]"
-                          />
-                        </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Profile ID</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100">
+                    <span className="text-[12px] font-bold text-[#1d1d1f] break-all">{selectedUser.uid}</span>
+                  </div>
+                </div>
 
-                        <div>
-                          <label htmlFor="email" className="block text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">
-                            Email Address
-                          </label>
-                          <input
-                            type="email"
-                            name="email"
-                            id="email"
-                            required
-                            value={formData.email}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                            className="block w-full border border-gray-200 rounded-md shadow-sm py-2.5 px-3 focus:outline-none focus:border-[#dcae32] focus:ring-1 focus:ring-[#dcae32] text-sm text-[#1d1d1f]"
-                          />
-                        </div>
-
-                        <div>
-                          <label htmlFor="password" className="block text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">
-                            Password {editingUser ? '(leave blank to keep current password)' : '(required)'}
-                          </label>
-                          <input
-                            type="password"
-                            name="password"
-                            id="password"
-                            value={formData.password}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                            required={!editingUser}
-                            minLength={editingUser ? undefined : 6}
-                            className="block w-full border border-gray-200 rounded-md shadow-sm py-2.5 px-3 focus:outline-none focus:border-[#dcae32] focus:ring-1 focus:ring-[#dcae32] text-sm text-[#1d1d1f]"
-                          />
-                        </div>
-
-                        <div>
-                          <label htmlFor="role" className="block text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">
-                            Access Role
-                          </label>
-                          <select
-                            id="role"
-                            name="role"
-                            value={formData.role}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as AccessRole }))}
-                            className="block w-full py-2.5 px-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:border-[#dcae32] focus:ring-1 focus:ring-[#dcae32] text-sm text-[#1d1d1f]"
-                          >
-                            <option value="ADMINISTRATOR">Administrator</option>
-                            <option value="LEAD COORDINATOR">Lead Coordinator</option>
-                            <option value="PRODUCTION STAFF">Production Staff</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label htmlFor="status" className="block text-[10px] font-bold text-[#a1a1aa] uppercase tracking-widest mb-1">
-                            Status
-                          </label>
-                          <select
-                            id="status"
-                            name="status"
-                            value={formData.status}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as UserStatus }))}
-                            className="block w-full py-2.5 px-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:border-[#dcae32] focus:ring-1 focus:ring-[#dcae32] text-sm text-[#1d1d1f]"
-                          >
-                            <option value="Active">Active</option>
-                            <option value="On-Site">On-Site</option>
-                            <option value="Away">Away</option>
-                            <option value="Invited">Invited</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="mt-8 flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingUser(false)}
-                          className="w-full sm:w-auto inline-flex justify-center items-center rounded-md border border-gray-200 px-6 py-2.5 bg-white text-xs font-bold tracking-widest text-[#3f3f46] hover:bg-gray-50 focus:outline-none transition-colors uppercase"
-                          disabled={isSubmitting}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="w-full sm:w-auto inline-flex justify-center items-center rounded-md border border-transparent px-6 py-2.5 bg-[#1d1d1f] text-xs font-bold tracking-widest text-white hover:bg-[#3f3f46] focus:outline-none transition-colors shadow-md uppercase disabled:opacity-60"
-                          disabled={isSubmitting}
-                        >
-                          {isSubmitting ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
-                          {editingUser ? 'Save Changes' : 'Create User'}
-                        </button>
-                      </div>
-                    </form>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Last Updated</label>
+                  <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100">
+                    <span className="text-sm font-bold text-[#1d1d1f]">{toFullDateTime(selectedUser.updatedAt)}</span>
                   </div>
                 </div>
               </div>
+
+              <div className="bg-[#fafafa] border border-gray-100 rounded-2xl p-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a1a1aa] mb-3">Directory Summary</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#1d1d1f]">
+                    {selectedUser.status}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#1d1d1f]">
+                    {selectedUser.role}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#1d1d1f]">
+                    {selectedUser.avatarUrl ? 'Avatar set' : 'No avatar'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-10 py-8 bg-[#fafafa] border-t border-gray-100 flex gap-4">
+              <button
+                type="button"
+                onClick={() => setSelectedUser(null)}
+                className="flex-1 py-4 bg-white border border-gray-200 hover:bg-gray-50 text-gray-500 text-[12px] font-black uppercase tracking-widest rounded-2xl transition-all"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedUser(null);
+                  handleEdit(selectedUser);
+                }}
+                className="flex-1 py-4 bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-lg shadow-[#facc15]/20"
+              >
+                Edit User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAddingUser && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95 my-auto" style={{ scrollbarGutter: 'stable' }}>
+            <h2 className="text-[28px] font-black text-gray-900 tracking-tight mb-2">
+              {editingUser ? 'Edit' : 'Initialize'} <span className="text-[#facc15] italic">{editingUser ? 'Credentials' : 'User'}</span>
+            </h2>
+            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-10">
+              {editingUser ? 'MODIFY EXISTING PRODUCTION CREDENTIALS' : 'ADD ACCOUNT TO PRODUCTION MANIFEST'}
+            </p>
+
+            <form onSubmit={handleSave}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex justify-center md:col-span-2 mb-2">
+                  <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                    {formData.avatarPreview ? (
+                      <img src={formData.avatarPreview} alt="Profile" className="h-20 w-20 rounded-full object-cover shadow-sm ring-4 ring-gray-50" />
+                    ) : (
+                      <div className="h-20 w-20 rounded-full bg-gray-50 flex items-center justify-center border-2 border-dashed border-gray-300 group-hover:border-[#facc15] group-hover:bg-[#fef9ec] transition-colors">
+                        <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest group-hover:text-[#facc15]">Photo</span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-white text-[10px] font-black tracking-widest uppercase">Change</span>
+                    </div>
+                    <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                  </div>
+                </div>
+
+                {formData.avatarPreview && (
+                  <div className="flex justify-center md:col-span-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={handleClearAvatar}
+                      className="text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-700"
+                    >
+                      Remove Picture
+                    </button>
+                  </div>
+                )}
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
+                    placeholder="Enter full name..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
+                    placeholder="name@example.com"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">
+                    Password {editingUser && <span className="text-gray-300 normal-case tracking-normal font-normal">(Optional)</span>}
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                    required={!editingUser}
+                    minLength={editingUser ? undefined : 6}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:border-[#facc15] transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                <CustomSelect
+                  label="Access Role"
+                  className="md:col-span-2"
+                  value={formData.role}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, role: val as AccessRole }))}
+                  options={[
+                    { value: 'ADMINISTRATOR', label: 'Administrator' },
+                    { value: 'LEAD COORDINATOR', label: 'Lead Coordinator' },
+                    { value: 'PRODUCTION STAFF', label: 'Production Staff' }
+                  ]}
+                />
+              </div>
+
+              <div className="flex gap-4 mt-12">
+                <button
+                  type="button"
+                  onClick={() => !isSubmitting && setIsAddingUser(false)}
+                  className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={isSubmitting}
+                >
+                  Discard
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 hover:bg-[#dcae32] transition-colors flex items-center justify-center disabled:opacity-60"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+                  {editingUser ? 'Save Changes' : 'Initialize User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {deactivateUid && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl animate-in zoom-in-95">
+            <h2 className="text-[28px] font-black text-gray-900 tracking-tight mb-2 text-center">
+              Suspend <span className="text-[#facc15] italic">Account</span>
+            </h2>
+            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-8 text-center leading-relaxed">
+              This action will temporarily deactivate the user and revoke their platform access.
+            </p>
+
+            <div className="flex gap-4 mt-8">
+              <button
+                type="button"
+                onClick={() => setDeactivateUid(null)}
+                className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={deletingUid === deactivateUid}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeactivate}
+                className="flex-1 py-4 bg-red-500 text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-red-500/20 hover:bg-red-600 transition-colors flex items-center justify-center disabled:opacity-60"
+                disabled={deletingUid === deactivateUid}
+              >
+                {deletingUid === deactivateUid ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+                Suspend
+              </button>
             </div>
           </div>
         </div>

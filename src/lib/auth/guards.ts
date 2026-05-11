@@ -61,12 +61,6 @@ async function getUserFromMongo(decodedToken: DecodedIdToken) {
     }
 
     const user = await usersCollection.findOne({ $or: filters });
-    console.log("------- DEBUG MONGO LOOKUP --------");
-    console.log("Token UID:", decodedToken.uid);
-    console.log("Token Email:", decodedToken.email);
-    console.log("Filters used:", JSON.stringify({ $or: filters }));
-    console.log("User found in Mongo:", user);
-    console.log("-----------------------------------");
     
     return user;
   } catch (error) {

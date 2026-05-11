@@ -33,6 +33,7 @@ export default function InquiriesCoordinatorPage() {
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, openUp: false });
   const [searchQuery, setSearchQuery] = useState('');
   const [classificationFilter, setClassificationFilter] = useState('All Classifications');
+  const [statusFilter, setStatusFilter] = useState('All Statuses');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -121,6 +122,10 @@ export default function InquiriesCoordinatorPage() {
     return () => window.removeEventListener('scroll', handleScroll, true);
   }, [user]);
 
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, classificationFilter, searchQuery, statusFilter]);
+
   const handleToggleArchive = async (id: string, currentlyArchived: boolean) => {
     if (!user) return;
     try {
@@ -177,19 +182,32 @@ export default function InquiriesCoordinatorPage() {
     }
   };
 
-  const filteredInquiries = inquiries.filter(inq => {
-    const matchesArchive = activeTab === 'archived' ? inq.isArchived : !inq.isArchived;
-    const matchesClassification = classificationFilter === 'All Classifications' || inq.eventType === classificationFilter;
-    const matchesSearch = !searchQuery ||
-      inq.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inq.eventType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inq.needs.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesArchive && matchesClassification && matchesSearch;
-  });
+  const filteredInquiries = inquiries
+    .filter(inq => {
+      const matchesArchive = activeTab === 'archived' ? inq.isArchived : !inq.isArchived;
+      const matchesClassification = classificationFilter === 'All Classifications' || inq.eventType === classificationFilter;
+      const matchesStatus = statusFilter === 'All Statuses' || inq.status === statusFilter;
+      const matchesSearch = !searchQuery ||
+        inq.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        inq.eventType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        inq.needs.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesArchive && matchesClassification && matchesStatus && matchesSearch;
+    })
+    .sort((a, b) => {
+      const aIsNew = a.status === 'New';
+      const bIsNew = b.status === 'New';
+
+      if (aIsNew !== bIsNew) {
+        return aIsNew ? -1 : 1;
+      }
+
+      return new Date(b.submitted).getTime() - new Date(a.submitted).getTime();
+    });
 
   // Pagination Logic
   const totalPages = Math.ceil(filteredInquiries.length / itemsPerPage);
   const paginatedInquiries = filteredInquiries.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const emptyRowsCount = Math.max(0, itemsPerPage - paginatedInquiries.length);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -252,43 +270,70 @@ export default function InquiriesCoordinatorPage() {
           </button>
         </div>
 
-        {/* Filters — matches admin exactly */}
-        <div className="flex flex-col lg:flex-row gap-6 mb-10 items-end">
-          <div className="relative flex-1 w-full lg:w-auto">
-            <Search size={18} className="text-[#a1a1aa] absolute left-5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-14 pr-6 py-4 bg-white border-2 border-gray-100 shadow-sm rounded-2xl text-sm font-bold text-[#1d1d1f] placeholder-[#a1a1aa] focus:outline-none focus:border-[#eebf43] focus:ring-4 focus:ring-[#eebf43]/5 transition-all"
-              placeholder="Search clients, events, or specific needs..."
-            />
+        {/* Filter Panel */}
+        <div className="mb-10 rounded-[28px] border border-gray-100 bg-[#fcfcfc] p-4 sm:p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#a1a1aa]">Filter By Status</p>
+            <span className="rounded-lg bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#8f8f98] border border-gray-100">
+              {filteredInquiries.length} results
+            </span>
           </div>
 
-          <CustomSelect 
-            value={classificationFilter}
-            onChange={setClassificationFilter}
-            options={[
-              { value: 'All Classifications', label: 'All Classifications' },
-              { value: 'Weddings', label: 'Weddings' },
-              { value: 'Corporate Events', label: 'Corporate Events' },
-              { value: 'Debuts / Galas', label: 'Debuts / Galas' },
-            ]}
-            className="w-full lg:w-72"
-          />
+          <div className="mb-5 overflow-x-auto pb-1">
+            <div className="inline-flex min-w-full gap-2 rounded-2xl border border-gray-100 bg-white p-2">
+              {['All Statuses', ...Object.keys(STATUS_STYLES)].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`whitespace-nowrap rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] border transition-all ${
+                    statusFilter === status
+                      ? 'bg-[#fff8e1] text-[#1d1d1f] border-[#f4d98a] shadow-sm'
+                      : 'bg-white text-[#8f8f98] border-transparent hover:text-[#1d1d1f] hover:bg-[#fafafa]'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-5 items-end">
+            <div className="relative flex-1 w-full lg:w-auto">
+              <Search size={18} className="text-[#a1a1aa] absolute left-5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-14 pr-6 py-4 bg-white border-2 border-gray-100 shadow-sm rounded-2xl text-sm font-bold text-[#1d1d1f] placeholder-[#a1a1aa] focus:outline-none focus:border-[#eebf43] focus:ring-4 focus:ring-[#eebf43]/5 transition-all"
+                placeholder="Search clients, events, or specific needs..."
+              />
+            </div>
+
+            <CustomSelect
+              value={classificationFilter}
+              onChange={setClassificationFilter}
+              options={[
+                { value: 'All Classifications', label: 'All Classifications' },
+                { value: 'Weddings', label: 'Weddings' },
+                { value: 'Corporate Events', label: 'Corporate Events' },
+                { value: 'Debuts / Galas', label: 'Debuts / Galas' },
+              ]}
+              className="w-full lg:w-72"
+            />
+          </div>
         </div>
 
         {/* Data Grid — matches admin exactly */}
-        <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden">
-          <div className="overflow-x-auto overflow-y-visible">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
+        <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden flex flex-col h-[760px]">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full text-left border-collapse min-w-[1480px] table-fixed">
               <thead>
                 <tr className="bg-[#fafafa] border-b border-gray-100">
-                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Form Identity</th>
-                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Client Briefing</th>
-                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Receipt Date</th>
-                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Status</th>
-                  <th className="px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-right">Actions</th>
+                  <th className="w-[21%] px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Form Identity</th>
+                  <th className="w-[31%] px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa]">Client Briefing</th>
+                  <th className="w-[12%] px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Receipt Date</th>
+                  <th className="w-[14%] px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Status</th>
+                  <th className="w-[22%] px-8 py-6 text-[10px] uppercase font-black tracking-[0.2em] text-[#a1a1aa] text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -319,7 +364,7 @@ export default function InquiriesCoordinatorPage() {
                       </div>
                     </td>
                     <td className="px-8 py-6 align-middle">
-                      <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
+                      <div className="flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleReplyEmail(item); }}
                           disabled={item.isArchived}
@@ -361,6 +406,14 @@ export default function InquiriesCoordinatorPage() {
                       </div>
                     </td>
                   </tr>
+                )}
+
+                {!isLoading && filteredInquiries.length > 0 && emptyRowsCount > 0 && (
+                  [...Array(emptyRowsCount)].map((_, idx) => (
+                    <tr key={`empty-row-${idx}`} className="h-[78px]">
+                      <td className="px-8 py-6" colSpan={5} />
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>

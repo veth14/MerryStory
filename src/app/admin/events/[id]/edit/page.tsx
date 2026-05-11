@@ -67,6 +67,15 @@ const combineEventDateTime = (date: string, time: string) => {
   return `${date}T${time}:00`;
 };
 
+const isEventDatePassed = (value: string) => {
+  if (!value) return false;
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return parsedDate.getTime() < startOfToday.getTime();
+};
+
 export default function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuth();
@@ -181,6 +190,12 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
     if (!formData.time) {
       setError('Production time is required.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (formData.status === 'Completed' && !isEventDatePassed(formData.date)) {
+      setError('Production can only be marked Completed after the production date has passed.');
       setIsSubmitting(false);
       return;
     }
@@ -314,9 +329,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                         { value: 'Active', label: 'Active Production' },
                         { value: 'At Risk', label: 'At Risk' },
                         { value: 'On Hold', label: 'On Hold' },
-                        { value: 'Completed', label: 'Completed' },
+                        ...(isEventDatePassed(formData.date) || formData.status === 'Completed' ? [{ value: 'Completed', label: 'Completed' }] : []),
                       ]}
                     />
+                    {!isEventDatePassed(formData.date) && formData.status !== 'Completed' && (
+                      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-amber-500">
+                        Completed becomes available after the production date passes.
+                      </p>
+                    )}
                   </div>
               </div>
 
@@ -374,7 +394,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-1.5 h-5 bg-[#facc15] rounded-full"></div>
-            <h3 className="text-gray-900 text-[16px] font-black tracking-tight uppercase tracking-widest">Workspace Limits</h3>
+            <h3 className="text-gray-900 text-[16px] font-black uppercase tracking-widest">Workspace Limits</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             <div className="space-y-2">

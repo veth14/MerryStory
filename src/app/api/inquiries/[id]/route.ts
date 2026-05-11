@@ -9,7 +9,7 @@ type RouteContext = {
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    await requireRole(request, ["admin", "coordinator"]);
+    const user = await requireRole(request, ["admin", "coordinator"]);
 
     const { id } = await context.params;
 
@@ -19,9 +19,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const body = await request.json();
     const updateData: any = {};
+    let oldStatus: string | null = null;
+    let newStatus: string | null = null;
 
     if (body.status !== undefined) {
       updateData.status = body.status;
+      newStatus = body.status;
     }
 
     if (body.isArchived !== undefined) {
@@ -35,6 +38,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const db = await getMongoDb();
     const inquiriesCollection = db.collection("inquiries");
 
+    // Get old inquiry to capture previous status
+    const oldInquiry = await inquiriesCollection.findOne({ _id: new ObjectId(id) });
+    if (oldInquiry) {
+      oldStatus = oldInquiry.status;
+    }
+
     const result = await inquiriesCollection.updateOne(
       { _id: new ObjectId(id) },
       { $set: updateData }
@@ -42,6 +51,26 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: "Inquiry not found." }, { status: 404 });
+    }
+
+    // Log the inquiry status change to audit logs
+    if (newStatus && oldStatus && oldStatus !== newStatus) {
+      const auditLogsCollection = db.collection("audit_logs");
+      await auditLogsCollection.insertOne({
+        category: "INQUIRY_MANAGEMENT",
+        action: "STATUS_CHANGED",
+        message: `Inquiry status changed from ${oldStatus} to ${newStatus}`,
+        details: {
+          inquiryId: id,
+          oldStatus,
+          newStatus,
+          inquiryRef: oldInquiry?.clientName || "Unnamed Inquiry"
+        },
+        actorUid: user.uid,
+        actorEmail: user.email,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
     }
 
     return NextResponse.json({ success: true }, { status: 200 });

@@ -3,6 +3,15 @@ import { requireAuthenticatedUser, AuthGuardError } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
+const isEventDatePassed = (eventDate?: string | Date | null) => {
+  if (!eventDate) return false;
+  const parsedDate = new Date(eventDate);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return parsedDate.getTime() < startOfToday.getTime();
+};
+
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
@@ -24,6 +33,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     if (!event) {
       return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    }
+
+    if (event.archived !== true && event.status !== 'Completed' && isEventDatePassed(event.date)) {
+      await eventsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: 'Completed', updatedAt: new Date() } }
+      );
+      event.status = 'Completed';
     }
 
     // Fetch lead and team profiles to get avatars
@@ -121,7 +138,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const updateData = {
+    if (status === 'Completed' && !isEventDatePassed(date) && existingEvent.status !== 'Completed') {
+      return NextResponse.json(
+        { error: 'Production can only be marked Completed after the production date has passed.' },
+        { status: 400 }
+      );
+    }
+
+    const updateData: any = {
       title,
       type,
       date,
@@ -153,10 +177,58 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       updatedAt: new Date()
     };
 
+    // If status moved to Completed and not marked doNotPurge, mark as archived
+    const shouldArchive = status === 'Completed' && !existingEvent?.archived && !existingEvent?.doNotPurge;
+    if (shouldArchive) {
+      updateData.archived = true;
+      updateData.archivedAt = new Date();
+    }
+
     const result = await eventsCollection.updateOne(
       { _id: new ObjectId(id) },
       { $set: updateData }
     );
+
+    // Log event update
+    const { writeAuditLog } = await import("@/lib/audit");
+    const user = await requireAuthenticatedUser(request);
+    
+    let changes = [];
+    if (existingEvent.status !== status) changes.push(`status: ${existingEvent.status} → ${status}`);
+    if (existingEvent.health !== health) changes.push(`health: ${existingEvent.health}% → ${health}%`);
+    if (existingEvent.title !== title) changes.push(`title updated`);
+    
+    await writeAuditLog({
+      request,
+      category: "EVENT_MANAGEMENT",
+      action: "EVENT_UPDATED",
+      message: `Event updated: ${title}${changes.length ? ` (${changes.join(', ')})` : ''}`,
+      actor: {
+        uid: user.uid,
+        email: user.email,
+        role: user.role
+      },
+      target: {
+        type: "event",
+        uid: id
+      },
+      details: {
+        eventTitle: title,
+        changes: changes
+      }
+    });
+
+    if (shouldArchive) {
+      await writeAuditLog({
+        request,
+        category: "EVENT_MANAGEMENT",
+        action: "EVENT_ARCHIVED",
+        message: `Event archived due to status Completed: ${title}`,
+        actor: { uid: user.uid, email: user.email, role: user.role },
+        target: { type: 'event', uid: id },
+        details: { eventTitle: title }
+      });
+    }
 
     return NextResponse.json({ message: "Event updated successfully" }, { status: 200 });
   } catch (error) {
