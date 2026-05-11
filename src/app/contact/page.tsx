@@ -300,7 +300,7 @@ export default function ContactPage() {
                  </svg>
                  <div>
                     <h4 className="font-bold text-[13px] text-gray-900 leading-tight">Private Line</h4>
-                    <p className="text-gray-500 text-[13px] mt-1">+1 (212) 555 - 0198</p>
+                    <p className="text-gray-500 text-[13px] mt-1">+63 0917 150 6958</p>
                  </div>
               </div>
 
@@ -310,7 +310,7 @@ export default function ContactPage() {
                  </svg>
                  <div>
                     <h4 className="font-bold text-[13px] text-gray-900 leading-tight">Email Studio</h4>
-                    <p className="text-gray-500 text-[13px] mt-1">hello@merrystory.com</p>
+                    <p className="text-gray-500 text-[13px] mt-1">merrystoryeventservices@gmail.com</p>
                  </div>
               </div>
 
@@ -320,7 +320,7 @@ export default function ContactPage() {
                  </svg>
                  <div>
                     <h4 className="font-bold text-[13px] text-gray-900 leading-tight">Facebook</h4>
-                    <p className="text-gray-500 text-[13px] mt-1">facebook.com/merrystory</p>
+                    <p className="text-gray-500 text-[13px] mt-1">facebook.com/MerryStoryProductions</p>
                  </div>
               </div>
             </div>

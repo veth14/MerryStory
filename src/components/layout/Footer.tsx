@@ -14,10 +14,8 @@ export function Footer() {
             Your story, spectacularly told. Creating unforgettable event experiences through passion and meticulous attention to detail.
           </p>
           <div className="flex space-x-4">
-            <a href="#" className="text-gray-400 hover:text-brand-yellow transition-colors"><Facebook size={20} /></a>
-            <a href="#" className="text-gray-400 hover:text-brand-yellow transition-colors"><Instagram size={20} /></a>
-            <a href="#" className="text-gray-400 hover:text-brand-yellow transition-colors"><Twitter size={20} /></a>
-            <a href="#" className="text-gray-400 hover:text-brand-yellow transition-colors"><Linkedin size={20} /></a>
+            <a href="https://www.facebook.com/MerryStoryProductions" className="text-gray-400 hover:text-brand-yellow transition-colors"><Facebook size={20} /></a>
+            <a href="https://www.instagram.com/merrystory/" className="text-gray-400 hover:text-brand-yellow transition-colors"><Instagram size={20} /></a>
           </div>
         </div>
 

@@ -80,7 +80,7 @@ export function ContactSection() {
                   </div>
                   <div>
                      <h4 className="font-bold text-gray-900 mb-1">Office</h4>
-                     <p className="text-gray-600 text-sm">7901 E Broadway Planning, Austin TX</p>
+                     <p className="text-gray-600 text-sm">Sabon Station Extra Kaligayahan, North Olympus Subd, B2 L16 Beethoven, Novaliches, Quezon City, Metro Manila</p>
                   </div>
                </div>
 
@@ -90,7 +90,7 @@ export function ContactSection() {
                   </div>
                   <div>
                      <h4 className="font-bold text-gray-900 mb-1">Phone</h4>
-                     <p className="text-gray-600 text-sm">+1 (555) 987-6543</p>
+                     <p className="text-gray-600 text-sm">+63 0917 150 6958</p>
                   </div>
                </div>
 
@@ -100,7 +100,7 @@ export function ContactSection() {
                   </div>
                   <div>
                      <h4 className="font-bold text-gray-900 mb-1">Email</h4>
-                     <p className="text-gray-600 text-sm">concierge@merrystory.com</p>
+                     <p className="text-gray-600 text-sm">merrystoryeventservices@gmail.com</p>
                   </div>
                </div>
              </div>
