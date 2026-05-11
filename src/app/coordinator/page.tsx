@@ -104,7 +104,7 @@ export default function CoordinatorDashboard() {
   const completionPct = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
 
   return (
-    <div className="w-full text-[#1d1d1f] pb-20 relative bg-[#f8f8f8] min-h-screen -m-8 p-8">
+    <div className="w-full max-w-none text-[#1d1d1f] pb-20 relative bg-[#f8f8f8] min-h-screen">
       {/* ── Header ── */}
       <div className="mb-8 pt-2">
         <p className="text-[#a1a1aa] text-[10px] font-extrabold tracking-widest uppercase mb-2 flex items-center gap-2">

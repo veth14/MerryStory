@@ -53,7 +53,7 @@ const sortTasksByDue = (tasks: any[]) =>
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireRole(request, ["coordinator", "admin"]);
+    const user = await requireRole(request, ["coordinator", "staff", "admin"]);
     const { searchParams } = new URL(request.url);
     const requestedEventId = searchParams.get("eventId")?.trim() || "";
 

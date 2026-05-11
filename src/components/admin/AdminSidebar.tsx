@@ -52,19 +52,17 @@ export default function AdminSidebar() {
   return (
     <>
       {/* Mobile Toggle Button */}
-      <button
-        id="sidebar-toggle"
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="md:hidden fixed top-5 left-5 z-50 p-2.5 bg-white rounded-lg shadow-md border border-gray-100 hover:bg-gray-50 transition-colors"
-      >
-        <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          {mobileOpen ? (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          ) : (
+      {!mobileOpen && (
+        <button
+          id="sidebar-toggle"
+          onClick={() => setMobileOpen(true)}
+          className="md:hidden fixed top-5 left-5 z-50 p-2.5 bg-white rounded-lg shadow-md border border-gray-100 hover:bg-gray-50 transition-colors"
+        >
+          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          )}
-        </svg>
-      </button>
+          </svg>
+        </button>
+      )}
 
       {/* Mobile Backdrop */}
       {mobileOpen && (
@@ -79,7 +77,7 @@ export default function AdminSidebar() {
         id="mobile-sidebar"
         className={`w-[280px] bg-white border-r border-gray-100 h-screen flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-40 ${
           mobileOpen 
-            ? 'fixed left-0 top-0 pt-20' 
+            ? 'fixed left-0 top-0' 
             : 'fixed left-0 top-0 -translate-x-full'
         } md:relative md:translate-x-0 md:pt-0 md:z-10`}
       >

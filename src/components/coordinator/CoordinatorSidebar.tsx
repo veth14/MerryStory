@@ -7,6 +7,8 @@ import { LayoutDashboard, Calendar, ClipboardCheck, Users, LogOut } from 'lucide
 
 import { useAuth } from '@/components/auth/AuthProvider';
 
+import { useState, useEffect } from 'react';
+
 const navItems = [
   { name: 'Dashboard', href: '/coordinator', icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
   { name: 'Events', href: '/coordinator/events', icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
@@ -18,6 +20,29 @@ export default function CoordinatorSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { role } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    if (!mobileOpen) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      const sidebar = document.getElementById('mobile-sidebar-coordinator');
+      const toggleBtn = document.getElementById('sidebar-toggle-coordinator');
+      if (sidebar && !sidebar.contains(e.target as Node) && !toggleBtn?.contains(e.target as Node)) {
+        setMobileOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [mobileOpen]);
+
 
   const handleSignOut = async () => {
     try {
@@ -33,7 +58,37 @@ export default function CoordinatorSidebar() {
     : navItems;
 
   return (
-    <aside className="w-[280px] bg-white border-r border-gray-100 h-screen hidden md:flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 relative">
+    <>
+      {/* Mobile Toggle Button */}
+      {!mobileOpen && (
+        <button
+          id="sidebar-toggle-coordinator"
+          onClick={() => setMobileOpen(true)}
+          className="md:hidden fixed top-5 left-5 z-50 p-2.5 bg-white rounded-lg shadow-md border border-gray-100 hover:bg-gray-50 transition-colors"
+        >
+          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
+
+      {/* Mobile Backdrop */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-30 transition-opacity"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        id="mobile-sidebar-coordinator"
+        className={`w-[280px] bg-white border-r border-gray-100 h-screen flex flex-col flex-shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-40 ${
+          mobileOpen 
+            ? 'fixed left-0 top-0' 
+            : 'fixed left-0 top-0 -translate-x-full'
+        } md:relative md:translate-x-0 md:pt-0 md:z-10`}
+      >
       <div className="p-8 pb-6 text-left flex items-start justify-start flex-col">
         <h2 className="text-[20px] tracking-tight font-extrabold text-gray-900 leading-tight">PRODUCTION</h2>
         <p className="text-[10px] uppercase tracking-wider text-[#d4a017] mt-1 font-bold">
@@ -93,6 +148,7 @@ export default function CoordinatorSidebar() {
           © 2026 MERRY STORY INC.
         </p>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

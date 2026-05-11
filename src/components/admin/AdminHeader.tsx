@@ -71,7 +71,7 @@ export default function AdminHeader() {
   };
 
   return (
-    <header className="bg-[#fafafa]/80 backdrop-blur-md h-20 flex items-center justify-between px-5 sm:px-8 md:px-10 border-b border-gray-100/50 fixed top-0 left-0 right-0 z-40 md:sticky md:top-0">
+    <header className="bg-[#fafafa]/80 backdrop-blur-md h-20 flex items-center justify-between px-5 sm:px-8 md:px-10 border-b border-gray-100/50 sticky top-0 z-40">
       <div className="flex items-center w-full max-w-md relative">
         
        
