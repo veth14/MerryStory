@@ -10,3 +10,4 @@ Documents Done
 Client Side Email Working
 WORKING NA EVERYTHING
 DEPLOY
+CONTACTS
