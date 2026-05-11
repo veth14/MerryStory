@@ -234,6 +234,11 @@ export type WelcomeEmailOptions = {
   role: string;
 };
 
+export type PasswordResetEmailOptions = {
+  to: string;
+  resetLink: string;
+};
+
 export type ContractReviewEmailOptions = {
   to: string;
   contractName: string;
@@ -348,6 +353,113 @@ export async function sendWelcomeActivationEmail(options: WelcomeEmailOptions): 
     from: `"Merry Story Productions" <${fromAddress}>`,
     to,
     subject: "You're invited — Activate your Merry Story account",
+    html,
+  });
+}
+
+export async function sendPasswordResetEmail(options: PasswordResetEmailOptions): Promise<void> {
+  const { to, resetLink } = options;
+
+  const transporter = getEmailTransporter();
+  const fromAddress = process.env.EMAIL_USER!;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reset Your Merry Story Password</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8f7f4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f7f4;padding:48px 0;">
+    <tr>
+      <td align="center">
+        <table width="580" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-top:4px solid #D4AF37;box-shadow:0 10px 40px rgba(0,0,0,0.03);">
+          <tr>
+            <td style="padding:34px 48px 12px;text-align:center;">
+              <h1 style="font-family:'Georgia',serif;font-weight:400;font-size:26px;color:#111;letter-spacing:4px;margin:0;">MERRY STORY</h1>
+              <p style="font-size:10px;letter-spacing:5px;color:#888;text-transform:uppercase;margin:8px 0 0;">Productions</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 48px 40px;">
+              <p style="font-size:15px;line-height:1.8;margin:0 0 20px;color:#444;font-family:'Georgia',serif;font-style:italic;text-align:center;">
+                Reset your production portal access.
+              </p>
+
+              <p style="font-size:15px;line-height:1.8;margin:0 0 20px;color:#444;">
+                Hello,
+              </p>
+
+              <p style="font-size:15px;line-height:1.8;margin:0 0 20px;color:#444;">
+                We received a request to reset your Merry Story Productions portal password. Use the secure link below to choose a new password.
+              </p>
+
+              <div style="background-color:#FAFAFA;padding:25px 30px;border-left:3px solid #D4AF37;margin-bottom:35px;">
+                <div style="margin-bottom:10px;">
+                  <strong style="color:#111;font-size:11px;text-transform:uppercase;letter-spacing:1px;">REQUEST:</strong>
+                  <span style="color:#555;margin-left:5px;">Password reset</span>
+                </div>
+                <div>
+                  <strong style="color:#111;font-size:11px;text-transform:uppercase;letter-spacing:1px;">SECURE LINK:</strong>
+                  <span style="color:#555;margin-left:5px;font-size:14px;word-break:break-all;">Generated for your account</span>
+                </div>
+              </div>
+
+              <div style="text-align:center;margin:34px 0 38px;">
+                <p style="font-size:13px;line-height:1.8;margin-bottom:20px;color:#666;letter-spacing:1px;text-transform:uppercase;">
+                  Password Reset Link
+                </p>
+                <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                  <tr>
+                    <td style="background-color:#D4AF37;padding:0;">
+                      <a href="${resetLink}" style="display:inline-block;padding:14px 28px;background-color:#D4AF37;color:white;text-decoration:none;font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:bold;">
+                        Reset My Password
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <p style="margin:0 0 8px;font-size:13px;color:#71717a;line-height:1.7;">
+                If the button does not open correctly, use this full link in your browser:
+              </p>
+              <p style="margin:0 0 32px;font-size:12px;color:#a1a1aa;word-break:break-all;">
+                <a href="${resetLink}" style="color:#D4AF37;">${resetLink}</a>
+              </p>
+
+              <p style="margin:0 0 24px;font-size:12px;color:#a1a1aa;line-height:1.7;">
+                This link is intended for the account that requested it. If you did not request a password reset, you can ignore this email.
+              </p>
+
+              <hr style="border:none;border-top:1px solid #EAEAEA;margin:40px 0;" />
+
+              <div style="text-align:center;">
+                <p style="font-size:14px;line-height:1.5;color:#666;margin-bottom:5px;">
+                  Warmest regards,
+                </p>
+                <p style="color:#111;font-family:'Georgia',serif;font-size:18px;font-style:italic;margin-top:0;margin-bottom:5px;">
+                  The Merry Story Team
+                </p>
+                <a href="mailto:hello@merrystory.com" style="font-size:11px;color:#999;text-decoration:none;letter-spacing:1px;">
+                  HELLO@MERRYSTORY.COM
+                </a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+
+  await transporter.sendMail({
+    from: `"Merry Story Productions" <${fromAddress}>`,
+    to,
+    subject: "Reset your Merry Story password",
     html,
   });
 }
