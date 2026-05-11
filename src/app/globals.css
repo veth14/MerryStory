@@ -36,3 +36,15 @@ body {
   }
 }
 
+/* Hide mobile sidebar toggles when any modal is open */
+.modal-open #sidebar-toggle,
+.modal-open #sidebar-toggle-coordinator {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Slightly dim toggle if still visible due to stacking context issues */
+.modal-open button[id^="sidebar-toggle"] {
+  opacity: 0 !important;
+}
+

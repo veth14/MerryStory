@@ -27,31 +27,33 @@ export default function EventsAdminPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-8 mb-8 border-b border-gray-200/60 pl-2">
+      <div className="mb-8 border-b border-gray-200/60 overflow-x-auto scrollbar-hide">
+        <div className="flex min-w-max gap-8 pl-2 pr-2">
         <button
           onClick={() => setActiveTab('projects')}
-          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'projects' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
+          className={`shrink-0 pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'projects' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
         >
           Event Projects
         </button>
         <button
           onClick={() => setActiveTab('calendar')}
-          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'calendar' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
+          className={`shrink-0 pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'calendar' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
         >
           Calendar & Scheduling
         </button>
         <button
           onClick={() => setActiveTab('vendors')}
-          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'vendors' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
+          className={`shrink-0 pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'vendors' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
         >
           Vendor Management
         </button>
         <button
           onClick={() => setActiveTab('archived')}
-          className={`pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'archived' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
+          className={`shrink-0 pb-3 text-xs font-extrabold tracking-widest uppercase transition-colors flex items-center gap-2 ${activeTab === 'archived' ? 'border-b-2 border-[#eebf43] text-[#1d1d1f]' : 'text-[#a1a1aa] hover:text-[#71717a]'}`}
         >
           Archived
         </button>
+        </div>
       </div>
 
       {/* Tab Content */}

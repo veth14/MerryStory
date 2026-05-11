@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import Modal from './Modal';
 
 type Props = {
   isOpen: boolean;
@@ -20,6 +19,10 @@ export default function ConfirmModal({ isOpen, title, description, type = "info"
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   if (!isOpen) return null;
   if (!mounted) return null;
 
@@ -31,25 +34,17 @@ export default function ConfirmModal({ isOpen, title, description, type = "info"
   const [leadWord, ...restWords] = title.trim().split(/\s+/);
   const accentText = restWords.join(' ');
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-xl p-4">
-      <div className="relative bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl animate-in zoom-in-95">
-
-        <h2 className="text-[28px] font-black text-gray-900 tracking-tight mb-2 text-center">
-          {leadWord}{' '}
-          {accentText ? <span className="text-[#facc15] italic">{accentText}</span> : null}
-        </h2>
-        {description && (
-          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-8 text-center leading-relaxed">
-            {description}
-          </p>
-        )}
-
-        <div className="flex gap-4 mt-8">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="sm"
+      actions={(
+        <div className="flex gap-4">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors"
+            className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400"
           >
             Cancel
           </button>
@@ -61,8 +56,19 @@ export default function ConfirmModal({ isOpen, title, description, type = "info"
             {confirmText}
           </button>
         </div>
+      )}
+    >
+      <div className="relative">
+        <h2 className="text-[28px] font-black text-gray-900 tracking-tight mb-2 text-center">
+          {leadWord}{' '}
+          {accentText ? <span className="text-[#facc15] italic">{accentText}</span> : null}
+        </h2>
+        {description && (
+          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-8 text-center leading-relaxed">
+            {description}
+          </p>
+        )}
       </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }

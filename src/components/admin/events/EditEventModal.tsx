@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import Modal from '@/components/ui/Modal';
 import { X, Loader2, Save, User, Briefcase, MapPin, Tag, Mail, Phone, AlertTriangle } from 'lucide-react';
 import { CustomSelect, CustomDatePicker } from '@/components/ui/CustomInputs';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -144,8 +145,21 @@ export default function EditEventModal({ event, onClose, onUpdate }: EditEventMo
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[40px] shadow-2xl relative animate-in zoom-in-95 duration-300">
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="4xl"
+      actions={(
+        <div className="flex items-center justify-end gap-6">
+          <button type="button" onClick={onClose} className="text-[12px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors">Cancel</button>
+          <button type="submit" form="edit-event-form" disabled={isSubmitting} className="px-10 py-4 bg-[#111827] hover:bg-black text-[#facc15] text-[12px] font-black uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-black/20 transition-all disabled:opacity-70 flex items-center gap-3">
+            {isSubmitting ? <Loader2 className="animate-spin h-4 w-4" /> : <Save size={18} />}
+            Save Changes
+          </button>
+        </div>
+      )}
+    >
+      <div>
         {/* Header */}
         <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 px-10 py-8 border-b border-gray-100 flex items-center justify-between">
           <div>
@@ -157,7 +171,7 @@ export default function EditEventModal({ event, onClose, onUpdate }: EditEventMo
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-10 space-y-10">
+        <form id="edit-event-form" onSubmit={handleSubmit} className="p-10 space-y-10">
           {error && (
             <div className="bg-red-50 text-red-600 p-5 rounded-2xl text-[13px] font-extrabold border border-red-100 flex items-center gap-3">
               <AlertTriangle size={18} />
@@ -290,16 +304,8 @@ export default function EditEventModal({ event, onClose, onUpdate }: EditEventMo
             <textarea name="initialAlert" value={formData.initialAlert} onChange={handleChange} rows={3} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold text-gray-900 focus:bg-white focus:border-[#facc15] transition-all outline-none resize-none leading-relaxed"></textarea>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-6 pt-10 border-t border-gray-100">
-            <button type="button" onClick={onClose} className="text-[12px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors">Cancel</button>
-            <button type="submit" disabled={isSubmitting} className="px-10 py-4 bg-[#111827] hover:bg-black text-[#facc15] text-[12px] font-black uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-black/20 transition-all disabled:opacity-70 flex items-center gap-3">
-              {isSubmitting ? <Loader2 className="animate-spin h-4 w-4" /> : <Save size={18} />}
-              Save Changes
-            </button>
-          </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }

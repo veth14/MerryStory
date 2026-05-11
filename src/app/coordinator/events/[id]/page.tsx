@@ -26,6 +26,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
+import Modal from '@/components/ui/Modal';
 
 type EventRecord = {
   _id: string;
@@ -416,11 +417,33 @@ function GuestAddModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-      <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95">
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="md"
+      actions={(
+        <div className="flex gap-4">
+          <button
+            onClick={onClose}
+            className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !form.name.trim() || !validateEmail(form.email)}
+            className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 disabled:opacity-70 transition-all inline-flex items-center justify-center gap-2"
+          >
+            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            Add Guest
+          </button>
+        </div>
+      )}
+    >
+      <div>
         <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">Add New <span className="text-[#facc15] italic">Guest</span></h2>
         <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-8">Guest Registry Addition</p>
-        
+
         <div className="space-y-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Name <span className="text-rose-500">*</span></label>
@@ -458,25 +481,8 @@ function GuestAddModal({
             />
           </div>
         </div>
-
-        <div className="flex gap-4 mt-10">
-          <button 
-            onClick={onClose}
-            className="flex-1 py-4 text-[12px] font-black uppercase tracking-widest text-gray-400"
-          >
-            Cancel
-          </button>
-          <button 
-            onClick={handleSubmit}
-            disabled={submitting || !form.name.trim() || !validateEmail(form.email)}
-            className="flex-1 py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 disabled:opacity-70 transition-all inline-flex items-center justify-center gap-2"
-          >
-            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            Add Guest
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -490,11 +496,20 @@ function LinkSentModal({
   if (!guest) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-      <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95">
+    <Modal isOpen={true} onClose={onClose} maxWidth="md" actions={(
+      <div>
+        <button 
+          onClick={onClose}
+          className="w-full py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 transition-all hover:bg-[#dcae32]"
+        >
+          Done
+        </button>
+      </div>
+    )}>
+      <div>
         <h2 className="text-[24px] font-black text-gray-900 tracking-tight mb-2">Link <span className="text-[#facc15] italic">Sent</span></h2>
         <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-8">RSVP Invitation Delivery</p>
-        
+
         <div className="space-y-6 mb-10">
           <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
             <Check className="text-emerald-600 flex-shrink-0" size={20} />
@@ -517,15 +532,8 @@ function LinkSentModal({
             </div>
           </div>
         </div>
-
-        <button 
-          onClick={onClose}
-          className="w-full py-4 bg-[#facc15] text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-[#facc15]/20 transition-all hover:bg-[#dcae32]"
-        >
-          Done
-        </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -569,6 +577,26 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
   const [productionTasksPage, setProductionTasksPage] = useState(1);
   const [finishedTasksPage, setFinishedTasksPage] = useState(1);
   const { id } = use(params);
+
+  useEffect(() => {
+    const modalOpen = Boolean(
+      isGuestModalOpen ||
+      isLinkSentModalOpen ||
+      selectedGuest ||
+      guestPendingRemoval ||
+      confirmTask
+    );
+
+    if (modalOpen) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [isGuestModalOpen, isLinkSentModalOpen, selectedGuest, guestPendingRemoval, confirmTask]);
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -1229,26 +1257,28 @@ function CoordinatorEventDetailsContent({ params }: { params: Promise<{ id: stri
 
       <div className="w-full mt-10">
         <div className="w-full flex flex-col">
-          <div className="border-b-2 border-gray-100 flex flex-wrap mb-8">
+          <div className="mb-8 border-b-2 border-gray-100 overflow-x-auto scrollbar-hide">
+            <div className="flex min-w-max">
             <button
               onClick={() => handleTabChange('overview')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'overview' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`shrink-0 py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'overview' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <Calendar size={16} /> Schedule & Info
             </button>
             <button
               onClick={() => handleTabChange('tasks')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'tasks' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`shrink-0 py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'tasks' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <ClipboardCheck size={16} /> Assigned Tasks
               <span className={`ml-1.5 text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'tasks' ? 'bg-[#1d1d1f] text-white' : 'bg-gray-200 text-gray-500'}`}>{pendingEventTasks.length + pendingProductionTasks.length}</span>
             </button>
             <button
               onClick={() => handleTabChange('rsvp')}
-              className={`py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'rsvp' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
+              className={`shrink-0 py-5 px-6 text-sm font-black tracking-wide border-b-2 transition-colors flex items-center gap-2 -mb-0.5 ${activeTab === 'rsvp' ? 'border-[#1d1d1f] text-[#1d1d1f]' : 'border-transparent text-[#a1a1aa] hover:text-[#71717a]'}`}
             >
               <Users size={16} /> Guest List
             </button>
+            </div>
           </div>
 
           <div className={activeTab === 'overview' ? 'block' : 'hidden'}>

@@ -352,6 +352,20 @@ export default function UsersAdministrationPage() {
 
   const [deactivateUid, setDeactivateUid] = useState<string | null>(null);
 
+  // Ensure body.modal-open is set when any user modal is open so sidebars hide toggles
+  useEffect(() => {
+    const modalOpen = Boolean(selectedUser || isAddingUser || deactivateUid);
+    if (modalOpen) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [selectedUser, isAddingUser, deactivateUid]);
+
   const confirmDeactivate = (uid: string) => {
     setDeactivateUid(uid);
   };

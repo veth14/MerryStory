@@ -21,6 +21,7 @@ export default function CoordinatorSidebar() {
   const router = useRouter();
   const { role } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hideToggle, setHideToggle] = useState(false);
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -43,6 +44,21 @@ export default function CoordinatorSidebar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [mobileOpen]);
 
+  useEffect(() => {
+    const update = () => {
+      const bodyHasModalClass = document.body.classList.contains('modal-open');
+      const hasOverlay = Boolean(document.querySelector('div.fixed.inset-0'));
+      setHideToggle(bodyHasModalClass || hasOverlay);
+    };
+
+    update();
+
+    const observer = new MutationObserver(update);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, []);
+
 
   const handleSignOut = async () => {
     try {
@@ -60,7 +76,7 @@ export default function CoordinatorSidebar() {
   return (
     <>
       {/* Mobile Toggle Button */}
-      {!mobileOpen && (
+      {!mobileOpen && !hideToggle && (
         <button
           id="sidebar-toggle-coordinator"
           onClick={() => setMobileOpen(true)}

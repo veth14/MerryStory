@@ -324,7 +324,7 @@ export default function InquiriesCoordinatorPage() {
         </div>
 
         {/* Data Grid — matches admin exactly */}
-        <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden flex flex-col h-[760px]">
+        <div className="bg-white border border-gray-100 rounded-[32px] shadow-sm overflow-hidden flex flex-col h-[600px]">
           <div className="overflow-x-auto overflow-y-auto flex-1">
             <table className="w-full text-left border-collapse min-w-[1480px] table-fixed">
               <thead>
@@ -364,7 +364,7 @@ export default function InquiriesCoordinatorPage() {
                       </div>
                     </td>
                     <td className="px-8 py-6 align-middle">
-                      <div className="flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
+                      <div className="flex items-center justify-center gap-3 md:opacity-0 md:group-hover:opacity-100 opacity-100 transition-all transform md:translate-x-2 md:group-hover:translate-x-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleReplyEmail(item); }}
                           disabled={item.isArchived}
@@ -552,22 +552,22 @@ export default function InquiriesCoordinatorPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-10 space-y-8">
-               <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Recipient Portfolio</label>
-                    <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 flex items-center gap-3">
+            <div className="p-6 sm:p-10 space-y-6 sm:space-y-8">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 items-start">
+                  <div className="space-y-1 sm:space-y-2">
+                    <label className="block min-h-[2.5rem] text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1 leading-tight">Recipient Portfolio</label>
+                    <div className="bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 flex items-center gap-3 min-w-0">
                        <Mail size={16} className="text-[#a1a1aa]" />
-                       <span className="text-sm font-bold text-gray-400">{composeModal.to}</span>
+                       <span className="min-w-0 truncate text-[13px] sm:text-sm font-bold text-gray-400">{composeModal.to}</span>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1">Communication Subject</label>
+                  <div className="space-y-1 sm:space-y-2">
+                    <label className="block min-h-[2.5rem] text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] ml-1 leading-tight">Communication Subject</label>
                     <input 
                       type="text" 
                       value={composeModal.subject} 
                       onChange={(e) => setComposeModal(prev => ({ ...prev, subject: e.target.value }))}
-                      className="w-full px-5 py-4 bg-white border-2 border-gray-100 rounded-2xl text-sm font-bold text-[#1d1d1f] focus:border-[#eebf43] outline-none transition-all"
+                      className="w-full min-w-0 px-5 py-4 bg-white border-2 border-gray-100 rounded-2xl text-[13px] sm:text-sm font-bold text-[#1d1d1f] focus:border-[#eebf43] outline-none transition-all"
                     />
                   </div>
                </div>
@@ -588,21 +588,25 @@ export default function InquiriesCoordinatorPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-10 py-8 bg-[#fafafa] border-t border-gray-100 flex gap-4">
+            <div className="px-6 sm:px-10 py-6 sm:py-8 bg-[#fafafa] border-t border-gray-100 flex gap-3 sm:gap-4">
                <button 
                  onClick={() => setComposeModal(prev => ({ ...prev, isOpen: false }))} 
-                 className="px-10 py-5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-400 text-[12px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95"
+                 className="px-6 sm:px-10 py-4 sm:py-5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-400 text-[11px] sm:text-[12px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95"
                >
                   Discard
                </button>
                <button 
                  onClick={handleSendEmail}
                  disabled={composeModal.isSending}
-                 className="flex-1 py-4 bg-[#facc15] hover:bg-[#eab308] text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all flex items-center justify-center gap-4 active:scale-95 shadow-lg shadow-[#facc15]/20 disabled:opacity-50"
+                 className="min-w-0 flex-1 py-4 px-5 bg-[#facc15] hover:bg-[#eab308] text-white text-[11px] sm:text-[12px] font-black uppercase tracking-[0.14em] rounded-2xl transition-all flex items-center justify-center gap-3 active:scale-95 shadow-lg shadow-[#facc15]/20 disabled:opacity-50"
                >
-                  {composeModal.isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                  {composeModal.isSending ? 'Transmitting Data...' : 'Dispatch Communication'}
-                  {!composeModal.isSending && <ArrowRight size={14} />}
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20">
+                    {composeModal.isSending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                  </span>
+                  <span className="min-w-0 flex-1 text-center leading-tight">
+                    {composeModal.isSending ? 'Transmitting Data...' : 'Dispatch Communication'}
+                  </span>
+                  {!composeModal.isSending && <ArrowRight size={14} className="hidden sm:block opacity-90 shrink-0" />}
                </button>
             </div>
           </div>
