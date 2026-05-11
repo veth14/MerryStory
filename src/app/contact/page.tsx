@@ -239,13 +239,13 @@ export default function ContactPage() {
                    <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
                  </svg>
                  <p className="text-gray-600 italic font-serif text-sm leading-relaxed relative z-10 w-[90%]">
-                   "Merry Story didn't just film our gala; they translated the very soul of the evening into a visual masterpiece. It is pure art."
+                   "Merry Story didn't just film our wedding; they translated the very soul of the evening into a visual masterpiece. It is pure art."
                  </p>
                  <div className="flex items-center gap-3 mt-6">
-                    <div className="w-8 h-8 rounded-full bg-brand-yellow flex-shrink-0" />
+                    <img src="https://scontent.fmnl17-7.fna.fbcdn.net/v/t1.6435-1/119664976_10222628683013297_8841573966397349243_n.jpg?stp=dst-jpg_s100x100_tt6&_nc_cat=108&ccb=1-7&_nc_sid=e99d92&_nc_eui2=AeHPnYmggJt8FfwM8ZPxatSPBV-HrnoiIzYFX4eueiIjNiAMlEeGcaop0Zarpog7tLpNU6DGGPyo8_SteDHNa6Gs&_nc_ohc=pL5xizOh2hIQ7kNvwG7iKfl&_nc_oc=AdpKRkBoGUyRSAf8W-2W9qPMlvlomfQmX_IRQZHdonIPYgkicEhtUSWagmjfmCYin5Q&_nc_zt=24&_nc_ht=scontent.fmnl17-7.fna&_nc_gid=V0ut7Nr9fEhdLb2ze5z1aA&_nc_ss=7b2a8&oh=00_Af53Vr396QMQ7ZCyprkczHEQ22FwaBgArWy5GbKvCtqiVQ&oe=6A2961D9" alt="Jillian Chua" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                     <div>
-                       <h5 className="text-[10px] font-bold uppercase tracking-[0.1em] text-gray-900 leading-tight">HELENA THORNE</h5>
-                       <span className="text-[8px] font-bold uppercase tracking-[0.05em] text-gray-500">GLOBAL ARTS FOUNDATION</span>
+                       <h5 className="text-[10px] font-bold uppercase tracking-[0.1em] text-gray-900 leading-tight">JILLIAN CHUA</h5>
+                       <span className="text-[8px] font-bold uppercase tracking-[0.05em] text-gray-500">BRIDE </span>
                     </div>
                  </div>
               </div>
