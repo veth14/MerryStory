@@ -6,6 +6,7 @@ Contract Pipeline - In progress
 Event Day - Done
 Logic Done
 Finance Update
-Documents Done
+Documents Done  
 Client Side Email Working
 WORKING NA EVERYTHING
+DEPLOY
