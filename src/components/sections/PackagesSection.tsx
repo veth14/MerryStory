@@ -9,14 +9,14 @@ export function PackagesSection() {
     {
       title: "Weddings",
       link: "/collections/weddings",
-      price: "700,000",
+      price: "150,000",
       description: "Atmospheric curation for the day two souls become an eternal legacy.",
       image: "https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/wedding.jpg",
     },
     {
       title: "Corporate",
       link: "/collections/corporate",
-      price: "1,000,000",
+      price: "50,000",
       description: "Elevating corporate identity through high-impact production.",
       image: "https://ppkvnopzbzkyefivffvc.supabase.co/storage/v1/object/public/images/packagesSection/corporate.jpg",
     },
