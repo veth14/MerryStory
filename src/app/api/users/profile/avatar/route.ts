@@ -3,6 +3,7 @@ import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { validateUpload } from "@/lib/upload-validation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,15 +16,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
     }
 
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-    
-    if (!fileExt || !allowedExts.includes(fileExt)) {
-      return NextResponse.json({ error: "Invalid file type. Only standard images are allowed." }, { status: 400 });
+    let validated;
+
+    try {
+      validated = validateUpload(file, {
+        allowedExtensions: ["jpg", "jpeg", "png", "webp", "gif"],
+        allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+        maxBytes: 2 * 1024 * 1024,
+      });
+    } catch (validationError) {
+      return NextResponse.json(
+        { error: validationError instanceof Error ? validationError.message : "Invalid file." },
+        { status: 400 }
+      );
     }
 
     const timeStamp = Date.now();
-    const fileName = `profile_${timeStamp}.${fileExt}`;
+    const fileName = `profile_${timeStamp}.${validated.extension}`;
     // Folder structure: avatars/uid/filename
     const folderPath = `avatars/${user.uid}`;
     const storagePath = `${folderPath}/${fileName}`;
@@ -61,7 +70,7 @@ export async function POST(request: NextRequest) {
       .storage
       .from("user")
       .upload(storagePath, buffer, {
-        contentType: file.type,
+        contentType: validated.mimeType,
         upsert: true
       });
 

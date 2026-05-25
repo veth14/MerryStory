@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuthenticatedUser, AuthGuardError } from '@/lib/auth/guards';
+import { requireRole, AuthGuardError } from '@/lib/auth/guards';
 import { getMongoDb } from '@/lib/mongodb';
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ['admin']);
 
     const db = await getMongoDb();
     const contracts = await db.collection('contracts').find({}).sort({ lastUpdated: -1, createdAt: -1 }).toArray();

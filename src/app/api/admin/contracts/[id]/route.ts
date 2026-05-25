@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthGuardError, requireAuthenticatedUser } from '@/lib/auth/guards';
+import { AuthGuardError, requireRole } from '@/lib/auth/guards';
 import { getMongoDb } from '@/lib/mongodb';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { randomUUID } from 'crypto';
 import { ObjectId } from 'mongodb';
+import { validateUpload } from '@/lib/upload-validation';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -19,13 +20,17 @@ function formatBytes(bytes: number) {
 
 async function uploadContractFile(file: File, eventId: string) {
   const supabase = getSupabaseServerClient();
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'bin';
+  const { extension, mimeType } = validateUpload(file, {
+    allowedExtensions: ['pdf'],
+    allowedMimeTypes: ['application/pdf'],
+    maxBytes: 10 * 1024 * 1024,
+  });
   const sanitizedBaseName = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_');
   const storagePath = `contracts/${eventId || 'unassigned'}/${Date.now()}_${sanitizedBaseName}.${extension}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error: uploadError } = await supabase.storage.from('user').upload(storagePath, buffer, {
-    contentType: file.type || 'application/octet-stream',
+    contentType: mimeType,
     upsert: true,
   });
 
@@ -48,7 +53,7 @@ async function uploadContractFile(file: File, eventId: string) {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ['admin']);
     const { id } = await context.params;
 
     if (!ObjectId.isValid(id)) {
@@ -77,7 +82,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireRole(request, ['admin']);
     const { id } = await context.params;
 
     if (!ObjectId.isValid(id)) {

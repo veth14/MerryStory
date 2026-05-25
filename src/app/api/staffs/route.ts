@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthenticatedUser, AuthGuardError } from "@/lib/auth/guards";
+import { requireRole, AuthGuardError } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin", "coordinator"]);
     const db = await getMongoDb();
     const staffsCollection = db.collection("staffs");
 

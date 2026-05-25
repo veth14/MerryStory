@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
+import { AuthGuardError, requireRole } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 import { writeAuditLog } from "@/lib/audit";
@@ -35,7 +35,7 @@ const validateDueDateTime = (dueDate: unknown, dueTime: unknown) => {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin", "coordinator"]);
 
     const { searchParams } = new URL(request.url);
     const eventId = searchParams.get("eventId");
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireRole(request, ["admin", "coordinator"]);
     const body = await request.json();
 
     const eventId = typeof body?.eventId === "string" ? body.eventId.trim() : "";
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const user = await requireAuthenticatedUser(request); // ← FIXED: capture user
+    const user = await requireRole(request, ["admin", "coordinator"]);
     const body = await request.json();
 
     const taskObjectId = typeof body?.taskObjectId === "string" ? body.taskObjectId.trim() : "";

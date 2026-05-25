@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
+import { AuthGuardError, requireRole } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { validateUpload } from "@/lib/upload-validation";
 
 const isEventDatePassed = (eventDate?: string | Date | null) => {
   if (!eventDate) return false;
@@ -15,7 +16,7 @@ const isEventDatePassed = (eventDate?: string | Date | null) => {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireRole(request, ["admin", "coordinator"]);
     
     const formData = await request.formData();
     
@@ -44,9 +45,13 @@ export async function POST(request: NextRequest) {
     let coverImageUrl = null;
     
     if (file) {
-      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const { extension, mimeType } = validateUpload(file, {
+        allowedExtensions: ["jpg", "jpeg", "png", "webp"],
+        allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+        maxBytes: 5 * 1024 * 1024,
+      });
       const timeStamp = Date.now();
-      const fileName = `cover_${timeStamp}.${fileExt}`;
+      const fileName = `cover_${timeStamp}.${extension}`;
       const storagePath = `events/${fileName}`;
       
       const supabase = getSupabaseServerClient();
@@ -56,7 +61,7 @@ export async function POST(request: NextRequest) {
         .storage
         .from("user")
         .upload(storagePath, buffer, {
-          contentType: file.type || "image/jpeg",
+          contentType: mimeType,
           upsert: true
         });
         
@@ -129,7 +134,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin", "coordinator"]);
     const db = await getMongoDb();
     const eventsCollection = db.collection("events");
 

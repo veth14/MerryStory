@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 type PasswordResetRequestBody = {
   email?: string;
@@ -8,6 +9,16 @@ type PasswordResetRequestBody = {
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimit = checkRateLimit(request, { keyPrefix: "password-reset", limit: 5, windowMs: 60_000 });
+
+    if (!rateLimit.allowed) {
+      const retryAfterSeconds = Math.max(Math.ceil((rateLimit.resetAt - Date.now()) / 1000), 1);
+      return new NextResponse(JSON.stringify({ error: "Too many requests. Please try again later." }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": String(retryAfterSeconds) },
+      });
+    }
+
     const body = (await request.json().catch(() => ({}))) as PasswordResetRequestBody;
     const email = body.email?.trim().toLowerCase();
 
