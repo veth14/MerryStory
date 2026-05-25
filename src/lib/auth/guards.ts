@@ -71,7 +71,7 @@ async function getUserFromMongo(decodedToken: DecodedIdToken) {
 
 export async function requireAuthenticatedUser(request: Request): Promise<AuthenticatedUser> {
   const bearerToken = extractBearerToken(request);
-  const decodedToken = await getFirebaseAdminAuth().verifyIdToken(bearerToken);
+  const decodedToken = await getFirebaseAdminAuth().verifyIdToken(bearerToken, true);
 
   const mongoUser = await getUserFromMongo(decodedToken);
   const claimRole = normalizeRole(decodedToken.role);

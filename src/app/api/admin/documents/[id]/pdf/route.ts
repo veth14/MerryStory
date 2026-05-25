@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthGuardError, requireAuthenticatedUser } from '@/lib/auth/guards';
+import { AuthGuardError, requireRole } from '@/lib/auth/guards';
 import { getMongoDb } from '@/lib/mongodb';
 import { buildSimplePdf } from '@/lib/simplePdf';
 import { ObjectId } from 'mongodb';
@@ -24,7 +24,7 @@ function formatReadableDate(value: unknown) {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ['admin']);
     const { id } = await context.params;
 
     if (!ObjectId.isValid(id)) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthenticatedUser, AuthGuardError } from "@/lib/auth/guards";
+import { requireRole, AuthGuardError } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
@@ -9,7 +9,7 @@ type RouteContext = {
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin", "coordinator"]);
     const { id } = await context.params;
 
     if (!id || !ObjectId.isValid(id)) {
@@ -57,7 +57,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin", "coordinator"]);
     const { id } = await context.params;
 
     if (!id || !ObjectId.isValid(id)) {

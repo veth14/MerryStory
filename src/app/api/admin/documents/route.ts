@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuthenticatedUser, AuthGuardError } from '@/lib/auth/guards';
+import { requireRole, AuthGuardError } from '@/lib/auth/guards';
 import { getMongoDb } from '@/lib/mongodb';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { ObjectId } from 'mongodb';
+import { validateUpload } from '@/lib/upload-validation';
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -14,13 +15,17 @@ function formatBytes(bytes: number) {
 
 async function uploadDocumentFile(file: File, eventId: string, category: string) {
   const supabase = getSupabaseServerClient();
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'bin';
+  const { extension, mimeType } = validateUpload(file, {
+    allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+    allowedMimeTypes: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'],
+    maxBytes: 10 * 1024 * 1024,
+  });
   const sanitizedBaseName = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_');
   const storagePath = `documents/${category || 'uploads'}/${eventId || 'unassigned'}/${Date.now()}_${sanitizedBaseName}.${extension}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error: uploadError } = await supabase.storage.from('user').upload(storagePath, buffer, {
-    contentType: file.type || 'application/octet-stream',
+    contentType: mimeType,
     upsert: true,
   });
 
@@ -43,7 +48,7 @@ async function uploadDocumentFile(file: File, eventId: string, category: string)
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ['admin']);
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category')?.trim();
@@ -84,7 +89,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireRole(request, ['admin']);
     const contentType = request.headers.get('content-type') || '';
     const isFormData = contentType.includes('multipart/form-data');
     const body = isFormData ? null : await request.json();

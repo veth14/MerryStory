@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthenticatedUser, AuthGuardError } from "@/lib/auth/guards";
+import { requireRole, AuthGuardError } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin"]);
     
     const { searchParams } = new URL(request.url);
     const eventId = searchParams.get('eventId');
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin"]);
     
     const body = await request.json();
     const { eventId, vendorName, serviceCategory, email, phone, contractAmount, contractDate, status } = body;
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin"]);
     
     const body = await request.json();
     const { vendorId, eventId, status } = body;
@@ -145,7 +145,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin"]);
     
     const body = await request.json();
     const { vendorId, eventId } = body;

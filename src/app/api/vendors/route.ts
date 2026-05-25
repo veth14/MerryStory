@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthenticatedUser, AuthGuardError } from "@/lib/auth/guards";
+import { requireRole, AuthGuardError } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuthenticatedUser(request);
+    await requireRole(request, ["admin", "coordinator"]);
     const db = await getMongoDb();
     const vendorsCollection = db.collection("vendors");
     
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireRole(request, ["admin", "coordinator"]);
     const body = await request.json();
     
     const { name, category, contact, email, phone, status } = body;

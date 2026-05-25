@@ -1,9 +1,21 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import QRCode from 'qrcode';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { escapeHtmlOptional } from '@/lib/sanitize';
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = checkRateLimit(request, { keyPrefix: 'rsvp-confirm', limit: 5, windowMs: 60_000 });
+
+    if (!rateLimit.allowed) {
+      const retryAfterSeconds = Math.max(Math.ceil((rateLimit.resetAt - Date.now()) / 1000), 1);
+      return new NextResponse(JSON.stringify({ error: 'Too many requests. Please try again later.' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': String(retryAfterSeconds) },
+      });
+    }
+
     const { eventName, guestName, email, attendees, dietary, isAttending, code } = await request.json();
 
     if (!email) {
@@ -32,8 +44,12 @@ export async function POST(request: Request) {
       });
 
       // Generate a dynamic Google Calendar Add Link
-      const eventTitle = encodeURIComponent(`RSVP: ${eventName}`);
-      const eventDetails = encodeURIComponent(`You are successfully registered for ${eventName}!\nGuest Name: ${guestName}\nTotal Attendees: ${attendees}\nReference Code: ${code}`);
+      const eventNameText = String(eventName || '').replace(/[\r\n]+/g, ' ').trim();
+      const guestNameText = String(guestName || '').replace(/[\r\n]+/g, ' ').trim();
+      const attendeesText = String(attendees || '').replace(/[\r\n]+/g, ' ').trim();
+      const codeText = String(code || '').replace(/[\r\n]+/g, ' ').trim();
+      const eventTitle = encodeURIComponent(`RSVP: ${eventNameText}`);
+      const eventDetails = encodeURIComponent(`You are successfully registered for ${eventNameText}!\nGuest Name: ${guestNameText}\nTotal Attendees: ${attendeesText}\nReference Code: ${codeText}`);
       const eventLocation = encodeURIComponent('Merry Story Productions Venue');
       // Using a placeholder date (December 25, 2024, 7 PM - 11 PM UTC)
       const eventDates = '20241225T190000Z/20241225T230000Z';
@@ -43,7 +59,7 @@ export async function POST(request: Request) {
       const mailOptions = {
         from: '"Merry Story Productions" <merrystoryeventservices@gmail.com>', // sender address
         to: email, // list of receivers
-        subject: `Your Ticket: ${eventName} RSVP Confirmed!`, 
+        subject: `Your Ticket: ${eventNameText} RSVP Confirmed!`, 
         html: `
         <div style="background-color: #FDFDFD; padding: 60px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333;">
           <div style="max-width: 600px; margin: 0 auto; background-color: #FFFFFF; padding: 50px 40px; border-top: 4px solid #D4AF37; box-shadow: 0 10px 40px rgba(0,0,0,0.03);">
@@ -54,30 +70,30 @@ export async function POST(request: Request) {
             </div>
 
             <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444; font-family: 'Georgia', serif; font-style: italic; text-align: center;">
-              You are going to ${eventName}!
+              You are going to ${escapeHtmlOptional(eventNameText)}!
             </p>
 
             <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
-              Dear ${guestName},
+              Dear ${escapeHtmlOptional(guestNameText)},
             </p>
             
             <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
-              Thank you for RSVPing. We have safely recorded your confirmation for <strong>${attendees} attendee(s)</strong>. We are truly delighted by the prospect of celebrating with you.
+              Thank you for RSVPing. We have safely recorded your confirmation for <strong>${escapeHtmlOptional(attendeesText)} attendee(s)</strong>. We are truly delighted by the prospect of celebrating with you.
             </p>
 
             <div style="background-color: #FAFAFA; padding: 25px 30px; border-left: 3px solid #D4AF37; margin-bottom: 35px;">
               <div style="margin-bottom: 8px;">
                 <strong style="color: #111; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">REFERENCE CODE:</strong> 
-                <span style="color: #555; margin-left: 5px;">${code}</span>
+                <span style="color: #555; margin-left: 5px;">${escapeHtmlOptional(codeText)}</span>
               </div>
               <div style="margin-bottom: 8px;">
                 <strong style="color: #111; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">TOTAL ATTENDEES:</strong> 
-                <span style="color: #555; margin-left: 5px;">${attendees}</span>
+                <span style="color: #555; margin-left: 5px;">${escapeHtmlOptional(attendeesText)}</span>
               </div>
               ${dietary ? `
               <div style="margin-bottom: 8px;">
                 <strong style="color: #111; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">DIETARY NOTES:</strong> 
-                <span style="color: #555; margin-left: 5px;">${dietary}</span>
+                <span style="color: #555; margin-left: 5px;">${escapeHtmlOptional(String(dietary))}</span>
               </div>
               ` : ''}
             </div>
@@ -91,7 +107,7 @@ export async function POST(request: Request) {
             </div>
 
             <div style="text-align: center; margin-bottom: 40px;">
-              <a href="${googleCalendarUrl}" target="_blank" style="display: inline-block; padding: 14px 28px; background-color: #D4AF37; color: white; text-decoration: none; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; transition: opacity 0.3s;">
+              <a href="${escapeHtmlOptional(googleCalendarUrl)}" target="_blank" style="display: inline-block; padding: 14px 28px; background-color: #D4AF37; color: white; text-decoration: none; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; transition: opacity 0.3s;">
                 Add to Google Calendar
               </a>
             </div>

@@ -6,6 +6,7 @@ import {
   getRsvpCollection,
   type RsvpRecord,
 } from './rsvpCollection';
+import { escapeHtmlOptional } from '@/lib/sanitize';
 
 export type HydratedRsvpRecord = RsvpRecord & { _id: ObjectId };
 
@@ -43,10 +44,13 @@ export const buildEventSlug = (value?: string) =>
     .replace(/^-+|-+$/g, '') || 'event';
 
 export const buildAbsoluteUrl = (request: Request, pathname: string) => {
-  const url = new URL(request.url);
-  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || url.host;
-  const protocol = request.headers.get('x-forwarded-proto') || url.protocol.replace(':', '');
-  return `${protocol}://${host}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
+  const baseUrl = process.env.PUBLIC_BASE_URL;
+
+  if (!baseUrl) {
+    throw new Error('Missing PUBLIC_BASE_URL environment variable.');
+  }
+
+  return new URL(pathname, baseUrl).toString();
 };
 
 export const resolveEventIdentity = async (db: Db, eventId: ObjectId): Promise<EventIdentity> => {
@@ -116,11 +120,11 @@ const buildInviteEmailHtml = ({
       </div>
 
       <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444; font-family: 'Georgia', serif; font-style: italic; text-align: center;">
-        You are invited to ${eventName}.
+        You are invited to ${escapeHtmlOptional(eventName)}.
       </p>
 
       <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
-        Dear ${guestName},
+        Dear ${escapeHtmlOptional(guestName)},
       </p>
 
       <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
@@ -130,7 +134,7 @@ const buildInviteEmailHtml = ({
       <div style="background-color: #FAFAFA; padding: 25px 30px; border-left: 3px solid #D4AF37; margin-bottom: 35px;">
         <div>
           <strong style="color: #111; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">REFERENCE CODE:</strong>
-          <span style="color: #555; margin-left: 5px; font-size: 18px; font-weight: 700; letter-spacing: 0.12em;">${code}</span>
+          <span style="color: #555; margin-left: 5px; font-size: 18px; font-weight: 700; letter-spacing: 0.12em;">${escapeHtmlOptional(code)}</span>
         </div>
       </div>
 
@@ -138,7 +142,7 @@ const buildInviteEmailHtml = ({
         <p style="font-size: 13px; line-height: 1.8; margin-bottom: 20px; color: #666; letter-spacing: 1px; text-transform: uppercase;">
           Secure RSVP Link
         </p>
-        <a href="${rsvpLink}" style="display: inline-block; padding: 14px 28px; background-color: #D4AF37; color: white; text-decoration: none; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold;">
+        <a href="${escapeHtmlOptional(rsvpLink)}" style="display: inline-block; padding: 14px 28px; background-color: #D4AF37; color: white; text-decoration: none; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold;">
           Continue To RSVP
         </a>
       </div>
@@ -147,7 +151,7 @@ const buildInviteEmailHtml = ({
         You will be asked to enter the access code before confirming your attendance.
       </p>
       <p style="margin:0 0 32px;font-size:12px;color:#a1a1aa;word-break:break-all;">
-        <a href="${rsvpLink}" style="color:#D4AF37;">${rsvpLink}</a>
+        <a href="${escapeHtmlOptional(rsvpLink)}" style="color:#D4AF37;">${escapeHtmlOptional(rsvpLink)}</a>
       </p>
 
       <hr style="border: none; border-top: 1px solid #EAEAEA; margin: 40px 0;" />
@@ -177,7 +181,10 @@ const buildTicketEmailHtml = ({
   code: string;
   notes: string;
   googleCalendarUrl: string;
-}) => `
+}) => {
+  const safeNotes = escapeHtmlOptional(notes).replace(/\r?\n/g, '<br />');
+
+  return `
   <div style="background-color: #FDFDFD; padding: 60px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; background-color: #FFFFFF; padding: 50px 40px; border-top: 4px solid #D4AF37; box-shadow: 0 10px 40px rgba(0,0,0,0.03);">
       <div style="text-align: center; margin-bottom: 40px;">
@@ -186,11 +193,11 @@ const buildTicketEmailHtml = ({
       </div>
 
       <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444; font-family: 'Georgia', serif; font-style: italic; text-align: center;">
-        You are going to ${eventName}!
+        You are going to ${escapeHtmlOptional(eventName)}!
       </p>
 
       <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
-        Dear ${guestName},
+        Dear ${escapeHtmlOptional(guestName)},
       </p>
 
       <p style="font-size: 15px; line-height: 1.8; margin-bottom: 20px; color: #444;">
@@ -200,13 +207,13 @@ const buildTicketEmailHtml = ({
       <div style="background-color: #FAFAFA; padding: 25px 30px; border-left: 3px solid #D4AF37; margin-bottom: 35px;">
         <div style="margin-bottom: 8px;">
           <strong style="color: #111; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">REFERENCE CODE:</strong>
-          <span style="color: #555; margin-left: 5px;">${code}</span>
+          <span style="color: #555; margin-left: 5px;">${escapeHtmlOptional(code)}</span>
         </div>
         ${
           notes
             ? `<div style="margin-bottom: 8px;">
           <strong style="color: #111; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">NOTES:</strong>
-          <span style="color: #555; margin-left: 5px;">${notes}</span>
+          <span style="color: #555; margin-left: 5px;">${safeNotes}</span>
         </div>`
             : ''
         }
@@ -221,7 +228,7 @@ const buildTicketEmailHtml = ({
       </div>
 
       <div style="text-align: center; margin-bottom: 40px;">
-        <a href="${googleCalendarUrl}" target="_blank" style="display: inline-block; padding: 14px 28px; background-color: #D4AF37; color: white; text-decoration: none; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold;">
+        <a href="${escapeHtmlOptional(googleCalendarUrl)}" target="_blank" style="display: inline-block; padding: 14px 28px; background-color: #D4AF37; color: white; text-decoration: none; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold;">
           Add to Google Calendar
         </a>
       </div>
@@ -240,6 +247,7 @@ const buildTicketEmailHtml = ({
     </div>
   </div>
 `;
+};
 
 export const sendRsvpInviteEmail = async ({
   to,

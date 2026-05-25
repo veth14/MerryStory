@@ -1,13 +1,13 @@
 import { createHmac } from 'crypto';
 
 function getAdminAccessSecret() {
-  return process.env.CONTRACT_ADMIN_ACCESS_SECRET || process.env.EMAIL_PASS || '';
+  return process.env.CONTRACT_ADMIN_ACCESS_SECRET || '';
 }
 
 export function createContractAdminAccessToken(reviewToken: string) {
   const secret = getAdminAccessSecret();
   if (!secret) {
-    throw new Error('Missing CONTRACT_ADMIN_ACCESS_SECRET or EMAIL_PASS environment variable.');
+    throw new Error('Missing CONTRACT_ADMIN_ACCESS_SECRET environment variable.');
   }
 
   return createHmac('sha256', secret).update(reviewToken).digest('hex');
