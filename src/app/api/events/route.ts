@@ -4,6 +4,7 @@ import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { validateUpload } from "@/lib/upload-validation";
+import { createSignedStorageUrl, resolveSignedUrl } from "@/lib/storage";
 
 const isEventDatePassed = (eventDate?: string | Date | null) => {
   if (!eventDate) return false;
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title, Lead, and Cover Image are required." }, { status: 400 });
     }
     
-    let coverImageUrl = null;
+    let coverImagePath: string | null = null;
     
     if (file) {
       const { extension, mimeType } = validateUpload(file, {
@@ -70,9 +71,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Failed to upload cover image." }, { status: 500 });
       }
       
-      const { data: publicUrlData } = supabase.storage.from("user").getPublicUrl(storagePath);
-      coverImageUrl = publicUrlData.publicUrl;
+      coverImagePath = storagePath;
     }
+    
+    const coverImageUrl = coverImagePath ? await createSignedStorageUrl(coverImagePath) : null;
     
     const db = await getMongoDb();
     const eventsCollection = db.collection("events");
@@ -98,6 +100,7 @@ export async function POST(request: NextRequest) {
         phone: clientPhone,
         role: clientRole
       },
+      coverImagePath,
       coverImageUrl,
       createdAt: new Date(),
       createdBy: user.uid
@@ -150,7 +153,15 @@ export async function GET(request: NextRequest) {
     
     const events = await eventsCollection.find({ archived: { $ne: true } }).sort({ createdAt: -1 }).toArray();
     
-    return NextResponse.json(events, { status: 200 });
+    // Resolve signed URLs for cover images
+    const eventsWithSignedUrls = await Promise.all(
+      events.map(async (event) => ({
+        ...event,
+        coverImageUrl: await resolveSignedUrl(event.coverImagePath || event.coverImageUrl),
+      }))
+    );
+    
+    return NextResponse.json(eventsWithSignedUrls, { status: 200 });
   } catch (error) {
     if (error instanceof AuthGuardError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });

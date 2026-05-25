@@ -5,6 +5,7 @@ import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { sendWelcomeActivationEmail } from "@/lib/email";
+import { createSignedStorageUrl, extractStoragePathFromPublicUrl } from "@/lib/storage";
 
 type AppRole = "admin" | "coordinator" | "staff";
 type AccessRole = "ADMINISTRATOR" | "LEAD COORDINATOR" | "PRODUCTION STAFF";
@@ -29,6 +30,7 @@ type UserDocument = {
   accessRole?: AccessRole;
   status?: UserStatus;
   avatarUrl?: string;
+  avatarPath?: string;
   isActive?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
@@ -97,8 +99,10 @@ function toIsoString(value: Date | string | undefined): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-function toUserResponse(doc: UserDocument): UserResponse {
+async function toUserResponse(doc: UserDocument): Promise<UserResponse> {
   const accessRole = normalizeAccessRole(doc.accessRole, inferAccessRoleFromAppRole(doc.role));
+  const resolvedPath = doc.avatarPath || (doc.avatarUrl ? extractStoragePathFromPublicUrl(doc.avatarUrl) : null);
+  const signedAvatarUrl = resolvedPath ? await createSignedStorageUrl(resolvedPath) : null;
 
   return {
     uid: doc.firebaseUid,
@@ -107,7 +111,7 @@ function toUserResponse(doc: UserDocument): UserResponse {
     role: accessRole,
     appRole: ACCESS_ROLE_TO_APP_ROLE[accessRole],
     status: normalizeStatus(doc.status),
-    avatarUrl: doc.avatarUrl || null,
+    avatarUrl: signedAvatarUrl || null,
     createdAt: toIsoString(doc.createdAt),
     updatedAt: toIsoString(doc.updatedAt),
     lastActiveAt: toIsoString(doc.lastActiveAt || doc.updatedAt || doc.createdAt),
@@ -136,20 +140,12 @@ function getFileExtension(fileName: string, mimeType: string): string {
   return "jpg";
 }
 
-function extractStoragePathFromPublicUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    const marker = "/storage/v1/object/public/user/";
-    const index = parsed.pathname.indexOf(marker);
-
-    if (index < 0) {
-      return null;
-    }
-
-    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
-  } catch {
+function resolveAvatarPath(value?: string | null): string | null {
+  if (!value) {
     return null;
   }
+
+  return extractStoragePathFromPublicUrl(value) || value;
 }
 
 async function uploadAvatar(file: File, targetUid: string): Promise<string> {
@@ -167,19 +163,11 @@ async function uploadAvatar(file: File, targetUid: string): Promise<string> {
     throw new Error(`Avatar upload failed: ${error.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("user").getPublicUrl(storagePath);
-
-  return publicUrl;
+  return storagePath;
 }
 
-async function deleteAvatarIfExists(avatarUrl: string | undefined): Promise<void> {
-  if (!avatarUrl) {
-    return;
-  }
-
-  const path = extractStoragePathFromPublicUrl(avatarUrl);
+async function deleteAvatarIfExists(avatarValue: string | undefined): Promise<void> {
+  const path = resolveAvatarPath(avatarValue);
 
   if (!path) {
     return;
@@ -200,7 +188,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       {
-        users: users.map(toUserResponse),
+        users: await Promise.all(users.map((user) => toUserResponse(user))),
       },
       { status: 200 }
     );
@@ -216,7 +204,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   let createdUid: string | null = null;
-  let createdAvatarUrl: string | null = null;
+  let createdAvatarPath: string | null = null;
 
   try {
     const actor = await requireRole(request, ["admin"]);
@@ -252,11 +240,11 @@ export async function POST(request: NextRequest) {
     createdUid = firebaseUser.uid;
     await adminAuth.setCustomUserClaims(firebaseUser.uid, { role: appRole });
 
-    let avatarUrl: string | undefined;
+    let avatarPath: string | undefined;
 
     if (avatar instanceof File && avatar.size > 0) {
-      avatarUrl = await uploadAvatar(avatar, firebaseUser.uid);
-      createdAvatarUrl = avatarUrl;
+      avatarPath = await uploadAvatar(avatar, firebaseUser.uid);
+      createdAvatarPath = avatarPath;
     }
 
     const db = await getMongoDb();
@@ -270,7 +258,8 @@ export async function POST(request: NextRequest) {
       role: appRole,
       accessRole,
       status,
-      avatarUrl,
+      avatarPath,
+      avatarUrl: avatarPath ? await createSignedStorageUrl(avatarPath) : null,
       isActive: status === "Active" || status === "On-Site",
       createdAt: now,
       updatedAt: now,
@@ -279,7 +268,6 @@ export async function POST(request: NextRequest) {
 
     await usersCollection.insertOne(userDoc);
 
-    // Send activation email (non-blocking — don't fail user creation if email fails)
     try {
       const activationLink = await adminAuth.generateEmailVerificationLink(email);
       await sendWelcomeActivationEmail({
@@ -311,16 +299,16 @@ export async function POST(request: NextRequest) {
         assignedAccessRole: accessRole,
         assignedAppRole: appRole,
         status,
-        hasAvatar: Boolean(avatarUrl),
+        hasAvatar: Boolean(avatarPath),
         activationEmailSent: true,
       },
     });
 
-    return NextResponse.json({ success: true, user: toUserResponse(userDoc) }, { status: 201 });
+    return NextResponse.json({ success: true, user: await toUserResponse(userDoc) }, { status: 201 });
   } catch (error) {
-    if (createdAvatarUrl) {
+    if (createdAvatarPath) {
       try {
-        await deleteAvatarIfExists(createdAvatarUrl);
+        await deleteAvatarIfExists(createdAvatarPath);
       } catch (rollbackError) {
         console.error("Failed to rollback avatar after create error:", rollbackError);
       }
@@ -349,4 +337,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export { deleteAvatarIfExists, normalizeAccessRole, normalizeStatus, ACCESS_ROLE_TO_APP_ROLE, type AccessRole, type AppRole, type UserStatus, type UserDocument, type UserResponse, toUserResponse, uploadAvatar };
+export {
+  deleteAvatarIfExists,
+  normalizeAccessRole,
+  normalizeStatus,
+  ACCESS_ROLE_TO_APP_ROLE,
+  type AccessRole,
+  type AppRole,
+  type UserStatus,
+  type UserDocument,
+  type UserResponse,
+  toUserResponse,
+  uploadAvatar,
+};

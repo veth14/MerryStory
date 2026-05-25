@@ -5,6 +5,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { randomUUID } from 'crypto';
 import { ObjectId } from 'mongodb';
 import { validateUpload } from '@/lib/upload-validation';
+import { createSignedStorageUrl, resolveSignedUrl } from '@/lib/storage';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -38,16 +39,14 @@ async function uploadContractFile(file: File, eventId: string) {
     throw new Error(`Failed to upload contract file: ${uploadError.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from('user').getPublicUrl(storagePath);
+  const fileUrl = await createSignedStorageUrl(storagePath);
 
   return {
-    fileUrl: publicUrl,
+    fileUrl,
+    storagePath,
     fileName: file.name,
     fileType: file.type || null,
     fileSize: formatBytes(file.size),
-    storagePath,
   };
 }
 
@@ -71,6 +70,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       ...contract,
       _id: contract._id?.toString?.() || contract._id,
       eventId: contract.eventId?.toString?.() || contract.eventId || '',
+      fileUrl: await resolveSignedUrl(contract.storagePath || contract.fileUrl),
+      signedFileUrl: await resolveSignedUrl(contract.signedStoragePath || contract.signedFileUrl),
     });
   } catch (error) {
     if (error instanceof AuthGuardError) {
@@ -136,6 +137,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       ...updatedContract,
       _id: updatedContract._id?.toString?.() || updatedContract._id,
       eventId: updatedContract.eventId?.toString?.() || updatedContract.eventId || '',
+      fileUrl: await resolveSignedUrl(updatedContract.storagePath || updatedContract.fileUrl),
+      signedFileUrl: await resolveSignedUrl(updatedContract.signedStoragePath || updatedContract.signedFileUrl),
     });
   } catch (error) {
     if (error instanceof AuthGuardError) {

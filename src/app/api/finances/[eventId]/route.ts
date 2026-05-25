@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { resolveSignedUrl } from "@/lib/storage";
 
 const PESO_SYMBOL = "\u20B1";
 
@@ -49,21 +50,23 @@ export async function GET(
     const utilization = budgetTotal > 0 ? Math.round((totalExpenses / budgetTotal) * 100) : 0;
     const remaining = budgetTotal - totalExpenses;
 
-    const recentExpenses = expenses
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 10)
-      .map((exp) => ({
-        id: exp._id.toString(),
-        date: new Date(exp.createdAt).toLocaleDateString(),
-        dueDateIso: exp.dueDate ? new Date(exp.dueDate).toISOString() : undefined,
-        desc: exp.description || "Payment",
-        subtitle: exp.vendor || "Unknown Vendor",
-        category: exp.paymentType || "Payment",
-        amount: `${PESO_SYMBOL}${exp.amount.toLocaleString()}`,
-        status: normalizeStatus(exp.status),
-        attachmentUrl: exp.attachmentUrl || null,
-        attachmentName: exp.attachmentName || null,
-      }));
+    const recentExpenses = await Promise.all(
+      expenses
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 10)
+        .map(async (exp) => ({
+          id: exp._id.toString(),
+          date: new Date(exp.createdAt).toLocaleDateString(),
+          dueDateIso: exp.dueDate ? new Date(exp.dueDate).toISOString() : undefined,
+          desc: exp.description || "Payment",
+          subtitle: exp.vendor || "Unknown Vendor",
+          category: exp.paymentType || "Payment",
+          amount: `${PESO_SYMBOL}${exp.amount.toLocaleString()}`,
+          status: normalizeStatus(exp.status),
+          attachmentUrl: await resolveSignedUrl(exp.attachmentPath || exp.attachmentUrl) || null,
+          attachmentName: exp.attachmentName || null,
+        }))
+    );
 
     const formattedInvoices = invoices
       .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())

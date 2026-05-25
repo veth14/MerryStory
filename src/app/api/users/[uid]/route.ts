@@ -67,16 +67,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     await adminAuth.setCustomUserClaims(uid, { role: appRole });
 
-    let avatarUrl = existing.avatarUrl;
+    let avatarPath = existing.avatarPath;
 
     if (removeAvatar) {
-      await deleteAvatarIfExists(existing.avatarUrl);
-      avatarUrl = undefined;
+      await deleteAvatarIfExists(existing.avatarPath || existing.avatarUrl);
+      avatarPath = undefined;
     }
 
     if (avatar instanceof File && avatar.size > 0) {
-      await deleteAvatarIfExists(existing.avatarUrl);
-      avatarUrl = await uploadAvatar(avatar, uid);
+      await deleteAvatarIfExists(existing.avatarPath || existing.avatarUrl);
+      avatarPath = await uploadAvatar(avatar, uid);
     }
 
     const now = new Date();
@@ -90,7 +90,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           role: appRole,
           accessRole,
           status,
-          avatarUrl,
+          avatarPath,
           isActive: status === "Active" || status === "On-Site",
           updatedAt: now,
         },
@@ -128,7 +128,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       },
     });
 
-    return NextResponse.json({ success: true, user: toUserResponse(updated) }, { status: 200 });
+    return NextResponse.json({ success: true, user: await toUserResponse(updated) }, { status: 200 });
   } catch (error) {
     if (error instanceof AuthGuardError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
@@ -166,7 +166,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "User not found." }, { status: 404 });
     }
 
-    await deleteAvatarIfExists(existing.avatarUrl);
+    await deleteAvatarIfExists(existing.avatarPath || existing.avatarUrl);
 
     await getFirebaseAdminAuth().deleteUser(uid);
     await usersCollection.deleteOne({ firebaseUid: uid });

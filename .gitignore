@@ -34,3 +34,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# security & audit docs
+SECURITY_AUDIT.md
+*_AUDIT.md
+*audit*.md

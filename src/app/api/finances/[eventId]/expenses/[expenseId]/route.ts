@@ -3,6 +3,7 @@ import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { ObjectId } from "mongodb";
+import { createSignedStorageUrl } from "@/lib/storage";
 
 const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "half-paid", "paid"]);
 const ALLOWED_PAYMENT_TYPES = new Set(["catering", "equipment", "decoration", "venue", "other"]);
@@ -31,12 +32,11 @@ async function uploadAttachment(file: File, eventId: string) {
     throw new Error(`Failed to upload attachment: ${uploadError.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("user").getPublicUrl(storagePath);
+  const attachmentUrl = await createSignedStorageUrl(storagePath);
 
   return {
-    attachmentUrl: publicUrl,
+    attachmentPath: storagePath,
+    attachmentUrl,
     attachmentName: file.name,
     attachmentType: file.type || null,
     documentSize: formatBytes(file.size),

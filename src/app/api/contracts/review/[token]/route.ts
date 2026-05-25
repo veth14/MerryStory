@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMongoDb } from '@/lib/mongodb';
 import { isValidContractAdminAccessToken } from '@/lib/contract-review-access';
+import { resolveSignedUrl } from '@/lib/storage';
 
 type RouteContext = {
   params: Promise<{ token: string }>;
@@ -27,6 +28,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Contract review link not found.' }, { status: 404 });
     }
 
+    // Resolve signed URL from storage path or legacy public URL
+    const resolvedFileUrl = await resolveSignedUrl(
+      contract.signedStoragePath || contract.signedFileUrl ||
+      contract.storagePath || contract.fileUrl || null
+    );
+
     return NextResponse.json({
       _id: contract._id?.toString?.() || contract._id,
       name: contract.name || 'Contract Agreement',
@@ -34,7 +41,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       eventName: contract.eventName || 'Unassigned Event',
       value: contract.value || '',
       status: contract.status || 'drafting',
-      fileUrl: contract.signedFileUrl || contract.fileUrl || null,
+      fileUrl: resolvedFileUrl,
       fileName: contract.signedFileName || contract.fileName || null,
       fileType: contract.signedFileType || contract.fileType || null,
       recipientEmail: contract.recipientEmail || '',

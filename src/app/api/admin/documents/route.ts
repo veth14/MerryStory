@@ -4,6 +4,7 @@ import { getMongoDb } from '@/lib/mongodb';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { ObjectId } from 'mongodb';
 import { validateUpload } from '@/lib/upload-validation';
+import { createSignedStorageUrl, resolveSignedUrl } from '@/lib/storage';
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -33,16 +34,14 @@ async function uploadDocumentFile(file: File, eventId: string, category: string)
     throw new Error(`Failed to upload document file: ${uploadError.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from('user').getPublicUrl(storagePath);
+  const fileUrl = await createSignedStorageUrl(storagePath);
 
   return {
-    fileUrl: publicUrl,
+    fileUrl,
+    storagePath,
     fileName: file.name,
     fileType: file.type || null,
     size: formatBytes(file.size),
-    storagePath,
   };
 }
 
@@ -72,13 +71,18 @@ export async function GET(request: NextRequest) {
       .limit(20)
       .toArray();
 
-    return NextResponse.json(
-      documents.map((document) => ({
+    // Resolve signed URLs for document files
+    const resolvedDocuments = await Promise.all(
+      documents.map(async (document) => ({
         ...document,
         _id: document._id?.toString?.() || document._id,
         eventId: document.eventId?.toString?.() || document.eventId || '',
+        fileUrl: await resolveSignedUrl(document.storagePath || document.fileUrl),
+        attachmentUrl: await resolveSignedUrl(document.attachmentPath || document.attachmentUrl),
       }))
     );
+
+    return NextResponse.json(resolvedDocuments);
   } catch (error) {
     if (error instanceof AuthGuardError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });

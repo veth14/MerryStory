@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuthenticatedUser, AuthGuardError } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { resolveSignedUrl, createSignedStorageUrl } from "@/lib/storage";
 
 const isEventDatePassed = (eventDate?: string | Date | null) => {
   if (!eventDate) return false;
@@ -60,7 +61,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const enrichedEvent = {
       ...event,
-      leadAvatarUrl: leadProfile?.avatarUrl || null,
+      coverImageUrl: await resolveSignedUrl(event.coverImagePath || event.coverImageUrl),
+      leadAvatarUrl: leadProfile?.avatarUrl ? await resolveSignedUrl(leadProfile.avatarPath || leadProfile.avatarUrl) : null,
       team: teamWithProfiles
     };
 
@@ -113,6 +115,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     
     const file = formData.get("coverImage") as File | null;
     let coverImageUrl = existingEvent.coverImageUrl;
+    let coverImagePath = existingEvent.coverImagePath || null;
 
     if (file && file.size > 0) {
       const { getSupabaseServerClient } = await import("@/lib/supabase/server");
@@ -133,8 +136,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         });
         
       if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage.from("user").getPublicUrl(storagePath);
-        coverImageUrl = publicUrlData.publicUrl;
+        coverImagePath = storagePath;
+        coverImageUrl = await createSignedStorageUrl(storagePath);
       }
     }
 
@@ -173,6 +176,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       },
       team,
       initialAlert,
+      coverImagePath,
       coverImageUrl,
       updatedAt: new Date()
     };
