@@ -5,6 +5,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { randomUUID } from 'crypto';
 import { ObjectId } from 'mongodb';
 import { validateUpload } from '@/lib/upload-validation';
+import { createSignedStorageUrl, resolveSignedUrl } from '@/lib/storage';
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -34,16 +35,14 @@ async function uploadContractFile(file: File, eventId: string) {
     throw new Error(`Failed to upload contract file: ${uploadError.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from('user').getPublicUrl(storagePath);
+  const fileUrl = await createSignedStorageUrl(storagePath);
 
   return {
-    fileUrl: publicUrl,
+    fileUrl,
+    storagePath,
     fileName: file.name,
     fileType: file.type || null,
     fileSize: formatBytes(file.size),
-    storagePath,
   };
 }
 
@@ -73,13 +72,18 @@ export async function GET(request: NextRequest) {
       .limit(50)
       .toArray();
 
-    return NextResponse.json(
-      contracts.map((contract) => ({
+    // Resolve signed URLs for contract files
+    const resolvedContracts = await Promise.all(
+      contracts.map(async (contract) => ({
         ...contract,
         _id: contract._id?.toString?.() || contract._id,
         eventId: contract.eventId?.toString?.() || contract.eventId || '',
+        fileUrl: await resolveSignedUrl(contract.storagePath || contract.fileUrl),
+        signedFileUrl: await resolveSignedUrl(contract.signedStoragePath || contract.signedFileUrl),
       }))
     );
+
+    return NextResponse.json(resolvedContracts);
   } catch (error) {
     if (error instanceof AuthGuardError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });

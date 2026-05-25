@@ -6,6 +6,7 @@ const securityHeaders = [
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'none'",
+      "frame-src 'self' https://merrystory.firebaseapp.com https://*.firebaseapp.com",
       "img-src 'self' https: data: blob:",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
       "style-src 'self' 'unsafe-inline' https:",

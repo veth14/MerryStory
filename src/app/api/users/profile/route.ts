@@ -3,6 +3,7 @@ import { AuthGuardError, requireAuthenticatedUser } from "@/lib/auth/guards";
 import { getMongoDb } from "@/lib/mongodb";
 import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { resolveSignedUrl } from "@/lib/storage";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         role: user.role,
         name: profile?.name || "",
         phone: profile?.phone || "",
-        avatarUrl: profile?.avatarUrl || null,
+        avatarUrl: await resolveSignedUrl(profile?.avatarPath || profile?.avatarUrl) || null,
       },
       { status: 200 }
     );

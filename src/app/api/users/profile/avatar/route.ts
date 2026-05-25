@@ -4,6 +4,7 @@ import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { validateUpload } from "@/lib/upload-validation";
+import { createSignedStorageUrl, extractStoragePathFromPublicUrl } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,16 +48,15 @@ export async function POST(request: NextRequest) {
     // If user has an existing avatar, delete it to save space
     const supabase = getSupabaseServerClient();
     
-    if (existingUser?.avatarUrl) {
+    const existingAvatarPath =
+      existingUser?.avatarPath ||
+      (existingUser?.avatarUrl ? extractStoragePathFromPublicUrl(existingUser.avatarUrl) : null);
+
+    if (existingAvatarPath) {
        // Extract the path from the URL.
        // Supabase public URL looks like: https://[projectId].supabase.co/storage/v1/object/public/user/avatars/...
        try {
-         const urlObj = new URL(existingUser.avatarUrl);
-         const pathParts = urlObj.pathname.split('/public/user/');
-         if (pathParts.length === 2) {
-           const oldStoragePath = pathParts[1];
-           await supabase.storage.from("user").remove([oldStoragePath]);
-         }
+         await supabase.storage.from("user").remove([existingAvatarPath]);
        } catch (err) {
          console.warn("Could not parse/delete old avatar URL automatically", err);
        }
@@ -79,20 +79,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Get public URL
-    const { data: { publicUrl } } = supabase.storage.from("user").getPublicUrl(storagePath);
+    const signedAvatarUrl = await createSignedStorageUrl(storagePath, { bucket: "user", expiresIn: 60 * 10 });
 
     // Update MongoDB
     if (existingUser) {
       await usersCollection.updateOne(
         { _id: existingUser._id },
-        { $set: { avatarUrl: publicUrl } }
+        { $set: { avatarPath: storagePath, avatarUrl: signedAvatarUrl } }
       );
     } else {
       await usersCollection.insertOne({
         firebaseUid: user.uid,
         email: user.email,
         role: user.role,
-        avatarUrl: publicUrl,
+        avatarPath: storagePath,
+        avatarUrl: signedAvatarUrl,
         createdAt: new Date(),
         updatedAt: new Date()
       });
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      avatarUrl: publicUrl 
+      avatarUrl: signedAvatarUrl 
     }, { status: 200 });
 
   } catch (error) {
@@ -142,22 +143,21 @@ export async function DELETE(request: NextRequest) {
     const usersCollection = db.collection("users");
     const existingUser = await usersCollection.findOne({ firebaseUid: user.uid });
     
-    if (existingUser?.avatarUrl) {
+    const existingAvatarPath =
+      existingUser?.avatarPath ||
+      (existingUser?.avatarUrl ? extractStoragePathFromPublicUrl(existingUser.avatarUrl) : null);
+
+    if (existingAvatarPath) {
       const supabase = getSupabaseServerClient();
       try {
-         const urlObj = new URL(existingUser.avatarUrl);
-         const pathParts = urlObj.pathname.split('/public/user/');
-         if (pathParts.length === 2) {
-           const oldStoragePath = pathParts[1];
-           await supabase.storage.from("user").remove([oldStoragePath]);
-         }
+         await supabase.storage.from("user").remove([existingAvatarPath]);
        } catch (err) {
          console.warn("Could not delete old avatar URL automatically", err);
        }
        
        await usersCollection.updateOne(
          { _id: existingUser._id },
-         { $unset: { avatarUrl: "" } }
+         { $unset: { avatarUrl: "", avatarPath: "" } }
        );
     }
 

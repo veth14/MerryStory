@@ -4,6 +4,7 @@ import { getMongoDb } from "@/lib/mongodb";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { ObjectId } from "mongodb";
+import { createSignedStorageUrl, resolveSignedUrl } from "@/lib/storage";
 
 const PESO_SYMBOL = "\u20B1";
 const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "half-paid", "paid"]);
@@ -38,7 +39,7 @@ export async function GET(
       .sort({ createdAt: -1 })
       .toArray();
     
-    const formattedExpenses = expenses.map(exp => ({
+    const formattedExpenses = await Promise.all(expenses.map(async (exp) => ({
       id: exp._id.toString(),
       vendor: exp.vendor,
       description: exp.description,
@@ -47,10 +48,10 @@ export async function GET(
       status: exp.status,
       paymentType: exp.paymentType,
       createdAt: exp.createdAt,
-      attachmentUrl: exp.attachmentUrl || null,
+      attachmentUrl: await resolveSignedUrl(exp.attachmentPath || exp.attachmentUrl) || null,
       attachmentName: exp.attachmentName || null,
       attachmentType: exp.attachmentType || null
-    }));
+    })));
     
     return NextResponse.json(formattedExpenses);
   } catch (error) {
@@ -102,6 +103,7 @@ export async function POST(
     }
     
     let attachmentUrl: string | null = null;
+    let attachmentPath: string | null = null;
     let attachmentName: string | null = null;
     let attachmentType: string | null = null;
 
@@ -123,11 +125,8 @@ export async function POST(
         return NextResponse.json({ error: `Failed to upload attachment: ${uploadError.message}` }, { status: 500 });
       }
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("user").getPublicUrl(storagePath);
-
-      attachmentUrl = publicUrl;
+      attachmentPath = storagePath;
+      attachmentUrl = await createSignedStorageUrl(storagePath);
       attachmentName = attachment.name;
       attachmentType = attachment.type || null;
     }
@@ -141,6 +140,7 @@ export async function POST(
       dueDate: parsedDueDate,
       status,
       paymentType,
+      attachmentPath,
       attachmentUrl,
       attachmentName,
       attachmentType,

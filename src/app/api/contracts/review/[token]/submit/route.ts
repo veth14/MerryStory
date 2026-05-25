@@ -5,6 +5,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { createContractAdminAccessToken } from '@/lib/contract-review-access';
 import { writeAuditLog } from '@/lib/audit';
+import { downloadStorageObject, createSignedStorageUrl, resolveStoragePath } from '@/lib/storage';
 
 function decodeDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
@@ -19,20 +20,15 @@ function decodeDataUrl(dataUrl: string) {
 }
 
 async function createSignedPdf(contract: any, signerName: string, signatureDataUrl: string) {
-  const originalUrl = String(contract.fileUrl || '').trim();
+  const originalStoragePath = resolveStoragePath(contract.signedStoragePath || contract.storagePath || contract.fileUrl);
   const originalName = String(contract.fileName || contract.name || 'contract.pdf').trim();
   const originalType = String(contract.fileType || '').toLowerCase();
 
-  if (!originalUrl || (!originalType.includes('pdf') && !originalName.toLowerCase().endsWith('.pdf'))) {
+  if (!originalStoragePath || (!originalType.includes('pdf') && !originalName.toLowerCase().endsWith('.pdf'))) {
     return null;
   }
 
-  const response = await fetch(originalUrl);
-  if (!response.ok) {
-    throw new Error('Failed to load original PDF for signing.');
-  }
-
-  const originalBytes = await response.arrayBuffer();
+  const originalBytes = await downloadStorageObject(originalStoragePath, 'user');
   const pdfDoc = await PDFDocument.load(originalBytes);
   const pages = pdfDoc.getPages();
   const page = pages[pages.length - 1];
@@ -113,12 +109,10 @@ async function createSignedPdf(contract: any, signerName: string, signatureDataU
     throw new Error(`Failed to upload signed PDF: ${uploadError.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from('user').getPublicUrl(storagePath);
+  const signedFileUrl = await createSignedStorageUrl(storagePath);
 
   return {
-    signedFileUrl: publicUrl,
+    signedFileUrl,
     signedFileName: `${safeBaseName}_signed.pdf`,
     signedFileType: 'application/pdf',
     signedStoragePath: storagePath,
@@ -129,20 +123,15 @@ async function createAnnotatedPdf(
   contract: any,
   annotations: Array<{ pageNumber: number; dataUrl: string; width?: number; height?: number }>
 ) {
-  const originalUrl = String(contract.fileUrl || '').trim();
+  const originalStoragePath = resolveStoragePath(contract.signedStoragePath || contract.storagePath || contract.fileUrl);
   const originalName = String(contract.fileName || contract.name || 'contract.pdf').trim();
   const originalType = String(contract.fileType || '').toLowerCase();
 
-  if (!originalUrl || (!originalType.includes('pdf') && !originalName.toLowerCase().endsWith('.pdf'))) {
+  if (!originalStoragePath || (!originalType.includes('pdf') && !originalName.toLowerCase().endsWith('.pdf'))) {
     return null;
   }
 
-  const response = await fetch(originalUrl);
-  if (!response.ok) {
-    throw new Error('Failed to load original PDF for signing.');
-  }
-
-  const originalBytes = await response.arrayBuffer();
+  const originalBytes = await downloadStorageObject(originalStoragePath, 'user');
   const pdfDoc = await PDFDocument.load(originalBytes);
   const pages = pdfDoc.getPages();
 
@@ -175,12 +164,10 @@ async function createAnnotatedPdf(
     throw new Error(`Failed to upload signed PDF: ${uploadError.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from('user').getPublicUrl(storagePath);
+  const signedFileUrl = await createSignedStorageUrl(storagePath);
 
   return {
-    signedFileUrl: publicUrl,
+    signedFileUrl,
     signedFileName: `${safeBaseName}_signed.pdf`,
     signedFileType: 'application/pdf',
     signedStoragePath: storagePath,
