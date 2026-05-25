@@ -39,3 +39,6 @@ next-env.d.ts
 SECURITY_AUDIT.md
 *_AUDIT.md
 *audit*.md
+
+# documents
+/docs
